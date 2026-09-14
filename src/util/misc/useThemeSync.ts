@@ -1,4 +1,3 @@
-// hooks/useThemeSync.ts
 import { useState, useEffect } from 'react';
 
 export function useThemeSync() {
@@ -7,22 +6,27 @@ export function useThemeSync() {
   });
 
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'theme-preference') {
-        setIsLight(e.newValue === 'light');
-      }
+    const handleThemeChange = () => {
+      setIsLight(localStorage.getItem('theme-preference') === 'light');
     };
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    // Listen for custom events within the same window & storage events across tabs
+    window.addEventListener('theme-changed', handleThemeChange);
+    window.addEventListener('storage', handleThemeChange);
+
+    return () => {
+      window.removeEventListener('theme-changed', handleThemeChange);
+      window.removeEventListener('storage', handleThemeChange);
+    };
   }, []);
 
   const toggleTheme = () => {
     const nextState = !isLight;
     setIsLight(nextState);
     localStorage.setItem('theme-preference', nextState ? 'light' : 'dark');
-    // Dispatch custom event for tabs/components in the same window context
-    window.dispatchEvent(new Event('storage'));
+    
+    // Dispatch custom event to trigger instant updates across all components in this window
+    window.dispatchEvent(new CustomEvent('theme-changed'));
   };
 
   return { isLight, toggleTheme };
