@@ -25,4 +25,8 @@ dist-ssr
 
 *.env
 *.env.local
+<<<<<<< HEAD
 
+=======
+eyaltodolist.txt
+>>>>>>> frontend
