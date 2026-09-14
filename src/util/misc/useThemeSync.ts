@@ -10,7 +10,6 @@ export function useThemeSync() {
       setIsLight(localStorage.getItem('theme-preference') === 'light');
     };
 
-    // Listen for custom events within the same window & storage events across tabs
     window.addEventListener('theme-changed', handleThemeChange);
     window.addEventListener('storage', handleThemeChange);
 
@@ -22,10 +21,14 @@ export function useThemeSync() {
 
   const toggleTheme = () => {
     const nextState = !isLight;
-    setIsLight(nextState);
+    
+    // 1. Immediately update local storage
     localStorage.setItem('theme-preference', nextState ? 'light' : 'dark');
     
-    // Dispatch custom event to trigger instant updates across all components in this window
+    // 2. Update local state so THIS component and any listening components update
+    setIsLight(nextState);
+    
+    // 3. Broadcast to other open components/tabs
     window.dispatchEvent(new CustomEvent('theme-changed'));
   };
 
