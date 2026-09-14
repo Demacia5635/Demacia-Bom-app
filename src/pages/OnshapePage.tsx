@@ -1,6 +1,7 @@
 import type { FC } from "react";
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useThemeSync } from "../util/misc/useThemeSync"; // Update path as needed
 import '../css/Table.css';
 
 interface RowData {
@@ -81,6 +82,7 @@ const DEFAULT_COL_WIDTH = 120;
 
 export const OnshapePage: FC = () => {
     const [searchParams] = useSearchParams();
+    const { isLight, toggleTheme } = useThemeSync();
 
     const worksapceOrVersion = searchParams.get('wv');
     const workspaceOrVersionId = searchParams.get('wvid');
@@ -143,9 +145,6 @@ export const OnshapePage: FC = () => {
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
     const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, rowId: null });
 
-    // Auto-fill state for the last column: when the user hasn't manually
-    // resized the last column, it stretches to consume any leftover space
-    // in the table wrapper instead of leaving a dead gap.
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [autoLastColWidth, setAutoLastColWidth] = useState<number | null>(null);
 
@@ -166,9 +165,6 @@ export const OnshapePage: FC = () => {
     const hasPurchasedParts = data.some(row => row.manufacturingMethod === 'Purchased externally');
     const visibleColumns = columns.filter(col => col.key !== 'producer' || hasPurchasedParts);
 
-    // Recompute the auto-fill width for the last column whenever the
-    // wrapper resizes, the visible column set changes, or any column
-    // width (manual or otherwise) changes.
     useEffect(() => {
         const wrapper = wrapperRef.current;
         if (!wrapper) return;
@@ -180,9 +176,6 @@ export const OnshapePage: FC = () => {
         }
 
         const recompute = () => {
-            // If the user has manually resized this specific column
-            // (it has an explicit entry in columnWidths), respect that
-            // and stop auto-filling it.
             if (Object.prototype.hasOwnProperty.call(columnWidths, lastCol.key)) {
                 setAutoLastColWidth(null);
                 return;
@@ -275,7 +268,7 @@ export const OnshapePage: FC = () => {
         }
     };
 
-   const handleResizeStart = (e: React.PointerEvent, key: string) => {
+    const handleResizeStart = (e: React.PointerEvent, key: string) => {
         e.stopPropagation();
         e.preventDefault();
 
@@ -295,8 +288,8 @@ export const OnshapePage: FC = () => {
         let isActive = true;
         let rafId: number | null = null;
 
-        const EDGE_ZONE = 40; // px from screen edge that triggers auto-growth
-        const MAX_EDGE_SPEED = 40; // px of column growth per frame at the very edge
+        const EDGE_ZONE = 40;
+        const MAX_EDGE_SPEED = 40;
 
         const targetElement = e.target as HTMLElement;
         targetElement.setPointerCapture(e.pointerId);
@@ -307,11 +300,6 @@ export const OnshapePage: FC = () => {
             if (table) table.style.width = 'max-content';
         };
 
-        // Persistent per-frame loop: runs continuously from pointerdown to
-        // pointerup regardless of whether new pointermove events arrive.
-        // This lets holding the cursor at the screen edge keep growing the
-        // column indefinitely, since the loop doesn't depend on the cursor
-        // actually moving any further.
         const tick = () => {
             if (!isActive) return;
 
@@ -324,9 +312,6 @@ export const OnshapePage: FC = () => {
 
             applyWidth(initialWidth + scaledDelta);
 
-            // Infinite expansion while the cursor rests near/at the right
-            // edge of the screen: grow proportionally to how deep into the
-            // edge zone the cursor is, every frame, with no upper bound.
             const distanceIntoRightEdge = latestClientX - (window.innerWidth - EDGE_ZONE);
             if (distanceIntoRightEdge > 0) {
                 const growth = Math.min(MAX_EDGE_SPEED, (distanceIntoRightEdge / EDGE_ZONE) * MAX_EDGE_SPEED);
@@ -338,8 +323,6 @@ export const OnshapePage: FC = () => {
                 applyWidth(currentWidth - shrink);
             }
 
-            // Keep the wrapper scrolled to follow growth even away from the
-            // hard screen edge, once the cursor nears the wrapper's own edge.
             if (wrapper && !isShrinking) {
                 const wrapperRect = wrapper.getBoundingClientRect();
                 if (latestClientX > wrapperRect.right - 100) {
@@ -437,11 +420,7 @@ export const OnshapePage: FC = () => {
             if (row.id !== rowId) return row;
             const updatedRow = { ...row };
             
-            if (col.type === 'number') {
-                (updatedRow as any)[col.key] = rawValue;
-            } else {
-                (updatedRow as any)[col.key] = rawValue;
-            }
+            (updatedRow as any)[col.key] = rawValue;
 
             if (col.key === 'manufacturingMethod') {
                 if (rawValue === 'Purchased externally') {
@@ -470,12 +449,8 @@ export const OnshapePage: FC = () => {
             return;
         }
 
-        if (processed.startsWith('.')) {
-            processed = '0' + processed;
-        }
-        if (processed.endsWith('.')) {
-            processed = processed.slice(0, -1);
-        }
+        if (processed.startsWith('.')) processed = '0' + processed;
+        if (processed.endsWith('.')) processed = processed.slice(0, -1);
 
         const num = Number(processed);
         const finalVal = isNaN(num) ? 0 : num;
@@ -535,14 +510,24 @@ export const OnshapePage: FC = () => {
     };
 
     return (
-        <div className="table-page-container" onClick={closeContextMenu}>
-            <div className="table-header-section">
-                <h2>BOM Table</h2>
-                <div className="metadata-tag">
-                    <div>wv: {worksapceOrVersion || 'None'}</div>
-                    <div>wvid: {workspaceOrVersionId || 'None'}</div>
-                    <div>mid: {microversionId || 'None'}</div>
+        <div className={`table-page-container ${isLight ? 'theme-light' : ''}`} onClick={closeContextMenu}>
+            <div className="table-header-section" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                    <h2>BOM Table</h2>
+                    <div className="metadata-tag">
+                        <div>wv: {worksapceOrVersion || 'None'}</div>
+                        <div>wvid: {workspaceOrVersionId || 'None'}</div>
+                        <div>mid: {microversionId || 'None'}</div>
+                    </div>
                 </div>
+                <button 
+                    type="button" 
+                    onClick={toggleTheme} 
+                    className="btn-secondary"
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                >
+                    {isLight ? '🌙 Dark Mode' : '☀️ Light Mode'}
+                </button>
             </div>
 
             <div className="table-controls">
@@ -653,11 +638,8 @@ export const OnshapePage: FC = () => {
                                                             onBlur={(e) => handleNumberBlur(row.id, col, e.target.value)}
                                                             onFocus={(e) => e.target.select()}
                                                             onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') {
-                                                                    e.currentTarget.blur();
-                                                                } else {
-                                                                    handleCellKeyDown(e, rowIndex, colIndex);
-                                                                }
+                                                                if (e.key === 'Enter') e.currentTarget.blur();
+                                                                else handleCellKeyDown(e, rowIndex, colIndex);
                                                             }}
                                                             onClick={(e) => e.stopPropagation()}
                                                             className="cell-input"

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { useThemeSync } from "../util/misc/useThemeSync";
 
 interface PartItem {
   partID: string;
@@ -26,8 +27,8 @@ interface ApiError {
 
 export default function CreateBomPage() {
   const navigate = useNavigate();
+  const { isLight, toggleTheme } = useThemeSync();
 
-  // Basic BOM Metadata
   const [id, setId] = useState<string>("");
   const [name, setName] = useState<string>("");
   const [catalogNumber, setCatalogNumber] = useState<string>("");
@@ -38,7 +39,6 @@ export default function CreateBomPage() {
   const [onshapeURL, setOnshapeURL] = useState<string>("");
   const [avatarID, setAvatarID] = useState<string>("");
 
-  // Onshape ID Object
   const [onshapeID, setOnshapeID] = useState<OnshapeIDData>({
     documentID: "",
     wvmType: "",
@@ -47,15 +47,12 @@ export default function CreateBomPage() {
     bomID: "",
   });
 
-  // Dynamic Item Lists
   const [parts, setParts] = useState<PartItem[]>([]);
   const [subAssemblies, setSubAssemblies] = useState<SubAssemblyItem[]>([]);
 
-  // UI State
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<ApiError | null>(null);
 
-  // Helper functions for dynamic parts
   const addPart = () => setParts([...parts, { partID: "", quantity: 1 }]);
   const removePart = (index: number) => setParts(parts.filter((_, i) => i !== index));
   const updatePart = (index: number, key: keyof PartItem, value: string | number) => {
@@ -64,7 +61,6 @@ export default function CreateBomPage() {
     setParts(updated);
   };
 
-  // Helper functions for dynamic sub-assemblies
   const addSubAssembly = () => setSubAssemblies([...subAssemblies, { bomID: "", quantity: 1 }]);
   const removeSubAssembly = (index: number) => setSubAssemblies(subAssemblies.filter((_, i) => i !== index));
   const updateSubAssembly = (index: number, key: keyof SubAssemblyItem, value: string | number) => {
@@ -88,7 +84,6 @@ export default function CreateBomPage() {
       return;
     }
 
-    // Build payload including optional Onshape ID object if populated
     const hasOnshapeData = Object.values(onshapeID).some((val) => val.trim() !== "");
     const payload = {
       id: id.trim(),
@@ -136,17 +131,31 @@ export default function CreateBomPage() {
     }
   };
 
-  return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <button
-        type="button"
-        onClick={() => navigate("/")}
-        className="mb-6 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded font-medium text-sm"
-      >
-        ← Back to Home
-      </button>
+  const cardBg = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
+  const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900" : "bg-zinc-950 border-zinc-800 text-zinc-100";
+  const textHeading = isLight ? "text-zinc-900" : "text-zinc-100";
+  const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
 
-      <h1 className="text-2xl font-bold mb-6 text-zinc-100">Create New BOM</h1>
+  return (
+    <div className={`p-8 max-w-4xl mx-auto min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50" : "bg-zinc-950 text-zinc-100"}`}>
+      <div className="flex justify-between items-center mb-6">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className={`px-4 py-2 rounded font-medium text-sm ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
+        >
+          ← Back to Home
+        </button>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className={`px-3 py-2 rounded font-medium text-sm ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
+        >
+          {isLight ? "🌙 Dark Mode" : "☀️ Light Mode"}
+        </button>
+      </div>
+
+      <h1 className={`text-2xl font-bold mb-6 ${textHeading}`}>Create New BOM</h1>
 
       {error && (
         <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
@@ -157,160 +166,157 @@ export default function CreateBomPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* General Metadata */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
-          <h2 className="text-lg font-bold text-zinc-200">General Properties</h2>
+        <div className={`${cardBg} border rounded-xl p-6 space-y-4 shadow-sm`}>
+          <h2 className={`text-lg font-bold ${textHeading}`}>General Properties</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">BOM ID (Required)</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>BOM ID (Required)</label>
               <input
                 type="text"
                 value={id}
                 onChange={(e) => setId(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
                 placeholder="e.g. BOM-1001"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Name</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
                 placeholder="e.g. Main Chassis Assembly"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Catalog Number</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>Catalog Number</label>
               <input
                 type="text"
                 value={catalogNumber}
                 onChange={(e) => setCatalogNumber(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
                 placeholder="e.g. CAT-001"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Project Catalog Number</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>Project Catalog Number</label>
               <input
                 type="text"
                 value={projectCatalogNumber}
                 onChange={(e) => setProjectCatalogNumber(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
                 placeholder="e.g. PRJ-2026"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Engineer</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>Engineer</label>
               <input
                 type="text"
                 value={engineer}
                 onChange={(e) => setEngineer(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
                 placeholder="e.g. John Doe"
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Avatar File ID (Google Drive)</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>Avatar File ID (Google Drive)</label>
               <input
                 type="text"
                 value={avatarID}
                 onChange={(e) => setAvatarID(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
                 placeholder="e.g. 1a2b3c4d_fileID"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Onshape URL</label>
+            <label className={`block text-xs ${textMuted} mb-1`}>Onshape URL</label>
             <input
               type="text"
               value={onshapeURL}
               onChange={(e) => setOnshapeURL(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+              className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               placeholder="https://cad.onshape.com/documents/..."
             />
           </div>
 
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Description</label>
+            <label className={`block text-xs ${textMuted} mb-1`}>Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+              className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               rows={2}
             />
           </div>
 
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Comments</label>
+            <label className={`block text-xs ${textMuted} mb-1`}>Comments</label>
             <textarea
               value={comments}
               onChange={(e) => setComments(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+              className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               rows={2}
             />
           </div>
         </div>
 
-        {/* Onshape ID Fields */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
-          <h2 className="text-lg font-bold text-zinc-200">Onshape ID Properties</h2>
+        <div className={`${cardBg} border rounded-xl p-6 space-y-4 shadow-sm`}>
+          <h2 className={`text-lg font-bold ${textHeading}`}>Onshape ID Properties</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Document ID</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>Document ID</label>
               <input
                 type="text"
                 value={onshapeID.documentID}
                 onChange={(e) => setOnshapeID({ ...onshapeID, documentID: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">WVM Type</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>WVM Type</label>
               <input
                 type="text"
                 value={onshapeID.wvmType}
                 onChange={(e) => setOnshapeID({ ...onshapeID, wvmType: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">WVM ID</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>WVM ID</label>
               <input
                 type="text"
                 value={onshapeID.wvmID}
                 onChange={(e) => setOnshapeID({ ...onshapeID, wvmID: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Element ID</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>Element ID</label>
               <input
                 type="text"
                 value={onshapeID.elementID}
                 onChange={(e) => setOnshapeID({ ...onshapeID, elementID: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">BOM ID</label>
+              <label className={`block text-xs ${textMuted} mb-1`}>BOM ID</label>
               <input
                 type="text"
                 value={onshapeID.bomID}
                 onChange={(e) => setOnshapeID({ ...onshapeID, bomID: e.target.value })}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm focus:outline-none focus:border-zinc-600"
+                className={`w-full ${inputBg} border rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500`}
               />
             </div>
           </div>
         </div>
 
-        {/* Sub-Assemblies List */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+        <div className={`${cardBg} border rounded-xl p-6 space-y-4 shadow-sm`}>
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-bold text-zinc-200">Sub-Assemblies</h2>
+            <h2 className={`text-lg font-bold ${textHeading}`}>Sub-Assemblies</h2>
             <button
               type="button"
               onClick={addSubAssembly}
@@ -326,7 +332,7 @@ export default function CreateBomPage() {
                 placeholder="Sub-Assembly BOM ID"
                 value={sub.bomID}
                 onChange={(e) => updateSubAssembly(idx, "bomID", e.target.value)}
-                className="flex-1 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm"
+                className={`flex-1 ${inputBg} border rounded px-3 py-2 text-sm`}
               />
               <input
                 type="number"
@@ -334,7 +340,7 @@ export default function CreateBomPage() {
                 placeholder="Qty"
                 value={sub.quantity}
                 onChange={(e) => updateSubAssembly(idx, "quantity", parseInt(e.target.value, 10) || 1)}
-                className="w-24 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm"
+                className={`w-24 ${inputBg} border rounded px-3 py-2 text-sm`}
               />
               <button
                 type="button"
@@ -346,14 +352,13 @@ export default function CreateBomPage() {
             </div>
           ))}
           {subAssemblies.length === 0 && (
-            <p className="text-xs text-zinc-500 italic">No sub-assemblies added.</p>
+            <p className={`text-xs ${textMuted} italic`}>No sub-assemblies added.</p>
           )}
         </div>
 
-        {/* Parts List */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+        <div className={`${cardBg} border rounded-xl p-6 space-y-4 shadow-sm`}>
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-bold text-zinc-200">Parts</h2>
+            <h2 className={`text-lg font-bold ${textHeading}`}>Parts</h2>
             <button
               type="button"
               onClick={addPart}
@@ -369,7 +374,7 @@ export default function CreateBomPage() {
                 placeholder="Part ID"
                 value={p.partID}
                 onChange={(e) => updatePart(idx, "partID", e.target.value)}
-                className="flex-1 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm"
+                className={`flex-1 ${inputBg} border rounded px-3 py-2 text-sm`}
               />
               <input
                 type="number"
@@ -377,7 +382,7 @@ export default function CreateBomPage() {
                 placeholder="Qty"
                 value={p.quantity}
                 onChange={(e) => updatePart(idx, "quantity", parseInt(e.target.value, 10) || 1)}
-                className="w-24 bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-zinc-100 text-sm"
+                className={`w-24 ${inputBg} border rounded px-3 py-2 text-sm`}
               />
               <button
                 type="button"
@@ -389,16 +394,15 @@ export default function CreateBomPage() {
             </div>
           ))}
           {parts.length === 0 && (
-            <p className="text-xs text-zinc-500 italic">No leaf parts added.</p>
+            <p className={`text-xs ${textMuted} italic`}>No leaf parts added.</p>
           )}
         </div>
 
-        {/* Submit Actions */}
         <div className="flex justify-end gap-4">
           <button
             type="button"
             onClick={() => navigate("/")}
-            className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-sm font-medium"
+            className={`px-5 py-2.5 rounded-lg text-sm font-medium ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-700" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"}`}
           >
             Cancel
           </button>
