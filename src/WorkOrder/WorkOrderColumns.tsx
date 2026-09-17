@@ -4,21 +4,15 @@ import type WorkOrderTableRow from "./WorkOrderTableRow";
 
 const WorkOrderColumns: ColumnConfig[] = [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: (row) => row.vendor !== "" },
-    { key: "name", label: "Name", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "catalogNumber", label: "Catalog Number", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "revision", label: "Revision", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "description", label: "Description", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "engineer", label: "Engineer", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "material", label: "Material", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "mass", label: "Mass", type: "number", isDisabled: () => true},
-    { key: "price", label: "Price", type: "number" },
-    { key: "quantityTotal", label: "Quantity Total", type: "number" },
-    { key: "quantityMade", label: "Quantity Made", type: "number" },
-    { key: "statusCode", label: "Status Code", type: "select", options: ['0', '1', '2'] },
-    { key: "productionGCOwner", label: "Production G-Code Owner", type: "string" },
+    { key: "lastUpdate", label: "Last Update", type: "string", isDisabled: () => true },
     { key: "productionMakingOwner", label: "Production Making Owner", type: "string" },
-    { key: "lastUpadate", label: "Last Update", type: "string", isDisabled: () => true },
-    { key: "firstAdded", label: "First Added", type: "string", isDisabled: () => true },
+    { key: "catalogNumber", label: "Catalog Number", type: "string", isDisabled: (row) => row.vendor !== "" },
+    { key: "name", label: "Name", type: "string", isDisabled: (row) => row.vendor !== "" },
+    { key: "quantityTotal", label: "Quantity Total", type: "number" },
+    { key: "statusCode", label: "Status Code", type: "select", options: ['0', '1', '2'] },
+    // date for part manufacturing finish
+    // manufacturing method
+    // importance
     { key: "comments", label: "Comments", type: "string" },
     // { key: "documentID", label: "Onshape Doc ID", type: "string", isDisabled: () => true },
     // { key: "wvmType", label: "WVM Type", type: "string", isDisabled: () => true },
