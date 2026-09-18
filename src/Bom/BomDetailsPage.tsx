@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import Table from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
+import { useThemeSync } from "../util/misc/useThemeSync";
 import type { BomModel, PartModel } from "../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
@@ -9,6 +10,8 @@ import BomColumns from "./BomColumns";
 
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
+  const { isLight, toggleTheme } = useThemeSync();
+
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<ApiError | null>(null);
@@ -109,8 +112,21 @@ export default function BomDetailsPage() {
       .finally(() => setLoading(false));
   }, [bomId]);
 
+  const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
+  const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
+
   return (
-    <div className="p-8">
+    <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
+      <div className="flex justify-end mb-4">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className={`px-3 py-2 rounded font-medium text-sm ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
+        >
+          {isLight ? "🌙 Dark Mode" : "☀️ Light Mode"}
+        </button>
+      </div>
+
       {mainBomData && (
         <MainBomDataUI bom={mainBomData} />
       )}
@@ -123,7 +139,7 @@ export default function BomDetailsPage() {
       )}
 
       {loading ? (
-        <div className="p-8 text-center text-zinc-400">Recursively fetching BOM tree...</div>
+        <div className={`p-8 text-center ${loadingText}`}>Recursively fetching BOM tree...</div>
       ) : (
         <Table
           data={rows}
