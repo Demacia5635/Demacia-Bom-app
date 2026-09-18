@@ -4,27 +4,33 @@ import type WorkOrderTableRow from "./WorkOrderTableRow";
 
 const WorkOrderColumns: ColumnConfig[] = [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: (row) => row.vendor !== "" },
-    { key: "name", label: "Name", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "catalogNumber", label: "Catalog Number", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "revision", label: "Revision", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "description", label: "Description", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "engineer", label: "Engineer", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "material", label: "Material", type: "string", isDisabled: (row) => row.vendor !== "" },
-    { key: "mass", label: "Mass", type: "number", isDisabled: () => true},
-    { key: "price", label: "Price", type: "number" },
-    { key: "quantityTotal", label: "Quantity Total", type: "number" },
-    { key: "quantityMade", label: "Quantity Made", type: "number" },
-    { key: "statusCode", label: "Status Code", type: "select", options: ['0', '1', '2'] },
-    { key: "productionGCOwner", label: "Production G-Code Owner", type: "string" },
+    { key: "lastUpadte", label: "Last Updated", type: "string", isDisabled: () => true },
     { key: "productionMakingOwner", label: "Production Making Owner", type: "string" },
-    { key: "lastUpadate", label: "Last Update", type: "string", isDisabled: () => true },
-    { key: "firstAdded", label: "First Added", type: "string", isDisabled: () => true },
+    { key: "catalogNumber", label: "Catalogue Number", type: "string", isDisabled: (row) => row.vendor !== "" },
+    { key: "name", label: "Name", type: "string", isDisabled: (row) => row.vendor !== "" },
+    { key: "quantityTotal", label: "Qty Per Assembly", type: "number", isDisabled: () => true },
+    { 
+        key: "statusCode", 
+        label: "Status", 
+        type: "select", 
+        options: ['In creation', 'Finished creation', 'Given to assembly kit'] 
+    },
+    { key: "approxArrivalDate", label: "Approx. Arrival Date", type: "string" },
+    { 
+        key: "manufacturingMethod", 
+        label: "Manufacturing Method", 
+        type: "select", 
+        options: ['Manual', 'Milled', 'Lathed', 'CNC'] 
+    },
+    { 
+        key: "importance", 
+        label: "Importance", 
+        type: "select", 
+        options: ['High', 'Medium', 'Low'] 
+    },
     { key: "comments", label: "Comments", type: "string" },
-    // { key: "documentID", label: "Onshape Doc ID", type: "string", isDisabled: () => true },
-    // { key: "wvmType", label: "WVM Type", type: "string", isDisabled: () => true },
-    // { key: "wvmID", label: "WVM ID", type: "string", isDisabled: () => true },
-    // { key: "elementID", label: "Element ID", type: "string", isDisabled: () => true },
-    // { key: "entityID", label: "Part ID", type: "string", isDisabled: () => true },
+    
+    // Actions / Links at the end
     {
         key: "onshapeURL",
         label: "Links",
@@ -35,7 +41,6 @@ const WorkOrderColumns: ColumnConfig[] = [
             if (row.onshapeURL) window.open(row.onshapeURL, "_blank");
         },
     },
-    // Export File Action (Disabled Property)
     {
         key: "exportSTL",
         label: "Export STL",

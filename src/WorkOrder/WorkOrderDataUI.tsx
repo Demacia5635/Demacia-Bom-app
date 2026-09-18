@@ -14,7 +14,7 @@ const WorkOrderDataUI: React.FC<{ workOrder: WorkorderModel }> = ({ workOrder })
     const dividerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
 
     return (
-      <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200`}>
+      <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200 mb-6`}>
         <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full lg:w-auto">
           <div className={`w-28 h-28 shrink-0 ${imageBg} border rounded-xl overflow-hidden flex items-center justify-center shadow-inner`}>
             {workOrder.avatarID ? (
@@ -34,7 +34,7 @@ const WorkOrderDataUI: React.FC<{ workOrder: WorkorderModel }> = ({ workOrder })
                 {workOrder.name || "Unnamed Assembly"}
               </h1>
               {workOrder.description && (
-                <p className={`text-s ${textMuted} italic`}>
+                <p className={`text-sm ${textMuted} italic`}>
                   {workOrder.description}
                 </p>
               )}
@@ -65,7 +65,7 @@ const WorkOrderDataUI: React.FC<{ workOrder: WorkorderModel }> = ({ workOrder })
           </div>
         </div>
 
-        {/* Right side: Onshape link & Comments */}
+        {/* Right side: Comments */}
         <div className={`flex flex-col items-start lg:items-end gap-3 self-stretch lg:self-auto shrink-0 border-t lg:border-t-0 ${dividerBorder} pt-4 lg:pt-0`}>
           {workOrder.comments && (
             <p className={`text-xs ${textMuted} italic max-w-xs text-left lg:text-right`}>

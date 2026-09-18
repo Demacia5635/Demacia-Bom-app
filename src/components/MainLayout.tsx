@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { Appbar } from "./Appbar";
 import { Sidebar } from "./Sidebar";
-import '../css/Table.css';
+import '../css/DarkMode.css';
+import '../css/LightMode.css';
 
 export default function MainLayout() {
     const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);

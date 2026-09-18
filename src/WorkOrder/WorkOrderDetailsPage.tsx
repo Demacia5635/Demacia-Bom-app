@@ -5,7 +5,7 @@ import { useThemeSync } from "../util/misc/useThemeSync";
 import Table from "../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
-import type { PartModel, WorkorderModel } from "../util/Models";
+import type { BomModel, PartModel, WorkorderModel } from "../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
 
 export default function WorkOrderDetailsPage() {
@@ -17,51 +17,110 @@ export default function WorkOrderDetailsPage() {
     const [loading, setLoading] = useState<boolean>(false);
     const [workOrderData, setworkOrderData] = useState<WorkorderModel | null>(null);
 
+    const parseStatusToString = (code: number | string | undefined): string => {
+        if (code === 1 || code === '1' || code === 'Finished creation') return 'Finished creation';
+        if (code === 2 || code === '2' || code === 'Given to assembly kit') return 'Given to assembly kit';
+        return 'In creation';
+    };
+
     useEffect(() => {
         async function getWOData() {
-            setworkOrderData(await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`));
+            if (!workOrderID) return;
+            const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
+            setworkOrderData(data);
         }
 
         getWOData();
     }, [workOrderID])
+
+    // Force-sync select element values and classes to the DOM so CSS rules catch them
+    useEffect(() => {
+        const syncSelectElements = () => {
+            const selects = document.querySelectorAll(".cell-select");
+            selects.forEach((el) => {
+                const select = el as HTMLSelectElement;
+                const val = select.value;
+                
+                // Set the attribute so CSS selectors can pick it up instantly
+                select.setAttribute("value", val);
+
+                // Clear old color classes
+                select.classList.remove("status-bg-orange", "status-bg-blue", "status-bg-green", "status-bg-red");
+
+                // Apply matching color class
+                if (["In creation", "Medium", "Manual"].includes(val)) {
+                    select.classList.add("status-bg-orange");
+                } else if (["Finished creation", "Milled", "Lathed", "CNC"].includes(val)) {
+                    select.classList.add("status-bg-blue");
+                } else if (["Given to assembly kit", "Low"].includes(val)) {
+                    select.classList.add("status-bg-green");
+                } else if (val === "High") {
+                    select.classList.add("status-bg-red");
+                }
+            });
+        };
+
+        const timer = setTimeout(syncSelectElements, 30);
+        const handleChange = () => setTimeout(syncSelectElements, 10);
+        
+        document.addEventListener("change", handleChange);
+        return () => {
+            clearTimeout(timer);
+            document.removeEventListener("change", handleChange);
+        };
+    }, [rows, isLight]);
     
     useEffect(() => {
-        if (!workOrderID || !workOrderData) return;
+        if (!workOrderID || !workOrderData || !workOrderData.bomID) return;
+
+        async function fetchBomPartsRecursively(
+            targetBomId: string,
+            multiplier: number = 1,
+            accMap: Map<string, number> = new Map()
+        ): Promise<Map<string, number>> {
+            const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
+
+            for (const sub of currentBom.subAssemblies || []) {
+                const subQuantity = (sub.quantity ?? 1) * multiplier;
+                await fetchBomPartsRecursively(sub.bomID, subQuantity, accMap);
+            }
+
+            for (const p of currentBom.parts || []) {
+                const partQuantity = (p.quantity ?? 1) * multiplier;
+                const existingQty = accMap.get(p.partID) || 0;
+                accMap.set(p.partID, existingQty + partQuantity);
+            }
+
+            return accMap;
+        }
 
         async function getPartsData(): Promise<WorkOrderTableRow[]> {
+            const aggregatedQuantities = await fetchBomPartsRecursively(workOrderData!.bomID!);
             const collectedRows: WorkOrderTableRow[] = [];
-            for (const p of workOrderData?.parts || []) {
-                const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
+
+            for (const [partID, totalQty] of aggregatedQuantities.entries()) {
+                const part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
+                const existingWoPart = workOrderData?.parts?.find(p => p.partID === partID);
+
                 const partRow: WorkOrderTableRow = {
-                    id: `${workOrderID}-part-${p.partID}`,
+                    id: `${workOrderID}-part-${partID}`,
                     parentId: null,
                     isExpanded: false,
-                    avatar: `/drive/file/id/${part.avatarID}` || "",
-                    name: part.name || "",
+                    avatar: part.avatarID ? `/drive/file/id/${part.avatarID}` : "",
+                    lastUpadte: existingWoPart?.updatedAt || new Date(),
+                    productionMakingOwner: existingWoPart?.productionMakingOwner || "",
                     catalogNumber: part.catalogNumber || "",
-                    revision: part.revision || "",
-                    description: part.description || "",
-                    engineer: part.engineer || "",
-                    material: part.material || "",
-                    mass: part.mass || 0,
-                    price: part.price || 0,
-                    quantityTotal: p.quantityTotal || 0,
-                    quantityMade: p.quantityTotal || 0,
-                    statusCode: p.statusCode || 0,
-                    productionGCOwner: p.productionGCOwner || "",
-                    productionMakingOwner: p.productionMakingOwner || "",
-                    lastUpadte: p.createdAt || new Date(),
-                    firstAdded: p.updatedAt || new Date(),
-                    comments: part.comments || "",
-                    documentID: part.onshapeID?.documentID || "",
-                    wvmType: part.onshapeID?.wvmType || "",
-                    wvmID: part.onshapeID?.wvmID || "",
-                    elementID: part.onshapeID?.elementID || "",
-                    entityID: part.onshapeID?.partID || "",
+                    name: part.name || "",
+                    quantityTotal: totalQty,
+                    statusCode: parseStatusToString(existingWoPart?.statusCode),
+                    approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
+                    manufacturingMethod: (existingWoPart as any)?.manufacturingMethod || (part as any)?.manufacturingMethod || "Manual",
+                    importance: (existingWoPart as any)?.importance || "Medium",
+                    comments: (existingWoPart as any)?.comments || (part as any)?.comments || "",
                     onshapeURL: part.onshapeURL || "",
                     exportSTL: part.stlLink || "",
                     exportParasolid: part.parasolidLink || "",
-                    vendor: part.vendor || ""
+                    vendor: (part as any).vendor || ""
                 };
                 collectedRows.push(partRow);
             }
@@ -102,7 +161,7 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {loading ? (
-                <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order...</div>
+                <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
             ) : (
                 <Table
                     data={rows}

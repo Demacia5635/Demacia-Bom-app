@@ -1,7 +1,8 @@
 /* =========================================
-   Theme Variables (Dark Mode Default & Light Mode)
+   Dark Mode Theme Styles
 ========================================= */
-.table-page-container {
+body.dark-theme-active .table-page-container,
+.table-page-container:not(.theme-light) {
   --bg-main: #0f172a;
   --bg-surface: #1e293b;
   --bg-surface-hover: #334155;
@@ -14,8 +15,8 @@
   --text-subdued: #64748b;
   --text-disabled: #475569;
   
-  --border-color: #334155;
-  --border-hover: #475569;
+  --border-color: transparent;
+  --border-hover: transparent;
   --border-active: #3b82f6;
 
   --btn-primary-bg: #3b82f6;
@@ -35,40 +36,10 @@
   color: var(--text-main);
   position: relative;
   min-height: 100vh;
+  color-scheme: dark;
 }
 
-.table-page-container.theme-light {
-  --bg-main: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-surface-hover: #f1f5f9;
-  --bg-surface-disabled: #f8fafc;
-  --bg-input-focus: #ffffff;
-  
-  --text-main: #1e293b;
-  --text-heading: #0f172a;
-  --text-muted: #64748b;
-  --text-subdued: #94a3b8;
-  --text-disabled: #cbd5e1;
-  
-  --border-color: #e2e8f0;
-  --border-hover: #cbd5e1;
-  --border-active: #3b82f6;
-
-  --btn-primary-bg: #2563eb;
-  --btn-primary-hover: #1d4ed8;
-  --btn-primary-active: #1e40af;
-
-  --btn-secondary-bg: #f1f5f9;
-  --btn-secondary-hover: #e2e8f0;
-  --btn-secondary-active: #cbd5e1;
-
-  --shadow-color: rgba(0, 0, 0, 0.05);
-  --context-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-}
-
-/* =========================================
-   Base Layout & Typography
-========================================= */
+/* Base Layout & Typography */
 .table-header-section h2 {
   margin: 0 0 8px 0;
   font-size: 1.5rem;
@@ -82,14 +53,11 @@
   background-color: var(--bg-surface);
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid var(--border-color);
   display: inline-flex;
   gap: 12px;
 }
 
-/* =========================================
-   Controls & Buttons
-========================================= */
+/* Controls & Buttons */
 .table-controls {
   margin-top: 16px;
   display: flex;
@@ -124,7 +92,6 @@
 .table-controls .btn-secondary {
   background-color: var(--btn-secondary-bg);
   color: var(--text-main);
-  border: 1px solid var(--border-color);
 }
 
 .table-controls .btn-secondary:hover {
@@ -135,12 +102,9 @@
   background-color: var(--btn-secondary-active);
 }
 
-/* =========================================
-   Table Structure & Scrolling
-========================================= */
+/* Table Structure & Scrolling */
 .table-wrapper {
   margin-top: 16px;
-  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -157,13 +121,9 @@
   font-size: 0.875rem;
 }
 
-/* =========================================
-   Table Headers, Dragging, & Resizing
-========================================= */
+/* Table Headers, Dragging, & Resizing */
 .table-th {
   background-color: var(--bg-surface);
-  border-bottom: 2px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
   padding: 12px 16px;
   font-weight: 600;
   color: var(--text-muted);
@@ -209,22 +169,13 @@
   color: var(--text-main);
 }
 
-.th-sort-btn .th-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .sort-indicator {
   font-size: 0.7rem;
   color: var(--text-subdued);
   flex-shrink: 0;
 }
 
-.th-sort-btn.sort-active .sort-indicator {
-  color: #3b82f6;
-}
-
+.th-sort-btn.sort-active .sort-indicator,
 .th-sort-btn:hover .sort-indicator {
   color: #3b82f6;
 }
@@ -271,20 +222,15 @@
 
 .table-th.drop-indicator-both,
 .table-td.drop-indicator-both {
-  border-left: 3px solid #3b82f6 !important;
-  border-right: 3px solid #3b82f6 !important;
+  outline: 2px solid #3b82f6;
 }
 
-/* =========================================
-   Table Cells & Inputs
-========================================= */
+/* Table Cells & Inputs */
 .table-tr:hover {
   background-color: var(--bg-surface-hover);
 }
 
 .table-td {
-  border-bottom: 1px solid var(--border-color);
-  border-right: 1px solid var(--border-color);
   padding: 0;
   color: var(--text-main);
   white-space: nowrap;
@@ -292,20 +238,9 @@
   text-overflow: ellipsis;
 }
 
-.table-tr:last-child .table-td {
-  border-bottom: none;
-}
-
-.td-content-wrapper {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-}
-
 .cell-input {
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   color: inherit;
   font: inherit;
   padding: 12px 16px;
@@ -316,13 +251,8 @@
   border-radius: 0;
 }
 
-.cell-input:not(:disabled):hover {
-  border-color: var(--border-hover);
-}
-
 .cell-input:not(:disabled):focus {
   background-color: var(--bg-input-focus);
-  border-color: #3b82f6;
 }
 
 .cell-disabled {
@@ -339,13 +269,12 @@
   -webkit-appearance: none;
   margin: 0;
 }
+
 .cell-input[type="number"] {
   -moz-appearance: textfield;
 }
 
-/* =========================================
-   Hierarchy / Subassembly Expander
-========================================= */
+/* Hierarchy / Subassembly Expander */
 .expand-toggle {
   background: none;
   border: none;
@@ -375,19 +304,23 @@
   flex-shrink: 0;
 }
 
-/* =========================================
-   Select Inputs & Status Colors
-========================================= */
+/* Select Inputs & Status Colors (Full Cell Fill) */
 .cell-select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
   cursor: pointer;
+  border: none;
+  background-color: transparent;
+  color: inherit;
   background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E");
   background-repeat: no-repeat;
   background-position: right 12px top 50%;
   background-size: 10px auto;
+  padding: 12px 16px;
   padding-right: 32px;
+  width: 100%;
+  height: 100%;
 }
 
 .cell-select:disabled {
@@ -395,50 +328,59 @@
 }
 
 .cell-select option {
-  background-color: var(--bg-surface);
-  color: var(--text-main);
+  background-color: #18181b;
+  color: #f4f4f5;
 }
 
-/* Status Colors (Adjusted slightly for light-mode text contrast) */
-.cell-select.status-bg-gray { background-color: rgba(148, 163, 184, 0.15); color: var(--text-main); }
-.cell-select.status-bg-purple { background-color: rgba(168, 85, 247, 0.15); color: #9333ea; }
-.cell-select.status-bg-blue { background-color: rgba(59, 130, 246, 0.15); color: #2563eb; }
-.cell-select.status-bg-yellow { background-color: rgba(234, 179, 8, 0.15); color: #ca8a04; }
-.cell-select.status-bg-light-green { background-color: rgba(34, 197, 94, 0.15); color: #15803d; }
-.cell-select.status-bg-green { background-color: rgba(22, 163, 74, 0.15); color: #166534; }
-.cell-select.status-bg-orange { background-color: rgba(249, 115, 22, 0.15); color: #c2410c; }
-.cell-select.status-bg-red { background-color: rgba(239, 68, 68, 0.15); color: #dc2626; }
-.cell-select.status-bg-cyan { background-color: rgba(6, 182, 212, 0.15); color: #0891b2; }
-
-.table-page-container:not(.theme-light) .cell-select.status-bg-purple { color: #d8b4fe; }
-.table-page-container:not(.theme-light) .cell-select.status-bg-blue { color: #93c5fd; }
-.table-page-container:not(.theme-light) .cell-select.status-bg-yellow { color: #fde047; }
-.table-page-container:not(.theme-light) .cell-select.status-bg-light-green { color: #86efac; }
-.table-page-container:not(.theme-light) .cell-select.status-bg-green { color: #4ade80; }
-.table-page-container:not(.theme-light) .cell-select.status-bg-orange { color: #fdba74; }
-.table-page-container:not(.theme-light) .cell-select.status-bg-red { color: #fca5a5; }
-.table-page-container:not(.theme-light) .cell-select.status-bg-cyan { color: #67e8f9; }
-
-.cell-select.status-bg-cyan:focus,
-.cell-select.status-bg-orange:focus,
-.cell-select.status-bg-gray:focus,
-.cell-select.status-bg-purple:focus,
-.cell-select.status-bg-blue:focus,
-.cell-select.status-bg-yellow:focus,
-.cell-select.status-bg-light-green:focus,
-.cell-select.status-bg-green:focus,
-.cell-select.status-bg-red:focus {
-  border-color: transparent;
-  box-shadow: inset 0 0 0 1px #3b82f6; 
+body.dark-theme-active .table-td:has(.cell-select.status-bg-orange),
+body.dark-theme-active .table-td:has(.cell-select[value="In creation"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Medium"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Manual"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-orange),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="In creation"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Medium"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Manual"]) {
+  background-color: rgba(249, 115, 22, 0.35);
+  color: #fed7aa;
 }
 
-/* =========================================
-   Context Menus
-========================================= */
+body.dark-theme-active .table-td:has(.cell-select.status-bg-blue),
+body.dark-theme-active .table-td:has(.cell-select[value="Finished creation"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Milled"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Lathed"]),
+body.dark-theme-active .table-td:has(.cell-select[value="CNC"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-blue),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Finished creation"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Milled"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Lathed"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="CNC"]) {
+  background-color: rgba(59, 130, 246, 0.35);
+  color: #bfdbfe;
+}
+
+body.dark-theme-active .table-td:has(.cell-select.status-bg-green),
+body.dark-theme-active .table-td:has(.cell-select[value="Given to assembly kit"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Low"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-green),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Given to assembly kit"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Low"]) {
+  background-color: rgba(34, 197, 94, 0.35);
+  color: #bbf7d0;
+}
+
+body.dark-theme-active .table-td:has(.cell-select.status-bg-red),
+body.dark-theme-active .table-td:has(.cell-select[value="High"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-red),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="High"]) {
+  background-color: rgba(239, 68, 68, 0.35);
+  color: #fecaca;
+}
+
+/* Context Menus */
 .context-menu {
   position: fixed;
   background: var(--bg-surface);
-  border: 1px solid var(--border-hover);
+  border: none;
   box-shadow: var(--context-shadow);
   border-radius: 6px;
   padding: 4px;

@@ -6,6 +6,25 @@ export function useThemeSync() {
   });
 
   useEffect(() => {
+    const themeName = isLight ? 'LightMode' : 'DarkMode';
+    const linkId = 'dynamic-theme-stylesheet';
+    
+    let linkElement = document.getElementById(linkId) as HTMLLinkElement | null;
+
+    if (!linkElement) {
+      linkElement = document.createElement('link');
+      linkElement.id = linkId;
+      linkElement.rel = 'stylesheet';
+      document.head.appendChild(linkElement);
+    }
+
+    // Load the correct file
+    linkElement.href = `../../${themeName}.css`;
+
+    // Toggle a class on the body so CSS scopes can latch onto it if needed
+    document.body.classList.toggle('light-theme-active', isLight);
+    document.body.classList.toggle('dark-theme-active', !isLight);
+
     const handleThemeChange = () => {
       setIsLight(localStorage.getItem('theme-preference') === 'light');
     };
@@ -17,18 +36,12 @@ export function useThemeSync() {
       window.removeEventListener('theme-changed', handleThemeChange);
       window.removeEventListener('storage', handleThemeChange);
     };
-  }, []);
+  }, [isLight]);
 
   const toggleTheme = () => {
     const nextState = !isLight;
-    
-    // 1. Immediately update local storage
     localStorage.setItem('theme-preference', nextState ? 'light' : 'dark');
-    
-    // 2. Update local state so THIS component and any listening components update
     setIsLight(nextState);
-    
-    // 3. Broadcast to other open components/tabs
     window.dispatchEvent(new CustomEvent('theme-changed'));
   };
 
