@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
+import { useThemeSync } from "../util/misc/useThemeSync";
 import Table from "../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
@@ -9,6 +10,8 @@ import WorkOrderDataUI from "./WorkOrderDataUI";
 
 export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
+    const { isLight, toggleTheme } = useThemeSync();
+
     const [rows, setRows] = useState<WorkOrderTableRow[]>([])
     const [error, setError] = useState<ApiError | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
@@ -19,9 +22,7 @@ export default function WorkOrderDetailsPage() {
             setworkOrderData(await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`));
         }
 
-        return () => {
-            getWOData();
-        }
+        getWOData();
     }, [workOrderID])
     
     useEffect(() => {
@@ -72,10 +73,23 @@ export default function WorkOrderDetailsPage() {
             .then((data) => setRows(data))
             .catch((err: ApiError) => setError(err))
             .finally(() => setLoading(false));
-    }, [workOrderID, workOrderData])
+    }, [workOrderID, workOrderData]);
+
+    const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
+    const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
 
     return (
-        <div className="p-8">
+        <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
+            <div className="flex justify-end mb-4">
+                <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className={`px-3 py-2 rounded font-medium text-sm ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
+                >
+                    {isLight ? "🌙 Dark Mode" : "☀️ Light Mode"}
+                </button>
+            </div>
+
             {workOrderData && (
                 <WorkOrderDataUI workOrder={workOrderData} />
             )}
@@ -88,7 +102,7 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {loading ? (
-                <div className="p-8 text-center text-zinc-400">Fetching Work Order...</div>
+                <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order...</div>
             ) : (
                 <Table
                     data={rows}
