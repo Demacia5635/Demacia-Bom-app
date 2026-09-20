@@ -2,10 +2,14 @@ import type { WorkorderModel } from "../util/Models";
 import { AuthenticatedImage } from "../util/ApiService";
 import { useThemeSync } from "../util/misc/useThemeSync";
 
-const WorkOrderDataUI: React.FC<{ workOrder: WorkorderModel }> = ({ workOrder }) => {
+interface WorkOrderDataUIProps {
+    workOrder: WorkorderModel;
+    assemblyThumbnailURL?: string;
+}
+
+const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyThumbnailURL }) => {
     const { isLight } = useThemeSync();
 
-    // Theme styles
     const containerBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
     const imageBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
     const textHeading = isLight ? "text-zinc-900" : "text-white";
@@ -13,18 +17,26 @@ const WorkOrderDataUI: React.FC<{ workOrder: WorkorderModel }> = ({ workOrder })
     const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
     const dividerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
 
+    // Resolve image source hierarchy safely
+    let imageSrc = assemblyThumbnailURL || workOrder?.thumbnailURL || "";
+    
+    if (!imageSrc && workOrder?.onshapeID?.documentID && workOrder?.onshapeID?.elementID) {
+        const { documentID, wvmType = "w", wvmID, elementID } = workOrder.onshapeID;
+        imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+    }
+
     return (
       <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200 mb-6`}>
         <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full lg:w-auto">
           <div className={`w-28 h-28 shrink-0 ${imageBg} border rounded-xl overflow-hidden flex items-center justify-center shadow-inner`}>
-            {workOrder.avatarID ? (
+            {imageSrc ? (
               <AuthenticatedImage
-                src={`/drive/file/id/${workOrder.avatarID}`}
+                src={imageSrc}
                 alt={workOrder.name || "Work Order Thumbnail"}
                 className="w-full h-full object-cover"
               />
             ) : (
-              <span className={`${isLight ? "text-zinc-400" : "text-zinc-600"} text-xs font-mono`}>NO IMAGE</span>
+              <span className={`${isLight ? "text-zinc-400" : "text-zinc-600"} text-xs font-mono`}>Loading...</span>
             )}
           </div>
 
@@ -74,7 +86,7 @@ const WorkOrderDataUI: React.FC<{ workOrder: WorkorderModel }> = ({ workOrder })
           )}
         </div>
       </div>
-    )
-}
+    );
+};
 
 export default WorkOrderDataUI;

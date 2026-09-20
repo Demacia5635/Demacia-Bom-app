@@ -16,6 +16,20 @@ export const BomCard: React.FC<{ bom: BomSummary }> = ({ bom }) => {
     const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
     const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
 
+    // Safely check for onshapeID on BomSummary using type casting
+    const bomOnshapeID = (bom as any).onshapeID;
+
+    // Resolve image source hierarchy: Onshape ID -> Thumbnail URL -> Drive Avatar ID
+    let imageSrc = "";
+    if (bomOnshapeID?.documentID && bomOnshapeID?.elementID) {
+        const { documentID, wvmType = "w", wvmID, elementID } = bomOnshapeID;
+        imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+    } else if ((bom as any)?.thumbnailURL) {
+        imageSrc = (bom as any).thumbnailURL;
+    } else if (bom?.avatarID) {
+        imageSrc = `/drive/file/id/${bom.avatarID}`;
+    }
+
     return (
         <div
             key={bom.id}
@@ -24,9 +38,9 @@ export const BomCard: React.FC<{ bom: BomSummary }> = ({ bom }) => {
         >
             <div>
                 <div className={`w-full h-40 ${imageBg} rounded-lg mb-4 flex items-center justify-center overflow-hidden border`}>
-                    {bom.avatarID ? (
+                    {imageSrc ? (
                         <AuthenticatedImage
-                            src={`/drive/file/id/${bom.avatarID}`}
+                            src={imageSrc}
                             alt={bom.name || "BOM"}
                             className="w-full h-full object-cover" />
                     ) : (

@@ -40,11 +40,19 @@ export default function BomDetailsPage() {
       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
       const currentAssemblyRowId = `${parentId ? parentId + "-" : ""}${bom.id}`;
 
+      let assemblyAvatarUrl = "";
+      if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
+        const { documentID, wvmType = "w", wvmID, elementID } = bom.onshapeID;
+        assemblyAvatarUrl = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+      } else if (bom?.avatarID) {
+        assemblyAvatarUrl = `/drive/file/id/${bom.avatarID}`;
+      }
+
       const assemblyRow: BomTableRow = {
         id: currentAssemblyRowId,
         parentId: parentId === bomId ? null : parentId,
         isExpanded: true,
-        avatar: `/drive/file/id/${bom.avatarID}` || "",
+        avatar: assemblyAvatarUrl,
         name: bom.name || targetBomId,
         catalogNumber: bom.catalogNumber || "",
         revision: "-",
@@ -75,11 +83,28 @@ export default function BomDetailsPage() {
 
       for (const p of bom.parts || []) {
         const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
+
+        // Robust fallback mapping for part Onshape IDs
+        let partAvatarUrl = "";
+        const docID = part?.onshapeID?.documentID;
+        const elemID = part?.onshapeID?.elementID;
+        
+        if (docID && elemID) {
+          const wvmType = part.onshapeID?.wvmType || "w";
+          const wvmID = part.onshapeID?.wvmID || "";
+          // Ensure we target the exact part ID from onshapeID, or fallback to the BOM item partID
+          const targetPartID = part.onshapeID?.partID || p.partID;
+          
+          partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${targetPartID}/thumbnail`;
+        } else if (part?.avatarID) {
+          partAvatarUrl = `/drive/file/id/${part.avatarID}`;
+        }
+
         const partRow: BomTableRow = {
           id: `${currentAssemblyRowId}-part-${part.id}`,
           parentId: currentAssemblyRowId === bomId ? null : currentAssemblyRowId,
           isExpanded: false,
-          avatar: `/drive/file/id/${part.avatarID}` || "",
+          avatar: partAvatarUrl,
           name: part.name || p.partID,
           catalogNumber: part.catalogNumber || "",
           revision: part.revision || "",

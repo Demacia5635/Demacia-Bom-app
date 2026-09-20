@@ -12,10 +12,11 @@ export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
     const { isLight, toggleTheme } = useThemeSync();
 
-    const [rows, setRows] = useState<WorkOrderTableRow[]>([])
+    const [rows, setRows] = useState<WorkOrderTableRow[]>([]);
     const [error, setError] = useState<ApiError | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
     const [workOrderData, setworkOrderData] = useState<WorkorderModel | null>(null);
+    const [assemblyThumbnailUrl, setAssemblyThumbnailUrl] = useState<string>("");
 
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'Finished creation') return 'Finished creation';
@@ -28,10 +29,16 @@ export default function WorkOrderDetailsPage() {
             if (!workOrderID) return;
             const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
             setworkOrderData(data);
+
+            // If workOrder directly holds an onshapeID, construct thumbnail URL immediately
+            if ((data as any)?.onshapeID?.documentID && (data as any)?.onshapeID?.elementID) {
+                const { documentID, wvmType = "w", wvmID, elementID } = (data as any).onshapeID;
+                setAssemblyThumbnailUrl(`/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`);
+            }
         }
 
         getWOData();
-    }, [workOrderID])
+    }, [workOrderID]);
 
     // Force-sync select element values and classes to the DOM so CSS rules catch them
     useEffect(() => {
@@ -41,13 +48,9 @@ export default function WorkOrderDetailsPage() {
                 const select = el as HTMLSelectElement;
                 const val = select.value;
                 
-                // Set the attribute so CSS selectors can pick it up instantly
                 select.setAttribute("value", val);
-
-                // Clear old color classes
                 select.classList.remove("status-bg-orange", "status-bg-blue", "status-bg-green", "status-bg-red");
 
-                // Apply matching color class
                 if (["In creation", "Medium", "Manual"].includes(val)) {
                     select.classList.add("status-bg-orange");
                 } else if (["Finished creation", "Milled", "Lathed", "CNC"].includes(val)) {
@@ -80,6 +83,14 @@ export default function WorkOrderDetailsPage() {
         ): Promise<Map<string, number>> {
             const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
 
+            // If this is the root BOM, generate the assembly thumbnail URL from its onshapeID
+            if (targetBomId === workOrderData?.bomID && currentBom?.onshapeID) {
+                const { documentID, wvmType = "w", wvmID, elementID } = currentBom.onshapeID;
+                if (documentID && elementID) {
+                    setAssemblyThumbnailUrl(`/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`);
+                }
+            }
+
             for (const sub of currentBom.subAssemblies || []) {
                 const subQuantity = (sub.quantity ?? 1) * multiplier;
                 await fetchBomPartsRecursively(sub.bomID, subQuantity, accMap);
@@ -102,11 +113,18 @@ export default function WorkOrderDetailsPage() {
                 const part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
                 const existingWoPart = workOrderData?.parts?.find(p => p.partID === partID);
 
+                let avatarUrl = "";
+                if (part?.onshapeID?.documentID && part?.onshapeID?.elementID) {
+                    const { documentID, wvmType = "w", wvmID, elementID, partID: oidPartID } = part.onshapeID;
+                    const targetPartID = oidPartID || partID;
+                    avatarUrl = `/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${targetPartID}/thumbnail`;
+                }
+
                 const partRow: WorkOrderTableRow = {
                     id: `${workOrderID}-part-${partID}`,
                     parentId: null,
                     isExpanded: false,
-                    avatar: part.avatarID ? `/drive/file/id/${part.avatarID}` : "",
+                    avatar: avatarUrl,
                     lastUpadte: existingWoPart?.updatedAt || new Date(),
                     productionMakingOwner: existingWoPart?.productionMakingOwner || "",
                     catalogNumber: part.catalogNumber || "",
@@ -120,7 +138,7 @@ export default function WorkOrderDetailsPage() {
                     onshapeURL: part.onshapeURL || "",
                     exportSTL: part.stlLink || "",
                     exportParasolid: part.parasolidLink || "",
-                    vendor: (part as any).vendor || ""
+                    vendor: part.vendor || ""
                 };
                 collectedRows.push(partRow);
             }
@@ -150,7 +168,10 @@ export default function WorkOrderDetailsPage() {
             </div>
 
             {workOrderData && (
-                <WorkOrderDataUI workOrder={workOrderData} />
+                <WorkOrderDataUI 
+                    workOrder={workOrderData} 
+                    assemblyThumbnailURL={assemblyThumbnailUrl} 
+                />
             )}
             {error && (
                 <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
@@ -171,5 +192,5 @@ export default function WorkOrderDetailsPage() {
                 />
             )}
         </div>
-    )
+    );
 }

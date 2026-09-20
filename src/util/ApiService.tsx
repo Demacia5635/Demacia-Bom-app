@@ -14,8 +14,11 @@ export async function fetchFromApi<T>(endpoint: string): Promise<T> {
     throw { message: "VITE_CLIENT_SECRET is missing from environment variables." };
   }
 
+  // Prevent double /api/ if endpoint already starts with /api
+  const normalizedEndpoint = endpoint.startsWith("/api") ? endpoint.replace("/api", "") : endpoint;
+
   try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const response = await fetch(`${BASE_URL}${normalizedEndpoint}`, {
       headers: {
         "x-client-secret": secret,
       },
@@ -37,14 +40,7 @@ export async function fetchFromApi<T>(endpoint: string): Promise<T> {
 
 /**
  * Fetches a file from the backend server using the client secret header
- * and triggers a browser file download[cite: 6].
- *
- * Handles both raw binary responses (Blob) and JSON-wrapped Buffer responses
- * ({ type: "Buffer", data: number[] })[cite: 6].
- *
- * @param url - Full endpoint URL to fetch the file from (e.g., http://localhost:5050/api/drive/file/${id})[cite: 6].
- * @param filename - Filename to save as on the user's device (e.g., "part.stl")[cite: 6].
- * @param mimeType - Optional explicit MIME type for the downloaded blob[cite: 6].
+ * and triggers a browser file download.
  */
 export async function downloadFile(
   url: string,
@@ -69,7 +65,6 @@ export async function downloadFile(
   const arrayBuffer = await response.arrayBuffer();
   const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
 
-  // Check if response is a JSON-wrapped Buffer: { type: "Buffer", data: number[] }
   const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b; // '{'
 
   let blob: Blob;
@@ -120,21 +115,28 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
     const getPicture = async () => {
       try {
-        const res = await fetch(`${BASE_URL}${src}`, {
+        // Fix: Properly handle URL formatting to prevent /api/api/ duplication
+        let targetUrl = src;
+        if (src.startsWith("/api")) {
+          targetUrl = `${import.meta.env.VITE_CLIENT_URL}${src}`;
+        } else if (!src.startsWith("http")) {
+          targetUrl = `${BASE_URL}${src.startsWith("/") ? src : `/${src}`}`;
+        }
+
+        const res = await fetch(targetUrl, {
           headers: secret ? { "x-client-secret": secret } : {},
-        })
-        if (!res.ok) throw new Error("Failed to load image");
+        });
+        
+        if (!res.ok) throw new Error(`Failed to load image: ${res.statusText}`);
 
         const arrayBuffer = await res.arrayBuffer();
         const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
         const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b; // '{'
 
-        // let blob: Blob;
         let base64String;
         let mime = "image/png";
 
         if (looksLikeJson) {
-          // JSON-wrapped Buffer response: { type: "Buffer", data: number[] }
           const text = new TextDecoder().decode(arrayBuffer);
           const json = JSON.parse(text);
           if (json.type === "Buffer" && Array.isArray(json.data)) {
@@ -144,7 +146,8 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
             throw new Error(json.message || "Invalid image format");
           }
         } else {
-          const responseContentType = res.headers.get("content=type");
+          // Fix: Corrected typo from "content=type" to "content-type"
+          const responseContentType = res.headers.get("content-type");
           if (responseContentType && responseContentType.includes("image")) {
             mime = responseContentType;
           }
@@ -166,9 +169,8 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
     return () => {
       isMounted = false;
     };
-  }, [src])
+  }, [src]);
 
-  // Cleanup object URL when component unmounts or src changes to prevent memory leaks
   if (error) {
     return <span className="text-zinc-600 text-sm">Image Load Failed</span>;
   }
@@ -180,16 +182,6 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
   return <img src={imageSrc} alt={alt} className={className} {...props} />;
 }
 
-/**
- * Fetches raw file bytes from the backend using the client secret header
- * and returns them as a Blob - the shared decoding core behind both
- * downloadFile() and AuthenticatedImage below.
- *
- * Handles both raw binary responses and JSON-wrapped Buffer responses
- * ({ type: "Buffer", data: number[] }), which is how Express sends back a
- * Node Buffer when it's accidentally (or unavoidably) JSON-serialized
- * instead of streamed as a binary body.
- */
 export async function fetchFileBytes(url: string, mimeType?: string): Promise<Blob> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
   if (!secret) {
@@ -209,7 +201,6 @@ export async function fetchFileBytes(url: string, mimeType?: string): Promise<Bl
   const arrayBuffer = await response.arrayBuffer();
   const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
 
-  // Check if response is a JSON-wrapped Buffer: { type: "Buffer", data: number[] }
   const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b; // '{'
 
   if (looksLikeJson) {

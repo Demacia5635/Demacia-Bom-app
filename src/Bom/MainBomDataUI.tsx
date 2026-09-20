@@ -19,15 +19,15 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
     if (visitedBoms.has(targetBomId)) return [];
     visitedBoms.add(targetBomId);
 
-    const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
+    const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
     const collectedParts: WorkOrderPartModel[] = [];
 
-    for (const sub of bom.subAssemblies || []) {
+    for (const sub of currentBom.subAssemblies || []) {
       const subParts = await fetchBomPartsRecursively(sub.bomID);
       collectedParts.push(...subParts);
     }
 
-    for (const p of bom.parts || []) {
+    for (const p of currentBom.parts || []) {
       const workOrderPart: WorkOrderPartModel = {
         partID: p.partID,
         quantityTotal: p.quantity,
@@ -44,7 +44,6 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
   }
 
   const handleNewWO = async (data: WorkOrderFormData) => {
-    const secret: string = import.meta.env.VITE_CLIENT_SECRET;
     const id = Date.now().toString();
     const parts = await fetchBomPartsRecursively(bom.id);
 
@@ -62,6 +61,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
     };
 
     try {
+      const secret: string = import.meta.env.VITE_CLIENT_SECRET;
       const response = await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/workOrder/id/${id}`, {
         method: "POST",
         headers: {
@@ -75,17 +75,26 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
         throw {
           message: `Failed to create Work Order: ${response.statusText}`,
           statusCode: response.status
-        } as ApiError
+        } as ApiError;
       }
 
       navigate(`/workOrder/${id}`);
     } catch (err: any) {
       if (err.statusCode) {
-        console.error(err)
+        console.error(err);
       } else {
-        console.error("An unexpected error");
+        console.error("An unexpected error occurred");
       }
     }
+  };
+
+  // Resolve image source hierarchy using onshapeID or avatarID fallback
+  let imageSrc = "";
+  if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
+    const { documentID, wvmType = "w", wvmID, elementID } = bom.onshapeID;
+    imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+  } else if (bom?.avatarID) {
+    imageSrc = `/drive/file/id/${bom.avatarID}`;
   }
 
   // Theme styles mapping
@@ -101,9 +110,9 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
       <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200`}>
         <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full lg:w-auto">
           <div className={`w-28 h-28 shrink-0 ${imageBg} border rounded-xl overflow-hidden flex items-center justify-center shadow-inner`}>
-            {bom.avatarID ? (
+            {imageSrc ? (
               <AuthenticatedImage
-                src={`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${bom.avatarID}`}
+                src={imageSrc}
                 alt={bom.name || "BOM Thumbnail"}
                 className="w-full h-full object-cover"
               />
@@ -118,7 +127,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
                 {bom.name || "Unnamed Assembly"}
               </h1>
               {bom.description && (
-                <p className={`text-s ${textMuted} italic`}>
+                <p className={`text-sm ${textMuted} italic`}>
                   {bom.description}
                 </p>
               )}

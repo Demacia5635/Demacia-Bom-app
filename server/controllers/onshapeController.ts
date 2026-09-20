@@ -19,19 +19,6 @@ interface OnshapeBomParams {
   elementID: string;
 }
 
-/**
- * Maps a thrown error to an HTTP response. Distinguishes the three
- * error shapes onshapeService.ts can raise, rather than flattening
- * everything to one status:
- *   - UnsupportedOnshapeOperationError -> 501: the operation has no
- *     REST equivalent in Onshape (e.g. delete a part, update a BOM).
- *     This isn't a failure to reach Onshape, so 502 would be misleading.
- *   - OnshapeApiError -> passes through Onshape's own status code
- *     (404, 403, etc.) so the caller sees the real cause.
- *   - anything else (network failure, missing credentials, etc.) -> 502,
- *     since that genuinely means "couldn't get a good response from
- *     the upstream Onshape API."
- */
 function handleOnshapeError(
   res: Response,
   err: unknown,
@@ -117,9 +104,11 @@ export async function getPartThumbnail(
     if (!thumbnail)
       return res
         .status(404)
-        .json({ message: `onshape part was not found ${req.params}` });
+        .json({ message: `onshape part was not found ${JSON.stringify(req.params)}` });
+    
     res.setHeader("Content-Type", "image/png");
-    return res.status(200).json(thumbnail);
+    // FIX: Use .send() instead of .json() so raw image buffer is returned
+    return res.status(200).send(thumbnail);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to fetch thumbnail for part");
   }
@@ -150,7 +139,8 @@ export async function setPartThumbnail(
 
     await onshapeService.setPartThumbnail(req.params, safeBuffer);
 
-    return res.status(204);
+    // FIX: Use res.sendStatus(204) to properly close 204 requests
+    return res.sendStatus(204);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to set thumbnail for part");
   }
@@ -168,10 +158,11 @@ export async function getElementThumbnail(
     if (!thumbnail)
       return res
         .status(404)
-        .json({ message: `onshape element was not found ${req.params}` });
+        .json({ message: `onshape element was not found ${JSON.stringify(req.params)}` });
 
     res.setHeader("Content-Type", "image/png");
-    return res.status(200).json(thumbnail);
+    // FIX: Use .send() instead of .json() so raw image buffer is returned
+    return res.status(200).send(thumbnail);
   } catch (err) {
     return handleOnshapeError(
       res,
@@ -204,7 +195,8 @@ export async function setElementThumbnail(
 
     await onshapeService.setElementThumbnail(req.params, safeBuffer);
     
-    return res.status(204);
+    // FIX: Use res.sendStatus(204) to properly close 204 requests
+    return res.sendStatus(204);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to set thumbnail for element");
   }
@@ -216,10 +208,10 @@ export async function exportSTL(
 ) {
   try {
     const stl = await onshapeService.exportPartToStl(req.params);
-    if (!stl) res.status(404).json({ message: `part not found ${req.params}`});
+    if (!stl) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "model/stl");
-    return res.status(200).json(stl);
+    return res.status(200).send(stl);
   } catch (err) {
     return handleOnshapeError(res, err, 'Failed to export stl');
   }
@@ -231,10 +223,10 @@ export async function exportParasolid(
 ) {
   try {
     const parasolid = await onshapeService.exportPartToParasolid(req.params);
-    if (!parasolid) res.status(404).json({ message: `part not found ${req.params}`});
+    if (!parasolid) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "application/x-parasolid");
-    return res.status(200).json(parasolid);
+    return res.status(200).send(parasolid);
   } catch (err) {
     return handleOnshapeError(res, err, 'Failed to export parasolid');
   }
@@ -246,10 +238,10 @@ export async function exportSolidworks(
 ) {
   try {
     const solidworks = await onshapeService.exportPartToSolidworks(req.params);
-    if (!solidworks) res.status(404).json({ message: `part not found ${req.params}`});
+    if (!solidworks) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "application/sldprt");
-    return res.status(200).json(solidworks);
+    return res.status(200).send(solidworks);
   } catch (err) {
     return handleOnshapeError(res, err, 'Failed to export solidworks');
   }
