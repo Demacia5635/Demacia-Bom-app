@@ -8,6 +8,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const [formData, setFormData] = useState<PartModel>({ ...part });
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
     useEffect(() => {
         setFormData({ ...part });
@@ -50,6 +51,8 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
         }
     };
 
+    const avatarUrl = formData.avatarID ? `/drive/file/id/${formData.avatarID}` : "";
+
     // Dynamic theme classes
     const containerBg = isLight ? "bg-white border-zinc-300 text-zinc-900 shadow-xl" : "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-2xl";
     const headerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
@@ -67,10 +70,14 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
             {/* Header */}
             <div className={`flex items-start justify-between gap-4 border-b pb-5 ${headerBorder}`}>
                 <div className="flex items-center gap-5 w-full">
-                    <div className={`w-24 h-24 shrink-0 border rounded-xl overflow-hidden flex items-center justify-center shadow-inner ${imageBoxBg}`}>
-                        {formData.avatarID ? (
+                    <div 
+                        onClick={() => setEnlargedImageSrc(avatarUrl || "FAILED")}
+                        className={`w-24 h-24 shrink-0 border rounded-xl overflow-hidden flex items-center justify-center shadow-inner cursor-pointer hover:opacity-80 transition-opacity ${imageBoxBg}`}
+                        title="Click to enlarge image"
+                    >
+                        {avatarUrl ? (
                             <AuthenticatedImage
-                                src={`/drive/file/id/${formData.avatarID}`}
+                                src={avatarUrl}
                                 alt={formData.name || "Part Avatar"}
                                 className="w-full h-full object-cover"
                             />
@@ -311,6 +318,36 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                     </div>
                 </div>
             </form>
+
+            {/* Enlarged Image Preview Overlay Modal */}
+            {enlargedImageSrc && (
+                <div 
+                    className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+                    onClick={() => setEnlargedImageSrc(null)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+                        <button
+                            type="button"
+                            onClick={() => setEnlargedImageSrc(null)}
+                            className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold"
+                        >
+                            ✕ Close
+                        </button>
+                        {enlargedImageSrc === "FAILED" ? (
+                            <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2">
+                                <span className="text-xl font-bold">Image Failed to Load</span>
+                                <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>
+                            </div>
+                        ) : (
+                            <AuthenticatedImage
+                                src={enlargedImageSrc}
+                                alt="Enlarged Preview"
+                                className="max-w-full max-h-[85vh] object-contain rounded-xl border border-zinc-700 shadow-2xl"
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

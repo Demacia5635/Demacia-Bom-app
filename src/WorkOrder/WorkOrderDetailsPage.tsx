@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
-import { fetchFromApi, type ApiError } from "../util/ApiService";
+import { fetchFromApi, AuthenticatedImage, type ApiError } from "../util/ApiService";
 import { useThemeSync } from "../util/misc/useThemeSync";
 import Table from "../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
@@ -19,7 +19,7 @@ export default function WorkOrderDetailsPage() {
     const [workOrderData, setworkOrderData] = useState<WorkorderModel | null>(null);
     const [assemblyThumbnailUrl, setAssemblyThumbnailUrl] = useState<string>("");
 
-    // States for the PartPortal modal popup & custom context menu
+    // States for the PartPortal modal popup & custom context menu & image preview
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
     const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
     const [contextMenu, setContextMenu] = useState<{
@@ -27,6 +27,7 @@ export default function WorkOrderDetailsPage() {
         y: number;
         row: WorkOrderTableRow;
     } | null>(null);
+    const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
     // Map to keep track of partID per row id
     const rowPartMapRef = useRef<Map<string, string>>(new Map());
@@ -175,9 +176,35 @@ export default function WorkOrderDetailsPage() {
             .finally(() => setLoading(false));
     }, [workOrderID, workOrderData]);
 
+    // Left click handler to catch clicks specifically on the avatar cell (column index 0)
+    const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLElement;
+        const cellEl = target.closest(".table-td, td");
+        if (!cellEl) return;
+
+        const trEl = cellEl.closest(".table-tr, tr");
+        if (!trEl) return;
+
+        const tbody = trEl.closest("tbody") || trEl.parentElement;
+        if (!tbody) return;
+
+        const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
+        const rowIndex = trs.indexOf(trEl);
+
+        if (rowIndex !== -1 && rows[rowIndex]) {
+            const clickedRow = rows[rowIndex];
+            const cellsInRow = Array.from(trEl.querySelectorAll(".table-td, td"));
+            const cellIndex = cellsInRow.indexOf(cellEl);
+
+            if (cellIndex === 0) {
+                setEnlargedImageSrc(clickedRow.avatar || "FAILED");
+            }
+        }
+    };
+
     const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
-        const rowEl = target.closest(".table-tr, tr, .table-td, td");
+        const rowEl = target.closest(".table-tr, tr");
         if (!rowEl) return;
 
         e.preventDefault();
@@ -187,11 +214,7 @@ export default function WorkOrderDetailsPage() {
         if (!tbody) return;
 
         const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
-        let rowIndex = -1;
-        const matchedTr = rowEl.closest(".table-tr, tr");
-        if (matchedTr) {
-            rowIndex = trs.indexOf(matchedTr);
-        }
+        const rowIndex = trs.indexOf(rowEl);
 
         if (rowIndex !== -1 && rows[rowIndex]) {
             setContextMenu({
@@ -248,7 +271,11 @@ export default function WorkOrderDetailsPage() {
             {loading ? (
                 <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
             ) : (
-                <div onContextMenuCapture={handleTableContextMenuCapture} className="relative">
+                <div 
+                    onClick={handleTableClick}
+                    onContextMenuCapture={handleTableContextMenuCapture} 
+                    className="relative cursor-pointer"
+                >
                     <Table
                         data={rows}
                         columnsData={WorkOrderColumns}
@@ -276,7 +303,7 @@ export default function WorkOrderDetailsPage() {
 
             {/* PartPortal Modal Popup Overlay */}
             {isPartPortalOpen && selectedPart && (
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
                     <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                         <button
                             type="button"
@@ -286,6 +313,36 @@ export default function WorkOrderDetailsPage() {
                             ✕ Close
                         </button>
                         <PartPortal part={selectedPart} />
+                    </div>
+                </div>
+            )}
+
+            {/* Enlarged Image Preview Overlay Modal */}
+            {enlargedImageSrc && (
+                <div 
+                    className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+                    onClick={() => setEnlargedImageSrc(null)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            type="button"
+                            onClick={() => setEnlargedImageSrc(null)}
+                            className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md"
+                        >
+                            ✕ Close
+                        </button>
+                        {enlargedImageSrc === "FAILED" || !enlargedImageSrc ? (
+                            <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
+                                <span className="text-xl font-bold">Image Failed to Load</span>
+                                <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>
+                            </div>
+                        ) : (
+                            <AuthenticatedImage
+                                src={enlargedImageSrc}
+                                alt="Enlarged Preview"
+                                className="max-w-full max-h-[85vh] object-contain rounded-xl border border-zinc-700 shadow-2xl"
+                            />
+                        )}
                     </div>
                 </div>
             )}
