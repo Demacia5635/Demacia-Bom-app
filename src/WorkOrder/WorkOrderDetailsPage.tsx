@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -7,6 +7,7 @@ import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import type { BomModel, PartModel, WorkorderModel } from "../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
+import PartPortal from "../searchParts/PartPortal";
 
 export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
@@ -18,11 +19,29 @@ export default function WorkOrderDetailsPage() {
     const [workOrderData, setworkOrderData] = useState<WorkorderModel | null>(null);
     const [assemblyThumbnailUrl, setAssemblyThumbnailUrl] = useState<string>("");
 
+    // States for the PartPortal modal popup & custom context menu
+    const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
+    const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
+    const [contextMenu, setContextMenu] = useState<{
+        x: number;
+        y: number;
+        row: WorkOrderTableRow;
+    } | null>(null);
+
+    // Map to keep track of partID per row id
+    const rowPartMapRef = useRef<Map<string, string>>(new Map());
+
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'Finished creation') return 'Finished creation';
         if (code === 2 || code === '2' || code === 'Given to assembly kit') return 'Given to assembly kit';
         return 'In creation';
     };
+
+    useEffect(() => {
+        const handleClickOutside = () => setContextMenu(null);
+        window.addEventListener("click", handleClickOutside);
+        return () => window.removeEventListener("click", handleClickOutside);
+    }, []);
 
     useEffect(() => {
         async function getWOData() {
@@ -108,6 +127,7 @@ export default function WorkOrderDetailsPage() {
         async function getPartsData(): Promise<WorkOrderTableRow[]> {
             const aggregatedQuantities = await fetchBomPartsRecursively(workOrderData!.bomID!);
             const collectedRows: WorkOrderTableRow[] = [];
+            rowPartMapRef.current.clear();
 
             for (const [partID, totalQty] of aggregatedQuantities.entries()) {
                 const part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
@@ -120,8 +140,11 @@ export default function WorkOrderDetailsPage() {
                     avatarUrl = `/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${targetPartID}/thumbnail`;
                 }
 
+                const rowId = `${workOrderID}-part-${partID}`;
+                rowPartMapRef.current.set(rowId, partID);
+
                 const partRow: WorkOrderTableRow = {
-                    id: `${workOrderID}-part-${partID}`,
+                    id: rowId,
                     parentId: null,
                     isExpanded: false,
                     avatar: avatarUrl,
@@ -151,6 +174,47 @@ export default function WorkOrderDetailsPage() {
             .catch((err: ApiError) => setError(err))
             .finally(() => setLoading(false));
     }, [workOrderID, workOrderData]);
+
+    const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => {
+        const target = e.target as HTMLElement;
+        const rowEl = target.closest(".table-tr, tr, .table-td, td");
+        if (!rowEl) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const tbody = rowEl.closest("tbody") || rowEl.parentElement;
+        if (!tbody) return;
+
+        const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
+        let rowIndex = -1;
+        const matchedTr = rowEl.closest(".table-tr, tr");
+        if (matchedTr) {
+            rowIndex = trs.indexOf(matchedTr);
+        }
+
+        if (rowIndex !== -1 && rows[rowIndex]) {
+            setContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                row: rows[rowIndex],
+            });
+        }
+    };
+
+    const handleShowPartData = async (row: WorkOrderTableRow) => {
+        setContextMenu(null);
+        const partId = rowPartMapRef.current.get(row.id) || (row as any).entityID;
+        if (!partId) return;
+
+        try {
+            const partData = await fetchFromApi<PartModel>(`/db/part/id/${partId}`);
+            setSelectedPart(partData);
+            setIsPartPortalOpen(true);
+        } catch (err) {
+            console.error("Failed to fetch part data for modal portal", err);
+        }
+    };
 
     const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
     const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
@@ -184,12 +248,46 @@ export default function WorkOrderDetailsPage() {
             {loading ? (
                 <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
             ) : (
-                <Table
-                    data={rows}
-                    columnsData={WorkOrderColumns}
-                    newRowFunction={undefined}
-                    setData={(newData) => { return setRows(newData as WorkOrderTableRow[]); }}
-                />
+                <div onContextMenuCapture={handleTableContextMenuCapture} className="relative">
+                    <Table
+                        data={rows}
+                        columnsData={WorkOrderColumns}
+                        newRowFunction={undefined}
+                        setData={(newData) => { return setRows(newData as WorkOrderTableRow[]); }}
+                    />
+
+                    {/* Custom Context Menu */}
+                    {contextMenu && (
+                        <div
+                            className="context-menu"
+                            style={{ top: contextMenu.y, left: contextMenu.x }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => handleShowPartData(contextMenu.row)}
+                            >
+                                Show Part Data
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* PartPortal Modal Popup Overlay */}
+            {isPartPortalOpen && selectedPart && (
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <button
+                            type="button"
+                            onClick={() => setIsPartPortalOpen(false)}
+                            className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+                        >
+                            ✕ Close
+                        </button>
+                        <PartPortal part={selectedPart} />
+                    </div>
+                </div>
             )}
         </div>
     );
