@@ -1,8 +1,10 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import { AuthenticatedImage, downloadFile } from "../util/ApiService";
+import { useThemeSync } from "../util/misc/useThemeSync";
 import type { PartModel } from "../util/Models";
 
 const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
+    const { isLight } = useThemeSync();
     const [formData, setFormData] = useState<PartModel>({ ...part });
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -48,12 +50,24 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
         }
     };
 
+    // Dynamic theme classes
+    const containerBg = isLight ? "bg-white border-zinc-300 text-zinc-900 shadow-xl" : "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-2xl";
+    const headerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
+    const imageBoxBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
+    const labelColor = isLight ? "text-zinc-600" : "text-zinc-500";
+    const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:ring-blue-600/50" : "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:ring-blue-500/50";
+    const cardBg = isLight ? "bg-zinc-50 border-zinc-200" : "bg-zinc-950 border-zinc-800/80";
+    const subInputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 focus:ring-blue-600/50" : "bg-zinc-900 border-zinc-800 text-zinc-100 focus:ring-blue-500/50";
+    const textAreaColor = isLight ? "text-zinc-800" : "text-zinc-200";
+    const commentsColor = isLight ? "text-zinc-700 italic" : "text-zinc-300 italic";
+    const secondaryBtnClass = isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200";
+
     return (
-        <div className="w-full max-w-4xl bg-zinc-900 border border-zinc-800 rounded-2xl p-6 sm:p-8 shadow-2xl text-zinc-100 space-y-6 my-auto max-h-[90vh] overflow-y-auto">
+        <div className={`w-full max-w-4xl border rounded-2xl p-6 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto transition-colors duration-200 ${containerBg}`}>
             {/* Header */}
-            <div className="flex items-start justify-between gap-4 border-b border-zinc-800 pb-5">
+            <div className={`flex items-start justify-between gap-4 border-b pb-5 ${headerBorder}`}>
                 <div className="flex items-center gap-5 w-full">
-                    <div className="w-24 h-24 shrink-0 bg-zinc-950 border border-zinc-800 rounded-xl overflow-hidden flex items-center justify-center shadow-inner">
+                    <div className={`w-24 h-24 shrink-0 border rounded-xl overflow-hidden flex items-center justify-center shadow-inner ${imageBoxBg}`}>
                         {formData.avatarID ? (
                             <AuthenticatedImage
                                 src={`/drive/file/id/${formData.avatarID}`}
@@ -61,13 +75,13 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                                 className="w-full h-full object-cover"
                             />
                         ) : (
-                            <span className="text-zinc-600 text-[10px] font-mono">NO IMAGE</span>
+                            <span className={`text-[10px] font-mono ${isLight ? "text-zinc-400" : "text-zinc-600"}`}>NO IMAGE</span>
                         )}
                     </div>
 
                     <div className="flex-1 space-y-2">
                         <div className="space-y-1">
-                            <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                            <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                                 Part Name
                             </label>
                             <input
@@ -77,7 +91,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                                 onChange={handleChange}
                                 disabled={part.vendor !== ""}
                                 placeholder="Enter Part Name"
-                                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-lg font-bold text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                className={`w-full border rounded-lg px-3.5 py-2 text-lg font-bold focus:outline-none focus:ring-2 ${inputBg}`}
                             />
                         </div>
                     </div>
@@ -93,8 +107,8 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
             <form onSubmit={handleUpsert} className="space-y-6">
                 {/* Row 1: Catalog Number & Revision & Engineer */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Catalog Number
                         </label>
                         <input
@@ -104,12 +118,12 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             disabled={part.vendor !== ""}
                             onChange={handleChange}
                             placeholder="e.g. PN-1002"
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className={`w-full border rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 ${subInputBg}`}
                         />
                     </div>
 
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Revision
                         </label>
                         <input
@@ -119,12 +133,12 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             disabled={part.vendor !== ""}
                             onChange={handleChange}
                             placeholder="e.g. Rev A"
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
                         />
                     </div>
 
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Engineer
                         </label>
                         <input
@@ -134,15 +148,15 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             disabled={part.vendor !== ""}
                             onChange={handleChange}
                             placeholder="Engineer name"
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
                         />
                     </div>
                 </div>
 
                 {/* Row 2: Material & Mass & Price */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Material
                         </label>
                         <input
@@ -152,12 +166,12 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             disabled={part.vendor !== ""}
                             onChange={handleChange}
                             placeholder="e.g. Aluminum 6061"
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
                         />
                     </div>
 
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Mass (kg)
                         </label>
                         <input
@@ -168,12 +182,12 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             disabled={part.vendor !== ""}
                             onChange={handleChange}
                             placeholder="0.00"
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
                         />
                     </div>
 
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Price ($)
                         </label>
                         <input
@@ -184,18 +198,19 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             disabled={part.vendor !== ""}
                             onChange={handleChange}
                             placeholder="0.00"
-                            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
                         />
                     </div>
                 </div>
 
                 {/* Row 3: Links & Media Keys */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Onshape CAD URL
                         </label>
                         <button
+                            type="button"
                             onClick={() => {
                                 if (part.onshapeURL) window.open(part.onshapeURL, "_blank");
                             }}
@@ -205,11 +220,12 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         </button>
                     </div>
 
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             STL Model Link
                         </label>
                         <button
+                            type="button"
                             onClick={async () => {
                                 const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${part.stlLink}`;
                                 await downloadFile(downloadUrl, `${part.name || "part"}.stl`);
@@ -220,11 +236,12 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         </button>
                     </div>
 
-                    <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-3.5 space-y-1.5">
-                        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Parasolid Model Link
                         </label>
                         <button
+                            type="button"
                             onClick={async () => {
                                 const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${part.parasolidLink}`;
                                 await downloadFile(downloadUrl, `${part.name || "part"}.parasolid`);
@@ -237,8 +254,8 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                 </div>
 
                 {/* Expanded Description Section */}
-                <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-4 space-y-1.5">
-                    <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                <div className={`border rounded-xl p-4 space-y-1.5 ${cardBg}`}>
+                    <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                         Description
                     </label>
                     <textarea
@@ -248,13 +265,13 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         onChange={handleChange}
                         disabled={part.vendor !== ""}
                         placeholder="Detailed description of the part..."
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${textAreaColor}`}
                     />
                 </div>
 
                 {/* Expanded Comments Section */}
-                <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-4 space-y-1.5">
-                    <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
+                <div className={`border rounded-xl p-4 space-y-1.5 ${cardBg}`}>
+                    <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                         Comments & Notes
                     </label>
                     <textarea
@@ -264,19 +281,19 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         onChange={handleChange}
                         disabled={part.vendor !== ""}
                         placeholder="Additional manufacturing notes, comments, or issues..."
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-300 italic placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y"
+                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${commentsColor}`}
                     />
                 </div>
 
                 {/* Footer Actions */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-zinc-800">
+                <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t ${headerBorder}`}>
                     <div className="flex items-center gap-3">
                         {formData.onshapeURL && (
                             <a
                                 href={formData.onshapeURL}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold transition-all"
+                                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${secondaryBtnClass}`}
                             >
                                 Open CAD Link ↗
                             </a>
