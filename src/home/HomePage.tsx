@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import { useThemeSync } from "../util/misc/useThemeSync";
-import BomCard from "./BomCard";
-import WorkOrderCard from "./WorkOrderCard";
+import BomTable from "./BomTable";
+import WorkOrderTable from "./WorkOrderTable";
 import type { BomModel, WorkorderModel } from "../util/Models";
 
 export type BomSummary = Omit<BomModel, 'description' | 'comments' | 'onshapeURL' | 'onshapeID' | 'parts' | 'subAssemblies' | 'createdAt'>;
@@ -47,7 +47,6 @@ export default function HomeScreen() {
   }, [])
 
   const textHeading = isLight ? "text-zinc-900" : "text-zinc-100";
-  const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
 
   if (loading) {
     return <div className={`p-8 text-center min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50 text-zinc-500" : "bg-zinc-950 text-zinc-400"}`}>Loading BOMs and Work Orders...</div>;
@@ -74,17 +73,13 @@ export default function HomeScreen() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {boms.map((bom) => <BomCard key={bom.id} bom={bom} />)}
-      </div>
+      <BomTable boms={boms} />
 
       <br/>
 
       <h1 className={`text-2xl font-bold mb-6 mt-6 ${textHeading}`}>Work Orders</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {workOrders.map((workOrder) => <WorkOrderCard key={workOrder.id} workOrder={workOrder} />)}
-      </div>
+      <WorkOrderTable workOrders={workOrders} />
     </div>
   );
 }
