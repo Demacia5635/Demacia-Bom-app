@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
 import Table from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
@@ -7,6 +7,7 @@ import type { BomModel, PartModel } from "../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
 import BomColumns from "./BomColumns";
+import PartPortal from "../searchParts/PartPortal";
 
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
@@ -17,6 +18,15 @@ export default function BomDetailsPage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
 
+  // States for the PartPortal modal popup & custom context menu
+  const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
+  const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    row: BomTableRow;
+  } | null>(null);
+
   useEffect(() => {
     if (!bomId) return;
 
@@ -24,6 +34,12 @@ export default function BomDetailsPage() {
       setMainBomData(bom);
     });
   }, [bomId]);
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (!bomId) return;
@@ -84,7 +100,6 @@ export default function BomDetailsPage() {
       for (const p of bom.parts || []) {
         const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
 
-        // Robust fallback mapping for part Onshape IDs
         let partAvatarUrl = "";
         const docID = part?.onshapeID?.documentID;
         const elemID = part?.onshapeID?.elementID;
@@ -92,7 +107,6 @@ export default function BomDetailsPage() {
         if (docID && elemID) {
           const wvmType = part.onshapeID?.wvmType || "w";
           const wvmID = part.onshapeID?.wvmID || "";
-          // Ensure we target the exact part ID from onshapeID, or fallback to the BOM item partID
           const targetPartID = part.onshapeID?.partID || p.partID;
           
           partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${targetPartID}/thumbnail`;
@@ -119,7 +133,7 @@ export default function BomDetailsPage() {
           wvmType: part.onshapeID?.wvmType || "",
           wvmID: part.onshapeID?.wvmID || "",
           elementID: part.onshapeID?.elementID || "",
-          entityID: part.onshapeID?.partID || "",
+          entityID: p.partID,
           onshapeURL: part.onshapeURL || "",
           exportSTL: part.stlLink || "",
           exportParasolid: part.parasolidLink || "",
@@ -136,6 +150,49 @@ export default function BomDetailsPage() {
       .catch((err: ApiError) => setError(err))
       .finally(() => setLoading(false));
   }, [bomId]);
+
+  // Using capture phase to intercept right-clicks anywhere inside the table wrapper reliably
+  const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const rowEl = target.closest(".table-tr, tr, .table-td, td");
+    if (!rowEl) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const tbody = rowEl.closest("tbody") || rowEl.parentElement;
+    if (!tbody) return;
+
+    const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
+    // Fallback if rows use tr elements or wrapper elements
+    let rowIndex = -1;
+    const matchedTr = rowEl.closest(".table-tr, tr");
+    if (matchedTr) {
+      rowIndex = trs.indexOf(matchedTr);
+    }
+
+    if (rowIndex !== -1 && rows[rowIndex]) {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        row: rows[rowIndex],
+      });
+    }
+  };
+
+  const handleShowPartData = async (row: BomTableRow) => {
+    setContextMenu(null);
+    const partId = row.entityID;
+    if (!partId) return;
+
+    try {
+      const partData = await fetchFromApi<PartModel>(`/db/part/id/${partId}`);
+      setSelectedPart(partData);
+      setIsPartPortalOpen(true);
+    } catch (err) {
+      console.error("Failed to fetch part data for modal portal", err);
+    }
+  };
 
   const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
   const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
@@ -166,15 +223,49 @@ export default function BomDetailsPage() {
       {loading ? (
         <div className={`p-8 text-center ${loadingText}`}>Recursively fetching BOM tree...</div>
       ) : (
-        <Table
-          data={rows}
-          columnsData={BomColumns}
-          setData={(newData) => {
-            return setRows(newData as BomTableRow[]);
-          }}
-          newRowFunction={undefined}
-          initialSort={{ key: "catalogNumber", direction: "asc" }}
-        />
+        <div onContextMenuCapture={handleTableContextMenuCapture} className="relative">
+          <Table
+            data={rows}
+            columnsData={BomColumns}
+            setData={(newData) => {
+              return setRows(newData as BomTableRow[]);
+            }}
+            newRowFunction={undefined}
+            initialSort={{ key: "catalogNumber", direction: "asc" }}
+          />
+
+          {/* Custom Context Menu */}
+          {contextMenu && (
+            <div
+              className="context-menu"
+              style={{ top: contextMenu.y, left: contextMenu.x }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => handleShowPartData(contextMenu.row)}
+              >
+                Show Part Data
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PartPortal Modal Popup Overlay */}
+      {isPartPortalOpen && selectedPart && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setIsPartPortalOpen(false)}
+              className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+            >
+              ✕ Close
+            </button>
+            <PartPortal part={selectedPart} />
+          </div>
+        </div>
       )}
     </div>
   );
