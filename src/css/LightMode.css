@@ -463,60 +463,70 @@ body.light-theme-active .table-td:has(.cell-select[value="High"]),
   font-weight: 700;
 }
 
-/* Context Menus */
+/* Context Menus - Light Mode */
 body.light-theme-active .context-menu,
-.table-page-container.theme-light .context-menu {
-  position: fixed;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--context-shadow);
-  border-radius: 6px;
-  padding: 4px;
-  z-index: 1000;
-  display: flex;
-  flex-direction: column;
-  min-width: 160px;
+.theme-light .context-menu,
+.context-menu {
+  position: fixed !important;
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border: 1px solid #0f172a !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15) !important;
+  border-radius: 6px !important;
+  padding: 4px !important;
+  z-index: 99999 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-width: 160px !important;
+  opacity: 1 !important;
 }
 
 body.light-theme-active .context-menu button,
-.table-page-container.theme-light .context-menu button {
-  background: none;
-  border: none;
-  padding: 8px 12px;
-  text-align: left;
-  font-size: 0.85rem;
-  color: var(--text-main);
-  cursor: pointer;
-  width: 100%;
-  border-radius: 4px;
+.theme-light .context-menu button,
+.context-menu button {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 8px 12px !important;
+  text-align: left !important;
+  font-size: 0.85rem !important;
+  color: #0b1622 !important;
+  cursor: pointer !important;
+  width: 100% !important;
+  border-radius: 4px !important;
 }
 
 body.light-theme-active .context-menu button:hover:not(:disabled),
-.table-page-container.theme-light .context-menu button:hover:not(:disabled) {
-  background-color: #1e40af;
-  color: #ffffff;
+.theme-light .context-menu button:hover:not(:disabled),
+.context-menu button:hover:not(:disabled) {
+  background-color: #1e40af !important;
+  color: #ffffff !important;
 }
 
 body.light-theme-active .context-menu button:disabled,
-.table-page-container.theme-light .context-menu button:disabled {
-  color: var(--text-disabled);
-  cursor: not-allowed;
+.theme-light .context-menu button:disabled,
+.context-menu button:disabled {
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
 }
 
 body.light-theme-active .context-divider,
-.table-page-container.theme-light .context-divider {
-  height: 1px;
-  background-color: var(--border-color);
-  margin: 4px 0;
+.theme-light .context-divider,
+.context-divider {
+  height: 1px !important;
+  background-color: #0f172a !important;
+  margin: 4px 0 !important;
 }
 
 body.light-theme-active .context-menu .delete-btn,
-.table-page-container.theme-light .context-menu .delete-btn {
-  color: #991b1b;
+.theme-light .context-menu .delete-btn,
+.context-menu .delete-btn {
+  background-color: transparent !important;
+  color: #991b1b !important;
 }
 
 body.light-theme-active .context-menu .delete-btn:hover,
-.table-page-container.theme-light .context-menu .delete-btn:hover {
-  background-color: #fee2e2;
-  color: #991b1b;
+.theme-light .context-menu .delete-btn:hover,
+.context-menu .delete-btn:hover {
+  background-color: #fee2e2 !important;
+  color: #991b1b !important;
 }
