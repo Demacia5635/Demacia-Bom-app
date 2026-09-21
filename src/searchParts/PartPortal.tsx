@@ -1,14 +1,23 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
-import { AuthenticatedImage, downloadFile } from "../util/ApiService";
+import { AuthenticatedImage, downloadFile, fetchFromApi } from "../util/ApiService";
 import { useThemeSync } from "../util/misc/useThemeSync";
-import type { PartModel } from "../util/Models";
+import type { PartModel, BomModel } from "../util/Models";
+import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 
 const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const { isLight } = useThemeSync();
+    const navigate = useNavigate();
+
     const [formData, setFormData] = useState<PartModel>({ ...part });
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+
+    // Linked BOM states
+    const [isCheckingBoms, setIsCheckingBoms] = useState(false);
+    const [linkedBoms, setLinkedBoms] = useState<BomModel[]>([]);
+    const [isBomModalOpen, setIsBomModalOpen] = useState(false);
 
     useEffect(() => {
         setFormData({ ...part });
@@ -48,6 +57,46 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
             setSaveError(err.message || "An unexpected error occurred while saving.");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    // Handler to find and navigate to linked BOMs with fallback endpoint support & detailed logging
+    const handleLinkedBomClick = async () => {
+        if (!part?.id) return;
+        setIsCheckingBoms(true);
+        try {
+            let allBoms: BomModel[] = [];
+            
+            // Try fetching from common list endpoints
+            try {
+                allBoms = await fetchFromApi<BomModel[]>(`/db/bom`);
+            } catch (e1) {
+                try {
+                    allBoms = await fetchFromApi<BomModel[]>(`/db/boms`);
+                } catch (e2) {
+                    allBoms = await fetchFromApi<BomModel[]>(`/db/bom/all`);
+                }
+            }
+
+            console.log("Fetched all BOMs for lookup:", allBoms);
+
+            const matchingBoms = (allBoms || []).filter((bom) => 
+                bom.parts?.some((p) => p.partID === part.id)
+            );
+
+            if (matchingBoms.length === 1) {
+                navigate(`/bom/${matchingBoms[0].id}`);
+            } else if (matchingBoms.length > 1) {
+                setLinkedBoms(matchingBoms);
+                setIsBomModalOpen(true);
+            } else {
+                alert("This part is not currently linked to any BOM assemblies.");
+            }
+        } catch (err) {
+            console.error("Failed to fetch BOM list for linked assembly lookup:", err);
+            alert("Could not retrieve linked BOMs. Check console for details.");
+        } finally {
+            setIsCheckingBoms(false);
         }
     };
 
@@ -210,7 +259,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                     </div>
                 </div>
 
-                {/* Row 3: Links & Media Keys */}
+                {/* Row 3: Links & Media Keys (4 Cards Layout) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
                         <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
@@ -256,6 +305,20 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Download Parasolid
+                        </button>
+                    </div>
+
+                    <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
+                            Linked Assembly / BOM
+                        </label>
+                        <button
+                            type="button"
+                            onClick={handleLinkedBomClick}
+                            disabled={isCheckingBoms}
+                            className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            {isCheckingBoms ? "Checking..." : "View Linked BOM ↗"}
                         </button>
                     </div>
                 </div>
@@ -325,16 +388,16 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                     className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
                     onClick={() => setEnlargedImageSrc(null)}
                 >
-                    <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
+                    <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
                         <button
                             type="button"
                             onClick={() => setEnlargedImageSrc(null)}
-                            className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold"
+                            className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md"
                         >
                             ✕ Close
                         </button>
                         {enlargedImageSrc === "FAILED" ? (
-                            <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2">
+                            <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
                                 <span className="text-xl font-bold">Image Failed to Load</span>
                                 <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>
                             </div>
@@ -347,6 +410,52 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         )}
                     </div>
                 </div>
+            )}
+
+            {/* Multiple Linked BOMs Selection Modal */}
+            {isBomModalOpen && createPortal(
+                <div 
+                    className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+                    onClick={() => setIsBomModalOpen(false)}
+                >
+                    <div 
+                        className={`w-full max-w-lg border rounded-2xl p-6 shadow-2xl space-y-4 ${containerBg}`}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between border-b pb-3 border-zinc-800">
+                            <h3 className="text-lg font-bold">Linked BOMs for Part</h3>
+                            <button
+                                type="button"
+                                onClick={() => setIsBomModalOpen(false)}
+                                className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+                            >
+                                ✕ Close
+                            </button>
+                        </div>
+                        <p className={`text-xs ${isLight ? "text-zinc-600" : "text-zinc-400"}`}>
+                            This part is used in multiple assemblies. Select a BOM below to view its details:
+                        </p>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {linkedBoms.map((bom) => (
+                                <div
+                                    key={bom.id}
+                                    onClick={() => {
+                                        setIsBomModalOpen(false);
+                                        navigate(`/bom/${bom.id}`);
+                                    }}
+                                    className={`p-3 border rounded-xl cursor-pointer transition-colors flex items-center justify-between ${isLight ? "bg-zinc-50 hover:bg-zinc-100 border-zinc-200" : "bg-zinc-950 hover:bg-zinc-800 border-zinc-800"}`}
+                                >
+                                    <div>
+                                        <p className="font-semibold text-sm">{bom.name || "Unnamed Assembly"}</p>
+                                        <p className={`text-xs ${isLight ? "text-zinc-500" : "text-zinc-400 font-mono"}`}>Catalog No: {bom.catalogNumber || "N/A"}</p>
+                                    </div>
+                                    <span className="text-xs font-bold text-blue-500">View BOM ↗</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
