@@ -176,6 +176,44 @@ export default function WorkOrderDetailsPage() {
             .finally(() => setLoading(false));
     }, [workOrderID, workOrderData]);
 
+    // Handle table data changes and save updates to part database (MongoDB)
+    const handleTableDataChange = async (newData: WorkOrderTableRow[]) => {
+        for (let i = 0; i < newData.length; i++) {
+            const newRow = newData[i];
+            const oldRow = rows.find(r => r.id === newRow.id);
+            const partId = rowPartMapRef.current.get(newRow.id);
+
+            if (oldRow && partId && (
+                oldRow.name !== newRow.name ||
+                oldRow.catalogNumber !== newRow.catalogNumber ||
+                oldRow.comments !== newRow.comments ||
+                oldRow.manufacturingMethod !== newRow.manufacturingMethod
+            )) {
+                try {
+                    const payload = {
+                        name: newRow.name,
+                        catalogNumber: newRow.catalogNumber,
+                        comments: newRow.comments,
+                        manufacturingMethod: newRow.manufacturingMethod,
+                    };
+
+                    await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${partId}`, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "x-client-secret": import.meta.env.VITE_CLIENT_SECRET,
+                        },
+                        body: JSON.stringify(payload),
+                    });
+                } catch (err) {
+                    console.error("Failed to sync work order grid updates to part database:", err);
+                }
+            }
+        }
+
+        setRows(newData);
+    };
+
     // Left click handler to catch clicks specifically on the avatar cell (column index 0)
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
@@ -280,7 +318,7 @@ export default function WorkOrderDetailsPage() {
                         data={rows}
                         columnsData={WorkOrderColumns}
                         newRowFunction={undefined}
-                        setData={(newData) => { return setRows(newData as WorkOrderTableRow[]); }}
+                        setData={(newData) => handleTableDataChange(newData as WorkOrderTableRow[])}
                     />
 
                     {/* Custom Context Menu */}

@@ -152,6 +152,55 @@ export default function BomDetailsPage() {
       .finally(() => setLoading(false));
   }, [bomId]);
 
+  // Handle table data alterations and save changes to MongoDB
+  const handleTableDataChange = async (newData: BomTableRow[]) => {
+    for (let i = 0; i < newData.length; i++) {
+      const newRow = newData[i];
+      const oldRow = rows.find(r => r.id === newRow.id);
+
+      if (oldRow && newRow.entityID && (
+        oldRow.name !== newRow.name ||
+        oldRow.catalogNumber !== newRow.catalogNumber ||
+        oldRow.revision !== newRow.revision ||
+        oldRow.description !== newRow.description ||
+        oldRow.engineer !== newRow.engineer ||
+        oldRow.material !== newRow.material ||
+        oldRow.mass !== newRow.mass ||
+        oldRow.price !== newRow.price ||
+        oldRow.comments !== newRow.comments
+      )) {
+        try {
+          const partId = newRow.entityID;
+          const payload = {
+            name: newRow.name,
+            catalogNumber: newRow.catalogNumber,
+            revision: newRow.revision,
+            description: newRow.description,
+            engineer: newRow.engineer,
+            material: newRow.material,
+            mass: newRow.mass,
+            price: newRow.price,
+            comments: newRow.comments,
+            vendor: newRow.vendor
+          };
+
+          await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${partId}`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-client-secret": import.meta.env.VITE_CLIENT_SECRET,
+            },
+            body: JSON.stringify(payload),
+          });
+        } catch (err) {
+          console.error("Failed to sync grid updates to part database:", err);
+        }
+      }
+    }
+
+    setRows(newData);
+  };
+
   // Left click handler: strictly used for enlarging the image when clicking the avatar cell
   const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -254,9 +303,7 @@ export default function BomDetailsPage() {
           <Table
             data={rows}
             columnsData={BomColumns}
-            setData={(newData) => {
-              return setRows(newData as BomTableRow[]);
-            }}
+            setData={(newData) => handleTableDataChange(newData as BomTableRow[])}
             newRowFunction={undefined}
             initialSort={{ key: "catalogNumber", direction: "asc" }}
           />
