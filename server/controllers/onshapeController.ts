@@ -36,13 +36,31 @@ function handleOnshapeError(
   return res.status(502).json({ message: fallbackMessage, error: message });
 }
 
-/** GET /api/onshape/ */
+function ensureBuffer(data: any): Buffer | null {
+  if (!data) return null;
+  if (Buffer.isBuffer(data)) return data;
+  if (typeof data === "string") {
+    if (data.startsWith("data:image")) {
+      return Buffer.from(data.split(",")[1], "base64");
+    }
+    return Buffer.from(data, "base64");
+  }
+  if (data instanceof ArrayBuffer || data instanceof Uint8Array) return Buffer.from(data);
+  if (typeof data === "object" && "data" in data && Array.isArray(data.data)) {
+    return Buffer.from(data.data);
+  }
+  try {
+    return Buffer.from(data);
+  } catch (err) {
+    return null;
+  }
+}
+
 export async function checkConnection(req: Request, res: Response) {
   const connected = await onshapeService.checkConnection();
   return res.status(connected ? 200 : 503).json({ connected });
 }
 
-/** GET /api/onshape/part/d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/p/:partID */
 export async function getPart(req: Request<OnshapePartParams>, res: Response) {
   try {
     const part = await onshapeService.getPartForDb(req.params);
@@ -52,7 +70,6 @@ export async function getPart(req: Request<OnshapePartParams>, res: Response) {
   }
 }
 
-/** POST /api/onshape/part/d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/p/:partID */
 export async function updatePart(
   req: Request<OnshapePartParams, unknown, Record<string, unknown>>,
   res: Response,
@@ -65,7 +82,6 @@ export async function updatePart(
   }
 }
 
-/** GET /api/onshape/bom/d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID */
 export async function getBom(req: Request<OnshapeBomParams>, res: Response) {
   try {
     const bom = await onshapeService.getBom(req.params);
@@ -97,18 +113,32 @@ export async function getPartThumbnail(
   res: Response,
 ) {
   try {
-    const thumbnail = await onshapeService.getPartThumbnail(
-      req.params,
-      req.params.size,
-    );
-    if (!thumbnail)
-      return res
-        .status(404)
-        .json({ message: `onshape part was not found ${JSON.stringify(req.params)}` });
+    // 1. Check if the database record already contains a cached Base64 avatarID string
+    const existingPart = await onshapeService.getPartForDb(req.params).catch(() => null);
+    if (existingPart && typeof (existingPart as any).avatarID === 'string' && (existingPart as any).avatarID.startsWith("data:image")) {
+      console.log(`[CACHE HIT] Part thumbnail served from DB.`);
+      const b64Data = (existingPart as any).avatarID.split(",")[1];
+      const buffer = Buffer.from(b64Data, 'base64');
+      res.setHeader("Content-Type", "image/png");
+      return res.status(200).send(buffer);
+    }
+
+    console.log(`[CACHE MISS] Fetching Part thumbnail from Onshape...`);
+
+    // 2. Fetch from Onshape if not cached
+    const thumbnail = await onshapeService.getPartThumbnail(req.params, req.params.size);
+    if (!thumbnail) return res.status(404).json({ message: "part thumbnail not found" });
+
+    // 3. Convert to Base64 and save to MongoDB via service update
+    const safeBuffer = ensureBuffer(thumbnail);
+    if (safeBuffer) {
+      const base64String = `data:image/png;base64,${safeBuffer.toString("base64")}`;
+      await onshapeService.updatePart(req.params, { avatarID: base64String })
+        .catch(e => console.error("Failed to cache part avatarID to DB:", e));
+    }
     
     res.setHeader("Content-Type", "image/png");
-    // FIX: Use .send() instead of .json() so raw image buffer is returned
-    return res.status(200).send(thumbnail);
+    return res.status(200).send(safeBuffer || thumbnail);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to fetch thumbnail for part");
   }
@@ -120,26 +150,10 @@ export async function setPartThumbnail(
 ) {
   try {
     const buffer = req.body;
-    let safeBuffer: Buffer;
-
-    if (Buffer.isBuffer(buffer)) {
-      safeBuffer = buffer;
-    } else if (
-      buffer &&
-      typeof buffer === "object" &&
-      "data" in buffer &&
-      Array.isArray((buffer as any).data)
-    ) {
-      safeBuffer = Buffer.from((buffer as any).data);
-    } else {
-      return res.status(400).json({
-        message: `Invalid buffer provided for file upload: expected Buffer, got ${typeof buffer}`,
-      });
-    }
+    const safeBuffer = ensureBuffer(buffer);
+    if (!safeBuffer) return res.status(400).json({ message: `Invalid buffer provided` });
 
     await onshapeService.setPartThumbnail(req.params, safeBuffer);
-
-    // FIX: Use res.sendStatus(204) to properly close 204 requests
     return res.sendStatus(204);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to set thumbnail for part");
@@ -151,18 +165,32 @@ export async function getElementThumbnail(
   res: Response,
 ) {
   try {
-    const thumbnail = await onshapeService.getElementThumbnail(
-      req.params,
-      req.params.size,
-    );
-    if (!thumbnail)
-      return res
-        .status(404)
-        .json({ message: `onshape element was not found ${JSON.stringify(req.params)}` });
+    // 1. Check if the database record already contains a cached Base64 avatarID string
+    const existingBom = await onshapeService.getBom(req.params).catch(() => null);
+    if (existingBom && typeof (existingBom as any).avatarID === 'string' && (existingBom as any).avatarID.startsWith("data:image")) {
+      console.log(`[CACHE HIT] BOM element thumbnail served from DB.`);
+      const b64Data = (existingBom as any).avatarID.split(",")[1];
+      const buffer = Buffer.from(b64Data, 'base64');
+      res.setHeader("Content-Type", "image/png");
+      return res.status(200).send(buffer);
+    }
+
+    console.log(`[CACHE MISS] Fetching BOM element thumbnail from Onshape...`);
+
+    // 2. Fetch from Onshape if not cached
+    const thumbnail = await onshapeService.getElementThumbnail(req.params, req.params.size);
+    if (!thumbnail) return res.status(404).json({ message: "element thumbnail not found" });
+
+    // 3. Convert to Base64 and save to MongoDB via service update
+    const safeBuffer = ensureBuffer(thumbnail);
+    if (safeBuffer) {
+      const base64String = `data:image/png;base64,${safeBuffer.toString("base64")}`;
+      await onshapeService.updateAssembly(req.params, { avatarID: base64String })
+        .catch(e => console.error("Failed to cache element avatarID to DB:", e));
+    }
 
     res.setHeader("Content-Type", "image/png");
-    // FIX: Use .send() instead of .json() so raw image buffer is returned
-    return res.status(200).send(thumbnail);
+    return res.status(200).send(safeBuffer || thumbnail);
   } catch (err) {
     return handleOnshapeError(
       res,
@@ -178,24 +206,10 @@ export async function setElementThumbnail(
 ) {
   try {
     const buffer = req.body;
-    let safeBuffer: Buffer;
-
-    if (Buffer.isBuffer(buffer)) {
-      safeBuffer = buffer;
-    } else if (
-      buffer &&
-      typeof buffer === "object" &&
-      "data" in Buffer &&
-      Array.isArray((buffer as any).data)
-    ) {
-      safeBuffer = Buffer.from((buffer as any).data);
-    } else {
-      return res.status(400).json({ message: `Invalid buffer provided for file upload: expected Buffer, got ${typeof buffer}`});
-    }
+    const safeBuffer = ensureBuffer(buffer);
+    if (!safeBuffer) return res.status(400).json({ message: `Invalid buffer provided` });
 
     await onshapeService.setElementThumbnail(req.params, safeBuffer);
-    
-    // FIX: Use res.sendStatus(204) to properly close 204 requests
     return res.sendStatus(204);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to set thumbnail for element");

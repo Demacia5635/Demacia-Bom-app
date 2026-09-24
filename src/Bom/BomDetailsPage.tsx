@@ -57,12 +57,13 @@ export default function BomDetailsPage() {
       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
       const currentAssemblyRowId = `${parentId ? parentId + "-" : ""}${bom.id}`;
 
+      // 1. Check MongoDB avatarID first. If missing, fallback to backend caching route.
       let assemblyAvatarUrl = "";
-      if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
+      if (bom?.avatarID && typeof bom.avatarID === 'string' && bom.avatarID.startsWith("data:image")) {
+        assemblyAvatarUrl = bom.avatarID;
+      } else if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
         const { documentID, wvmType = "w", wvmID, elementID } = bom.onshapeID;
         assemblyAvatarUrl = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-      } else if (bom?.avatarID) {
-        assemblyAvatarUrl = `/drive/file/id/${bom.avatarID}`;
       }
 
       const assemblyRow: BomTableRow = {
@@ -101,18 +102,21 @@ export default function BomDetailsPage() {
       for (const p of bom.parts || []) {
         const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
 
+        // 2. Check MongoDB avatarID for parts first. If missing, fallback to backend route.
         let partAvatarUrl = "";
-        const docID = part?.onshapeID?.documentID;
-        const elemID = part?.onshapeID?.elementID;
-        
-        if (docID && elemID) {
-          const wvmType = part.onshapeID?.wvmType || "w";
-          const wvmID = part.onshapeID?.wvmID || "";
-          const targetPartID = part.onshapeID?.partID || p.partID;
+        if (part?.avatarID && typeof part.avatarID === 'string' && part.avatarID.startsWith("data:image")) {
+          partAvatarUrl = part.avatarID;
+        } else {
+          const docID = part?.onshapeID?.documentID;
+          const elemID = part?.onshapeID?.elementID;
           
-          partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${targetPartID}/thumbnail`;
-        } else if (part?.avatarID) {
-          partAvatarUrl = `/drive/file/id/${part.avatarID}`;
+          if (docID && elemID) {
+            const wvmType = part.onshapeID?.wvmType || "w";
+            const wvmID = part.onshapeID?.wvmID || "";
+            const targetPartID = part.onshapeID?.partID || p.partID;
+            
+            partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${targetPartID}/thumbnail`;
+          }
         }
 
         const partRow: BomTableRow = {
@@ -201,7 +205,6 @@ export default function BomDetailsPage() {
     setRows(newData);
   };
 
-  // Left click handler: strictly used for enlarging the image when clicking the avatar cell
   const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const cellEl = target.closest(".table-td, td");
@@ -221,14 +224,12 @@ export default function BomDetailsPage() {
       const cellsInRow = Array.from(trEl.querySelectorAll(".table-td, td"));
       const cellIndex = cellsInRow.indexOf(cellEl);
 
-      // Trigger image enlargement only if clicking the avatar cell (column index 0)
       if (cellIndex === 0) {
         setEnlargedImageSrc(clickedRow.avatar || "FAILED");
       }
     }
   };
 
-  // Right click handler: strictly used for opening the context menu for any row
   const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const rowEl = target.closest(".table-tr, tr");
@@ -308,7 +309,6 @@ export default function BomDetailsPage() {
             initialSort={{ key: "catalogNumber", direction: "asc" }}
           />
 
-          {/* Custom Context Menu */}
           {contextMenu && (
             <div
               className="context-menu"
@@ -326,7 +326,6 @@ export default function BomDetailsPage() {
         </div>
       )}
 
-      {/* PartPortal Modal Popup Overlay */}
       {isPartPortalOpen && selectedPart && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -342,7 +341,6 @@ export default function BomDetailsPage() {
         </div>
       )}
 
-      {/* Enlarged Image Preview Overlay Modal */}
       {enlargedImageSrc && (
         <div 
           className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"

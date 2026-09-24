@@ -89,13 +89,13 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
     }
   };
 
-  // Resolve image source hierarchy using onshapeID or avatarID fallback
+  // Resolve image source hierarchy using Base64 avatarID or fallback to backend route
   let imageSrc = "";
-  if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
+  if (bom?.avatarID && typeof bom.avatarID === 'string' && bom.avatarID.startsWith("data:image")) {
+    imageSrc = bom.avatarID;
+  } else if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
     const { documentID, wvmType = "w", wvmID, elementID } = bom.onshapeID;
     imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-  } else if (bom?.avatarID) {
-    imageSrc = `/drive/file/id/${bom.avatarID}`;
   }
 
   // Theme styles mapping
