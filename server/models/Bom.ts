@@ -55,3 +55,4 @@ const bomSchema = new mongoose.Schema(
 const Bom = mongoose.model('Bom', bomSchema);
 
 export default Bom;
+
