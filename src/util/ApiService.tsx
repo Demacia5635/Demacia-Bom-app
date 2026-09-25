@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const BASE_URL = `${import.meta.env.VITE_CLIENT_URL}/api`;
+const BASE_URL = import.meta.env.DEV ? "/api" : `${import.meta.env.VITE_CLIENT_URL}/api`;
 
 export interface ApiError {
   message: string;

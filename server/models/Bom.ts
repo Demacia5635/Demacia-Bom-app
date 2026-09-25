@@ -44,6 +44,10 @@ const bomSchema = new mongoose.Schema(
 
     onshapeURL: { type: String },
     avatarID: { type: String },
+    
+    // Added fields to support Google Drive caching:
+    driveFileId: { type: String },
+    imageUrl: { type: String },
 
     comments: { type: String },
     onshapeID: { type: onshapeIDSchema, required: false },
@@ -55,4 +59,3 @@ const bomSchema = new mongoose.Schema(
 const Bom = mongoose.model('Bom', bomSchema);
 
 export default Bom;
-
