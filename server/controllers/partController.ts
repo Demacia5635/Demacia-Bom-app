@@ -4,7 +4,7 @@ import Part from "../models/Part";
 import onshapeService from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
 
-console.log(">>> [DEBUG] PART CONTROLLER WITH DRIVE SYNC LOADED <<<");
+console.log(">>> [DEBUG] PART CONTROLLER WITH RACE-CONDITION LOCK LOADED <<<");
 
 // Initialize Google Drive Service
 const oauth2Client = new google.auth.OAuth2(
@@ -18,6 +18,9 @@ if (process.env.GOOGLE_REFRESH_TOKEN) {
 }
 
 const driveService = new GoogleDriveService(oauth2Client);
+
+// In-memory lock to prevent simultaneous concurrent uploads of the same part
+const activeUploads = new Map<string, Promise<string | void>>();
 
 interface OnshapeID {
   documentID: string;
@@ -73,38 +76,76 @@ function ensureBuffer(data: any): Buffer | null {
   }
 }
 
-// Background sync helper for parts fetched via DB routes
+// Background sync helper with race-condition locking
 async function backgroundSyncPartThumbnail(partDoc: any) {
   try {
     if (!partDoc.onshapeID) return;
     const { documentID, wvmType, wvmID, elementID, partID } = partDoc.onshapeID;
     if (!documentID || !partID) return;
 
-    console.log(">>> [SYNC] Fetching thumbnail from Onshape for part:", partID);
-    const thumbnail = await onshapeService.getPartThumbnail({
-      documentID,
-      wvmType,
-      wvmID,
-      elementID,
-      partID,
-    });
+    // 1. Check if an upload for this partID is ALREADY actively running in memory
+    if (activeUploads.has(partID)) {
+      console.log(">>> [CONCURRENCY LOCK] Waiting for active upload of part:", partID);
+      const existingFileId = await activeUploads.get(partID);
+      if (existingFileId) {
+        partDoc.driveFileId = existingFileId;
+        await partDoc.save();
+      }
+      return;
+    }
 
-    if (!thumbnail) return;
-    const safeBuffer = ensureBuffer(thumbnail);
-    if (!safeBuffer) return;
+    // Create a promise lock for this specific partID
+    const uploadPromise = (async () => {
+      // 2. Check MongoDB for existing file ID
+      const existingPartWithDrive = await Part.findOne({
+        "onshapeID.partID": partID,
+        driveFileId: { $exists: true, $ne: null,$ne: "" },
+      });
 
-    const fileName = `part_${partID}_${Date.now()}.png`;
-    const uploadedFile = await driveService.uploadFile({
-      buffer: safeBuffer,
-      fileName,
-      mimeType: "image/png",
-    });
+      if (existingPartWithDrive && existingPartWithDrive.driveFileId) {
+        console.log(">>> [DUPLICATE CACHE] Reusing existing Google Drive ID for part:", partID);
+        partDoc.driveFileId = existingPartWithDrive.driveFileId;
+        partDoc.imageUrl = existingPartWithDrive.imageUrl;
+        await partDoc.save();
+        return existingPartWithDrive.driveFileId;
+      }
 
-    if (uploadedFile && uploadedFile.id) {
-      console.log(">>> [SUCCESS] Uploaded part thumbnail to Google Drive! File ID:", uploadedFile.id);
-      partDoc.driveFileId = uploadedFile.id;
-      partDoc.imageUrl = uploadedFile.webViewLink;
-      await partDoc.save();
+      console.log(">>> [SYNC] Fetching thumbnail from Onshape for unique part:", partID);
+      const thumbnail = await onshapeService.getPartThumbnail({
+        documentID,
+        wvmType,
+        wvmID,
+        elementID,
+        partID,
+      });
+
+      if (!thumbnail) return;
+      const safeBuffer = ensureBuffer(thumbnail);
+      if (!safeBuffer) return;
+
+      const fileName = `part_${partID}_${Date.now()}.png`;
+      const uploadedFile = await driveService.uploadFile({
+        buffer: safeBuffer,
+        fileName,
+        mimeType: "image/png",
+      });
+
+      if (uploadedFile && uploadedFile.id) {
+        console.log(">>> [SUCCESS] Uploaded unique part thumbnail to Google Drive! File ID:", uploadedFile.id);
+        partDoc.driveFileId = uploadedFile.id;
+        partDoc.imageUrl = uploadedFile.webViewLink;
+        await partDoc.save();
+        return uploadedFile.id;
+      }
+    })();
+
+    // Store the promise in our active map
+    activeUploads.set(partID, uploadPromise);
+    try {
+      await uploadPromise;
+    } finally {
+      // Clean up map once finished
+      activeUploads.delete(partID);
     }
   } catch (err) {
     console.error(">>> [CRITICAL ERROR] Background part thumbnail sync failed:", err);
