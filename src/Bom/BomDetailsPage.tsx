@@ -57,7 +57,9 @@ export default function BomDetailsPage() {
       const currentAssemblyRowId = `${parentId ? parentId + "-" : ""}${bom.id}`;
 
       let assemblyAvatarUrl = "";
-      if (bom?.avatarID && typeof bom.avatarID === "string" && bom.avatarID.startsWith("data:image")) {
+      if (bom?.driveFileId) {
+        assemblyAvatarUrl = `/api/drive/file/id/${bom.driveFileId}`;
+      } else if (bom?.avatarID && typeof bom.avatarID === "string" && bom.avatarID.startsWith("data:image")) {
         assemblyAvatarUrl = bom.avatarID;
       } else if (bom?.imageUrl) {
         assemblyAvatarUrl = bom.imageUrl;
@@ -98,8 +100,36 @@ export default function BomDetailsPage() {
 
       const collectedRows: BomTableRow[] = targetBomId === bomId ? [] : [assemblyRow];
 
+      // Recursively fetch sub-assemblies and properly resolve their individual BOM database records for Drive caching
       for (const sub of bom.subAssemblies || []) {
+        const subBomRecord = await fetchFromApi<BomModel>(`/db/bom/id/${sub.bomID}`).catch(() => null);
+        let subAvatarUrl = "";
+
+        if (subBomRecord?.driveFileId) {
+          subAvatarUrl = `/api/drive/file/id/${subBomRecord.driveFileId}`;
+        } else if (subBomRecord?.avatarID && typeof subBomRecord.avatarID === "string" && subBomRecord.avatarID.startsWith("data:image")) {
+          subAvatarUrl = subBomRecord.avatarID;
+        } else if (subBomRecord?.imageUrl) {
+          subAvatarUrl = subBomRecord.imageUrl;
+        } else if (subBomRecord?.onshapeID?.documentID && subBomRecord?.onshapeID?.elementID) {
+          const docID = subBomRecord.onshapeID.documentID;
+          const wType = subBomRecord.onshapeID.wvmType || "w";
+          const wID = subBomRecord.onshapeID.wvmID || "";
+          const elemID = subBomRecord.onshapeID.elementID;
+          subAvatarUrl = `/api/onshape/bom/d/${docID}/wvmT/${wType}/wvmI/${wID}/e/${elemID}/thumbnail`;
+        } else {
+          // Fallback parsing from sub.bomID if structured
+          const partsArr = sub.bomID.split("_");
+          if (partsArr.length >= 4) {
+            subAvatarUrl = `/api/onshape/bom/d/${partsArr[0]}/wvmT/${partsArr[1] || "w"}/wvmI/${partsArr[2] || ""}/e/${partsArr[3]}/thumbnail`;
+          }
+        }
+
         const subRows = await fetchBomRecursively(sub.bomID, currentAssemblyRowId);
+        // Ensure sub-assembly row gets its resolved avatar URL if not overwritten
+        if (subRows.length > 0 && subAvatarUrl) {
+          subRows[0].avatar = subAvatarUrl;
+        }
         collectedRows.push(...subRows);
       }
 
@@ -108,7 +138,6 @@ export default function BomDetailsPage() {
 
         let partAvatarUrl = "";
 
-        // Route through local Google Drive stream if driveFileId exists
         if (part?.driveFileId) {
           partAvatarUrl = `/api/drive/file/id/${part.driveFileId}`;
         } else if (part?.avatarID && typeof part.avatarID === "string" && part.avatarID.startsWith("data:image")) {

@@ -8,7 +8,7 @@ import onshapeService, {
 } from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
 
-console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH BOM DRIVE CACHING LOADED <<<");
+console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH STRICT COMPOSITE PART ID SYNC LOADED <<<");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -89,49 +89,43 @@ async function syncPartThumbnailToDrive(
   params: OnshapePartParams,
   size?: string
 ): Promise<{ id: string; webViewLink?: string } | null> {
-  const partID = params.partID;
-  const dbId = formPartID(params);
+  const dbId = formPartID(params); // Strictly scoped unique composite ID per part instance
 
+  // 1. Check MongoDB strictly by unique composite dbId
   const existingDoc = await Part.findOne({ id: dbId });
   if (existingDoc && existingDoc.driveFileId) {
     return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
   }
 
-  if (activePartUploads.has(partID)) {
-    return activePartUploads.get(partID)!;
+  // 2. Concurrency Lock by unique dbId
+  if (activePartUploads.has(dbId)) {
+    return activePartUploads.get(dbId)!;
   }
 
   const uploadPromise = (async () => {
     try {
-      const existingDriveFile = await driveService.findFileByPartID(partID).catch(() => null);
-      if (existingDriveFile) {
-        await Part.findOneAndUpdate(
-          { id: dbId },
-          { $set: { driveFileId: existingDriveFile.id, imageUrl: existingDriveFile.webViewLink, onshapeID: params } },
-          { returnDocument: "after", upsert: true }
-        ).catch(() => {});
-        return { id: existingDriveFile.id, webViewLink: existingDriveFile.webViewLink };
-      }
-
+      // 3. Fetch fresh thumbnail specifically for this unique part instance from Onshape
       const thumbnail = await onshapeService.getPartThumbnail(params, size);
       if (!thumbnail) return null;
 
       const safeBuffer = ensureBuffer(thumbnail);
       if (!safeBuffer) return null;
 
-      const fileName = `part_${partID}_${Date.now()}.png`;
+      // 4. Upload uniquely to Google Drive with instance-specific filename
+      const fileName = `part_${params.documentID}_${params.partID}_${Date.now()}.png`;
       const uploadedFile = await driveService.uploadFile({
         buffer: safeBuffer,
         fileName: fileName,
         mimeType: "image/png",
-        partID: partID,
+        partID: params.partID,
       }).catch((err) => {
-        console.error(`>>> [DRIVE UPLOAD ERROR] Part ${partID}:`, err?.message || err);
+        console.error(`>>> [DRIVE UPLOAD ERROR] Part ${params.partID}:`, err?.message || err);
         return null;
       });
 
       if (!uploadedFile || !uploadedFile.id) return null;
 
+      // 5. Save strictly to MongoDB using the unique composite dbId upsert
       await Part.findOneAndUpdate(
         { id: dbId },
         {
@@ -146,14 +140,14 @@ async function syncPartThumbnailToDrive(
 
       return uploadedFile;
     } catch (err: any) {
-      console.error(`>>> [SYNC EXCEPTION] Part ${partID}:`, err?.message || err);
+      console.error(`>>> [SYNC EXCEPTION] Part ${params.partID}:`, err?.message || err);
       return null;
     } finally {
-      setTimeout(() => activePartUploads.delete(partID), 1000);
+      setTimeout(() => activePartUploads.delete(dbId), 1000);
     }
   })();
 
-  activePartUploads.set(partID, uploadPromise);
+  activePartUploads.set(dbId, uploadPromise);
   return uploadPromise;
 }
 
@@ -164,27 +158,23 @@ async function syncElementThumbnailToDrive(
   const elementID = params.elementID;
   const dbIdPrefix = formBomID(params);
 
-  // 1. Check MongoDB first for existing BOM document with driveFileId
   const existingDoc = await Bom.findOne({ id: { $regex: `^${dbIdPrefix}` }, driveFileId: { $exists: true,$ne: "" } });
   if (existingDoc && existingDoc.driveFileId) {
     return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
   }
 
-  // 2. Concurrency Lock by elementID
   if (activeElementUploads.has(elementID)) {
     return activeElementUploads.get(elementID)!;
   }
 
   const uploadPromise = (async () => {
     try {
-      // 3. Fetch thumbnail from Onshape API
       const thumbnail = await onshapeService.getElementThumbnail(params, size);
       if (!thumbnail) return null;
 
       const safeBuffer = ensureBuffer(thumbnail);
       if (!safeBuffer) return null;
 
-      // 4. Upload to Google Drive once
       const fileName = `element_${elementID}_${Date.now()}.png`;
       const uploadedFile = await driveService.uploadFile({
         buffer: safeBuffer,
@@ -197,7 +187,6 @@ async function syncElementThumbnailToDrive(
 
       if (!uploadedFile || !uploadedFile.id) return null;
 
-      // 5. Persist driveFileId to matching BOM documents in MongoDB
       await Bom.updateMany(
         { id: { $regex: `^${dbIdPrefix}` } },
         {
