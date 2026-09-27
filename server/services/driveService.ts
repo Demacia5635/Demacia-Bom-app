@@ -3,40 +3,9 @@ import { OAuth2Client } from "google-auth-library";
 import { Readable } from "stream";
 import "dotenv/config";
 
-/**
- * ─────────────────────────────────────────────────────────────────────────
- * SETUP
- * ─────────────────────────────────────────────────────────────────────────
- * 1. You said you already created the OAuth2 client. Paste it in below,
- *    or better, import it from wherever you created it and pass it into
- *    `createGoogleDriveService(oauth2Client)`.
- *
- *    Example of what that client usually looks like:
- *
- *    const oauth2Client = new google.auth.OAuth2(
- *      process.env.GOOGLE_CLIENT_ID,
- *      process.env.GOOGLE_CLIENT_SECRET,
- *      process.env.GOOGLE_REDIRECT_URI
- *    );
- *    oauth2Client.setCredentials({
- *      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
- *    });
- *
- * 2. Set the root folder ID (the "specific folder" all your files live under)
- *    as an env var: GOOGLE_DRIVE_ROOT_FOLDER_ID=xxxxxxxxxxxx
- *    (This is the long ID in the folder's URL:
- *     https://drive.google.com/drive/folders/<THIS_PART>)
- *
- * 3. Install dependencies if you haven't:
- *    npm install googleapis
- * ─────────────────────────────────────────────────────────────────────────
- */
-
 const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID as string;
 
 if (!ROOT_FOLDER_ID) {
-  // Not throwing here so the module can still be imported in tests/tooling,
-  // but every call will fail fast if this isn't set.
   console.warn(
     "[googleDriveService] GOOGLE_DRIVE_ROOT_FOLDER_ID is not set. All Drive operations will fail.",
   );
@@ -55,18 +24,15 @@ export interface DriveFile {
 }
 
 export interface UploadFileParams {
-  /** Name to give the file in Drive, e.g. "invoice.pdf" */
   fileName: string;
-  /** MIME type, e.g. "application/pdf", "image/png" */
   mimeType: string;
-  /** File contents as a Buffer (from multer, fs.readFileSync, etc.) */
   buffer: Buffer;
-  /**
-   * Optional subfolder ID under the root folder to upload into.
-   * If omitted, the file is uploaded directly into ROOT_FOLDER_ID.
-   */
   folderId?: string;
+  partID?: string; // Optional unique key for deduplication locking
 }
+
+// Global cross-controller lock map to prevent parallel duplicate uploads
+const globalUploadLocks = new Map<string, Promise<DriveFile>>();
 
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
@@ -75,10 +41,6 @@ export class GoogleDriveService {
     this.drive = google.drive({ version: "v3", auth: oauth2Client });
   }
 
-  /**
-   * Get all files in a given folder.
-   * If no folderId is passed, defaults to the root folder configured above.
-   */
   async getAllFilesInFolder(
     folderId: string = ROOT_FOLDER_ID,
   ): Promise<DriveFile[]> {
@@ -91,7 +53,7 @@ export class GoogleDriveService {
       const res: any = await this.drive.files.list({
         q: `'${folderId}' in parents and trashed = false`,
         fields:
-          "nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, blob)",
+          "nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)",
         pageSize: 100,
         pageToken,
       });
@@ -104,23 +66,37 @@ export class GoogleDriveService {
     return files;
   }
 
-  /**
-   * Get metadata for a specific file by its Drive file ID.
-   */
+  async findFileByPartID(partID: string): Promise<DriveFile | null> {
+    this.assertRootConfigured();
+    try {
+      // Use exact name matching or containment query
+      const res = await this.drive.files.list({
+        q: `'${ROOT_FOLDER_ID}' in parents and name contains 'part_${partID}_' and trashed = false`,
+        fields: "files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)",
+        pageSize: 1,
+      });
+
+      const files = res.data.files;
+      if (files && files.length > 0) {
+        return this.mapFile(files[0]);
+      }
+      return null;
+    } catch (err) {
+      console.error(`>>> [DRIVE ERROR] Failed to search for file with partID ${partID}:`, err);
+      return null;
+    }
+  }
+
   async getFile(fileId: string): Promise<DriveFile> {
     const res = await this.drive.files.get({
       fileId,
       fields:
-        "id, name, mimeType, size, createdTime, modifiedTime, parents",
+        "id, name, mimeType, size, createdTime, modifiedTime, parents, webViewLink, webContentLink",
     });
 
     return this.mapFile(res.data);
   }
 
-  /**
-   * Download a specific file's raw content (useful if you want to stream it
-   * back to a client via Express res.pipe(), or return it as a Buffer).
-   */
   async getFileContent(fileId: string): Promise<Buffer> {
     const res = await this.drive.files.get(
       { fileId, alt: "media" },
@@ -131,13 +107,52 @@ export class GoogleDriveService {
   }
 
   /**
-   * Upload a file into a specific directory under the root folder.
-   * If no folderId is passed, uploads directly into the root folder.
+   * Upload a file with built-in atomic deduplication locking.
    */
   async uploadFile(params: UploadFileParams): Promise<DriveFile> {
     this.assertRootConfigured();
-    const { fileName, mimeType, buffer, folderId } = params;
+    const { fileName, mimeType, buffer, folderId, partID } = params;
 
+    // If a partID is provided, enforce a global mutex lock
+    if (partID) {
+      if (globalUploadLocks.has(partID)) {
+        console.log(`>>> [GLOBAL LOCK] Intercepted duplicate upload attempt for partID: ${partID}. Awaiting active upload...`);
+        return globalUploadLocks.get(partID)!;
+      }
+
+      const uploadPromise = (async (): Promise<DriveFile> => {
+        try {
+          // Pre-flight check inside lock
+          const existing = await this.findFileByPartID(partID);
+          if (existing) {
+            console.log(`>>> [GLOBAL LOCK] Found existing file in Drive during lock for partID: ${partID}`);
+            return existing;
+          }
+
+          const res = await this.drive.files.create({
+            requestBody: {
+              name: fileName,
+              parents: [folderId ?? ROOT_FOLDER_ID],
+            },
+            media: {
+              mimeType,
+              body: Readable.from(buffer),
+            },
+            fields:
+              "id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents",
+          });
+
+          return this.mapFile(res.data);
+        } finally {
+          globalUploadLocks.delete(partID);
+        }
+      })();
+
+      globalUploadLocks.set(partID, uploadPromise);
+      return uploadPromise;
+    }
+
+    // Default upload if no partID lock key is present
     const res = await this.drive.files.create({
       requestBody: {
         name: fileName,
@@ -154,25 +169,14 @@ export class GoogleDriveService {
     return this.mapFile(res.data);
   }
 
-  /**
-   * Delete a specific file by its Drive file ID.
-   */
   async deleteFile(fileId: string): Promise<void> {
     await this.drive.files.delete({ fileId });
   }
 
-  /**
-   * Delete a folder (and everything inside it, since Drive deletes
-   * a folder's contents along with it).
-   */
   async deleteFolder(folderId: string): Promise<void> {
     await this.drive.files.delete({ fileId: folderId });
   }
 
-  /**
-   * Create a subfolder under the root folder (handy helper, not explicitly
-   * requested but often needed alongside the above).
-   */
   async createFolder(
     folderName: string,
     parentFolderId: string = ROOT_FOLDER_ID,
@@ -233,21 +237,6 @@ export class GoogleDriveService {
   }
 }
 
-/**
- * Factory function — pass in your already-configured OAuth2Client.
- *
- * Usage in your Express app (e.g. app.ts or a routes file):
- *
- *   import { createGoogleDriveService } from './services/googleDriveService';
- *   import { oauth2Client } from './auth/oauth2Client'; // your existing client
- *
- *   const driveService = createGoogleDriveService(oauth2Client);
- *
- *   app.get('/files', async (req, res) => {
- *     const files = await driveService.getAllFilesInFolder();
- *     res.json(files);
- *   });
- */
 export function createGoogleDriveService(
   oauth2Client: OAuth2Client,
 ): GoogleDriveService {
