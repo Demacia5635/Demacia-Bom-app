@@ -69,7 +69,6 @@ export class GoogleDriveService {
   async findFileByPartID(partID: string): Promise<DriveFile | null> {
     this.assertRootConfigured();
     try {
-      // Use exact name matching or containment query
       const res = await this.drive.files.list({
         q: `'${ROOT_FOLDER_ID}' in parents and name contains 'part_${partID}_' and trashed = false`,
         fields: "files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)",
@@ -113,6 +112,9 @@ export class GoogleDriveService {
     this.assertRootConfigured();
     const { fileName, mimeType, buffer, folderId, partID } = params;
 
+    // Convert input to a clean Node.js Buffer if necessary
+    const safeBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+
     // If a partID is provided, enforce a global mutex lock
     if (partID) {
       if (globalUploadLocks.has(partID)) {
@@ -129,6 +131,8 @@ export class GoogleDriveService {
             return existing;
           }
 
+          console.log(`>>> [DRIVE API CREATE] Creating Google Drive file for partID: ${partID} (${safeBuffer.length} bytes)...`);
+
           const res = await this.drive.files.create({
             requestBody: {
               name: fileName,
@@ -136,13 +140,17 @@ export class GoogleDriveService {
             },
             media: {
               mimeType,
-              body: Readable.from(buffer),
+              body: Readable.from(safeBuffer), // Uses readable stream initialized directly from safeBuffer
             },
             fields:
               "id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents",
           });
 
+          console.log(`>>> [DRIVE UPLOAD SUCCESS] Successfully created Google Drive file ${res.data.id}`);
           return this.mapFile(res.data);
+        } catch (err: any) {
+          console.error(`>>> [DRIVE API ERROR] Failed to upload partID ${partID}:`, err?.response?.data || err?.message || err);
+          throw err;
         } finally {
           globalUploadLocks.delete(partID);
         }
@@ -160,7 +168,7 @@ export class GoogleDriveService {
       },
       media: {
         mimeType,
-        body: Readable.from(buffer),
+        body: Readable.from(safeBuffer),
       },
       fields:
         "id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents",

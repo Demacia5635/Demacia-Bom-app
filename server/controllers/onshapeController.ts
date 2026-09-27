@@ -81,72 +81,96 @@ function ensureBuffer(data: any): Buffer | null {
   }
 }
 
-async function syncPartThumbnailToDrive(params: OnshapePartParams, size?: string): Promise<{ id: string; webViewLink?: string } | null> {
+async function syncPartThumbnailToDrive(
+  params: OnshapePartParams,
+  size?: string
+): Promise<{ id: string; webViewLink?: string } | null> {
   const partID = params.partID;
   const dbId = formID(params);
 
-  // 1. Check MongoDB first to see if driveFileId already exists
+  console.log(`>>> [SYNC START] Processing thumbnail for partID: ${partID}...`);
+
+  // 1. Check DB Cache
   const existingDoc = await Part.findOne({ id: dbId });
   if (existingDoc && existingDoc.driveFileId) {
-    console.log(">>> [DB CACHE HIT] Reusing cached driveFileId for part:", partID);
+    console.log(`>>> [DB CACHE HIT] Reusing driveFileId for part ${partID}: ${existingDoc.driveFileId}`);
     return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
   }
 
-  // 2. Concurrency Lock: If this partID is currently uploading, await it
+  // 2. Concurrency Lock
   if (activeUploads.has(partID)) {
-    console.log(">>> [CONCURRENCY LOCK] Waiting for active upload of part:", partID);
+    console.log(`>>> [CONCURRENCY LOCK] Awaiting active upload for part ${partID}...`);
     return activeUploads.get(partID)!;
   }
 
   const uploadPromise = (async () => {
     try {
-      console.log(">>> [SYNC] Fetching thumbnail from Onshape for unique part:", partID);
-      const thumbnail = await onshapeService.getPartThumbnail(params, size);
-      if (!thumbnail) return null;
-
-      const safeBuffer = ensureBuffer(thumbnail);
-      if (!safeBuffer) return null;
-
-      // 3. Search Google Drive one last time before creating a new file
+      // 3. Search Drive
       const existingDriveFile = await driveService.findFileByPartID(partID);
       if (existingDriveFile) {
-        console.log(">>> [DRIVE RECOVERY] Found existing file in Drive during sync for part:", partID);
+        console.log(`>>> [DRIVE FOUND] Recovered existing file ${existingDriveFile.id} for part ${partID}`);
         await Part.findOneAndUpdate(
           { id: dbId },
-          { driveFileId: existingDriveFile.id, imageUrl: existingDriveFile.webViewLink, onshapeID: params },
-          { upsert: true, new: true }
-        ).catch(() => {});
+          { $set: { driveFileId: existingDriveFile.id, imageUrl: existingDriveFile.webViewLink, onshapeID: params } },
+          { returnDocument: "after", upsert: true }
+        ).catch((err) => console.error(">>> [DB SAVE ERROR]:", err));
         return { id: existingDriveFile.id, webViewLink: existingDriveFile.webViewLink };
       }
 
-      const fileName = `part_${partID}_${Date.now()}.png`;
-      const uploadedFile = await driveService.uploadFile({
-        buffer: safeBuffer,
-        fileName: fileName,
-        mimeType: "image/png",
-      });
-
-      if (!uploadedFile || !uploadedFile.id) {
-        console.error(">>> [DEBUG ERROR] Google Drive upload returned no file ID!");
+      // 4. Fetch from Onshape
+      console.log(`>>> [ONSHAPE API CALL] Fetching thumbnail for part ${partID}...`);
+      const thumbnail = await onshapeService.getPartThumbnail(params, size);
+      if (!thumbnail) {
+        console.error(`>>> [ONSHAPE ERROR] getPartThumbnail returned null for part ${partID}`);
         return null;
       }
 
-      console.log(">>> [SUCCESS] Uploaded unique part thumbnail to Google Drive! File ID:", uploadedFile.id);
+      const safeBuffer = ensureBuffer(thumbnail);
+      if (!safeBuffer) {
+        console.error(`>>> [BUFFER ERROR] Failed to convert thumbnail to Buffer for part ${partID}`);
+        return null;
+      }
 
-      // Save to MongoDB immediately
+      // 5. Upload to Google Drive
+      const fileName = `part_${partID}_${Date.now()}.png`;
+      console.log(`>>> [UPLOADING TO DRIVE] Sending ${safeBuffer.length} bytes to Drive for part ${partID}...`);
+
+      const uploadedFile = await driveService
+        .uploadFile({
+          buffer: safeBuffer,
+          fileName: fileName,
+          mimeType: "image/png",
+          partID: partID,
+        })
+        .catch((driveErr) => {
+          console.error(`>>> [CRITICAL DRIVE UPLOAD ERROR] Part ${partID}:`, driveErr?.response?.data || driveErr?.message || driveErr);
+          return null;
+        });
+
+      if (!uploadedFile || !uploadedFile.id) {
+        console.error(`>>> [UPLOAD FAILED] driveService returned null for part ${partID}`);
+        return null;
+      }
+
+      console.log(`>>> [DRIVE UPLOAD SUCCESS] Saved fileId: ${uploadedFile.id} for part ${partID}`);
+
+      // 6. Save to MongoDB
       await Part.findOneAndUpdate(
         { id: dbId },
-        { 
-          driveFileId: uploadedFile.id,
-          imageUrl: uploadedFile.webViewLink,
-          onshapeID: params
+        {
+          $set: {
+            driveFileId: uploadedFile.id,
+            imageUrl: uploadedFile.webViewLink || `https://lh3.googleusercontent.com/d/${uploadedFile.id}`,
+            onshapeID: params,
+          },
         },
-        { upsert: true, new: true }
-      ).catch(() => {});
+        { returnDocument: "after", upsert: true }
+      );
 
+      console.log(`>>> [MONGO SAVED SUCCESS] Updated database for part ${dbId}`);
       return uploadedFile;
     } catch (err: any) {
-      console.error(">>> [CRITICAL ERROR] Failed to sync part thumbnail to Drive:", err?.response?.data || err.message || err);
+      console.error(`>>> [SYNC EXCEPTION] Unexpected failure for part ${partID}:`, err?.message || err);
       return null;
     } finally {
       activeUploads.delete(partID);
