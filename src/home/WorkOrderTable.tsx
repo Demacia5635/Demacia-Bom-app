@@ -33,13 +33,29 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkorderSummary[] }> = ({ w
                         const rawWO = wo as any;
                         let imageSrc = "";
 
-                        if (rawWO?.onshapeID?.documentID && rawWO?.onshapeID?.elementID) {
-                            const { documentID, wvmType = "w", wvmID, elementID } = rawWO.onshapeID;
+                        // Priority Hierarchy:
+                        // 1. Direct local Google Drive stream via driveFileId (from linked Assembly/BOM)
+                        if (rawWO?.driveFileId) {
+                            imageSrc = `/api/drive/file/id/${rawWO.driveFileId}`;
+                        }
+                        // 2. Base64 avatarID
+                        else if (wo?.avatarID && typeof wo.avatarID === "string" && wo.avatarID.startsWith("data:image")) {
+                            imageSrc = wo.avatarID;
+                        }
+                        // 3. Fallback drive File ID passed as avatarID
+                        else if (wo?.avatarID && wo.avatarID.length > 10) {
+                            imageSrc = `/api/drive/file/id/${wo.avatarID}`;
+                        }
+                        // 4. Drive view link / web image URL
+                        else if (rawWO?.imageUrl) {
+                            imageSrc = rawWO.imageUrl;
+                        }
+                        // 5. Fallback to Onshape thumbnail route
+                        else if (rawWO?.onshapeID?.documentID && rawWO?.onshapeID?.elementID) {
+                            const { documentID, wvmType = "w", wvmID = "", elementID } = rawWO.onshapeID;
                             imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
                         } else if (rawWO?.thumbnailURL) {
                             imageSrc = rawWO.thumbnailURL;
-                        } else if (wo?.avatarID && wo.avatarID.length > 10) {
-                            imageSrc = `/drive/file/id/${wo.avatarID}`;
                         }
 
                         return (

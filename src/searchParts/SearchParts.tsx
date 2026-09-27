@@ -47,7 +47,7 @@ export function PartsSearchPage() {
 
     return (
         <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${pageBg}`}>
-            {/* Header & Search Bar Bar */}
+            {/* Header & Search Bar */}
             <div className="max-w-6xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
@@ -97,45 +97,73 @@ export function PartsSearchPage() {
             <div className="max-w-6xl mx-auto">
                 {filteredParts.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredParts.map((part) => (
-                            <div
-                                key={part.id}
-                                onClick={() => setOpen(part)}
-                                className={`${cardBg} border rounded-xl p-4 shadow-md transition-all cursor-pointer flex gap-4 items-start group`}
-                            >
-                                {/* Thumbnail */}
-                                <div className={`w-16 h-16 shrink-0 ${imageBg} border rounded-lg overflow-hidden flex items-center justify-center`}>
-                                    {part.avatarID ? (
-                                        <AuthenticatedImage
-                                            src={`/drive/file/id/${part.avatarID}`}
-                                            alt={part.name}
-                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                        />
-                                    ) : (
-                                        <span className={`${textSubdued} text-[10px] font-mono`}>NO IMAGE</span>
-                                    )}
-                                </div>
+                        {filteredParts.map((part) => {
+                            const rawPart = part as any;
+                            let imageSrc = "";
 
-                                {/* Part Metadata */}
-                                <div className="flex-1 min-w-0 space-y-1">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <h3 className={`text-sm font-semibold ${textHeading} truncate group-hover:text-blue-500 transition-colors`}>
-                                            {part.name}
-                                        </h3>
+                            // Priority Hierarchy:
+                            // 1. Direct local Google Drive stream via driveFileId
+                            if (rawPart?.driveFileId) {
+                                imageSrc = `/api/drive/file/id/${rawPart.driveFileId}`;
+                            } 
+                            // 2. Base64 avatarID
+                            else if (part.avatarID && typeof part.avatarID === "string" && part.avatarID.startsWith("data:image")) {
+                                imageSrc = part.avatarID;
+                            } 
+                            // 3. Fallback drive File ID stored in avatarID
+                            else if (part.avatarID && part.avatarID.length > 10) {
+                                imageSrc = `/api/drive/file/id/${part.avatarID}`;
+                            } 
+                            // 4. Drive view link / web image URL
+                            else if (rawPart?.imageUrl) {
+                                imageSrc = rawPart.imageUrl;
+                            } 
+                            // 5. Fallback Onshape part thumbnail route
+                            else if (rawPart?.onshapeID?.documentID && rawPart?.onshapeID?.elementID && rawPart?.onshapeID?.partID) {
+                                const { documentID, wvmType = "w", wvmID = "", elementID, partID } = rawPart.onshapeID;
+                                imageSrc = `/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${partID}/thumbnail`;
+                            }
+
+                            return (
+                                <div
+                                    key={part.id}
+                                    onClick={() => setOpen(part)}
+                                    className={`${cardBg} border rounded-xl p-4 shadow-md transition-all cursor-pointer flex gap-4 items-start group`}
+                                >
+                                    {/* Thumbnail */}
+                                    <div className={`w-16 h-16 shrink-0 ${imageBg} border rounded-lg overflow-hidden flex items-center justify-center`}>
+                                        {imageSrc ? (
+                                            <AuthenticatedImage
+                                                src={imageSrc}
+                                                alt={part.name || "Part Thumbnail"}
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                            />
+                                        ) : (
+                                            <span className={`${textSubdued} text-[10px] font-mono`}>NO IMAGE</span>
+                                        )}
                                     </div>
 
-                                    <p className={`text-xs font-mono ${textMuted}`}>
-                                        Cat #: <span className={textValue}>{part.catalogNumber || "N/A"}</span>
-                                    </p>
+                                    {/* Part Metadata */}
+                                    <div className="flex-1 min-w-0 space-y-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <h3 className={`text-sm font-semibold ${textHeading} truncate group-hover:text-blue-500 transition-colors`}>
+                                                {part.name || part.id}
+                                            </h3>
+                                        </div>
 
-                                    {part.description && (
-                                        <p className={`text-xs ${textMuted} line-clamp-2 italic`}>
-                                            {part.description}
+                                        <p className={`text-xs font-mono ${textMuted}`}>
+                                            Cat #: <span className={textValue}>{part.catalogNumber || "N/A"}</span>
                                         </p>
-                                    )}
+
+                                        {part.description && (
+                                            <p className={`text-xs ${textMuted} line-clamp-2 italic`}>
+                                                {part.description}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className={`${cardBg} border rounded-xl p-12 text-center space-y-2`}>

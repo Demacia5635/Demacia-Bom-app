@@ -31,13 +31,25 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
                         const bomOnshapeID = (bom as any).onshapeID;
                         let imageSrc = "";
 
-                        if (bomOnshapeID?.documentID && bomOnshapeID?.elementID) {
-                            const { documentID, wvmType = "w", wvmID, elementID } = bomOnshapeID;
+                        // Priority Hierarchy:
+                        // 1. Direct local Google Drive stream via driveFileId
+                        if ((bom as any)?.driveFileId) {
+                            imageSrc = `/api/drive/file/id/${(bom as any).driveFileId}`;
+                        } 
+                        // 2. Base64 avatarID
+                        else if (bom?.avatarID && typeof bom.avatarID === "string" && bom.avatarID.startsWith("data:image")) {
+                            imageSrc = bom.avatarID;
+                        } 
+                        // 3. Drive view link / web image URL
+                        else if ((bom as any)?.imageUrl) {
+                            imageSrc = (bom as any).imageUrl;
+                        } 
+                        // 4. Fallback to Onshape thumbnail route
+                        else if (bomOnshapeID?.documentID && bomOnshapeID?.elementID) {
+                            const { documentID, wvmType = "w", wvmID = "", elementID } = bomOnshapeID;
                             imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
                         } else if ((bom as any)?.thumbnailURL) {
                             imageSrc = (bom as any).thumbnailURL;
-                        } else if (bom?.avatarID) {
-                            imageSrc = `/drive/file/id/${bom.avatarID}`;
                         }
 
                         return (

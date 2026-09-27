@@ -100,7 +100,27 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
         }
     };
 
-    const avatarUrl = formData.avatarID ? `/drive/file/id/${formData.avatarID}` : "";
+    // Priority Hierarchy for Part Avatar:
+    // 1. Direct local Google Drive stream via driveFileId
+    // 2. Base64 avatarID
+    // 3. Fallback drive File ID stored in avatarID
+    // 4. Drive view link / web image URL
+    // 5. Fallback Onshape part thumbnail route
+    let avatarUrl = "";
+    const rawPart = formData as any;
+
+    if (rawPart?.driveFileId) {
+        avatarUrl = `/api/drive/file/id/${rawPart.driveFileId}`;
+    } else if (formData.avatarID && typeof formData.avatarID === "string" && formData.avatarID.startsWith("data:image")) {
+        avatarUrl = formData.avatarID;
+    } else if (formData.avatarID && formData.avatarID.length > 10) {
+        avatarUrl = `/api/drive/file/id/${formData.avatarID}`;
+    } else if (rawPart?.imageUrl) {
+        avatarUrl = rawPart.imageUrl;
+    } else if (rawPart?.onshapeID?.documentID && rawPart?.onshapeID?.elementID && rawPart?.onshapeID?.partID) {
+        const { documentID, wvmType = "w", wvmID = "", elementID, partID } = rawPart.onshapeID;
+        avatarUrl = `/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${partID}/thumbnail`;
+    }
 
     // Dynamic theme classes
     const containerBg = isLight ? "bg-white border-zinc-300 text-zinc-900 shadow-xl" : "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-2xl";
