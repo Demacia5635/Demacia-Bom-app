@@ -4,7 +4,7 @@ import Part from "../models/Part";
 import onshapeService from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
 
-console.log(">>> [DEBUG] PART CONTROLLER FORCED AUTO-SYNC LOADED <<<");
+console.log(">>> [DEBUG] PART CONTROLLER STRICT SINGLE-LOCK LOADED <<<");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -17,7 +17,9 @@ if (process.env.GOOGLE_REFRESH_TOKEN) {
 }
 
 const driveService = new GoogleDriveService(oauth2Client);
-const activeUploads = new Map<string, Promise<string | null>>();
+
+// Strict global mutex lock map keyed by partID
+const activePartUploads = new Map<string, Promise<string | null>>();
 
 interface OnshapeID {
   documentID: string;
@@ -87,28 +89,44 @@ function ensureBuffer(data: any): Buffer | null {
 async function forceUploadToDrive(id: string, onshapeID: OnshapeID): Promise<string | null> {
   const partID = onshapeID.partID;
 
-  if (activeUploads.has(partID)) {
-    console.log(`>>> [CONCURRENCY LOCK] Awaiting upload for partID: ${partID}`);
-    return activeUploads.get(partID)!;
+  // 1. Lock Intercept: If an upload is already running for this partID, await its promise!
+  if (activePartUploads.has(partID)) {
+    console.log(`>>> [CONCURRENCY LOCK] Intercepted parallel request for partID: ${partID}. Awaiting active promise...`);
+    return activePartUploads.get(partID)!;
   }
 
-  const uploadPromise = (async () => {
+  const uploadPromise = (async (): Promise<string | null> => {
     try {
-      console.log(`>>> [ONSHAPE API CALL] Downloading fresh thumbnail from Onshape for partID: ${partID}...`);
-      const thumbnail = await onshapeService.getPartThumbnail(onshapeID);
-      if (!thumbnail) {
-        console.error(`>>> [ONSHAPE ERROR] getPartThumbnail returned null for ${partID}`);
-        return null;
+      // 2. Check MongoDB again inside the lock
+      const existingInDb = await Part.findOne({ "onshapeID.partID": partID, driveFileId: { $exists: true,$ne: "" } });
+      if (existingInDb && existingInDb.driveFileId) {
+        console.log(`>>> [LOCK CHECK] Found driveFileId in DB for partID: ${partID}: ${existingInDb.driveFileId}`);
+        return existingInDb.driveFileId;
       }
 
+      // 3. Check Google Drive for an existing file before touching Onshape
+      const existingDriveFile = await driveService.findFileByPartID(partID);
+      if (existingDriveFile) {
+        console.log(`>>> [DRIVE FOUND] Reusing existing file ${existingDriveFile.id} for partID: ${partID}`);
+        return existingDriveFile.id;
+      }
+
+      console.log(`>>> [ONSHAPE API CALL] Fetching thumbnail for partID: ${partID}...`);
+      const thumbnail = await onshapeService.getPartThumbnail(onshapeID);
+      if (!thumbnail) return null;
+
       const safeBuffer = ensureBuffer(thumbnail);
-      if (!safeBuffer) {
-        console.error(`>>> [BUFFER ERROR] Buffer conversion failed for ${partID}`);
-        return null;
+      if (!safeBuffer) return null;
+
+      // 4. Final safety re-check on Drive before upload
+      const doubleCheckDrive = await driveService.findFileByPartID(partID);
+      if (doubleCheckDrive) {
+        console.log(`>>> [RACE PREVENTED] File appeared in Drive during fetch. Reusing ID: ${doubleCheckDrive.id}`);
+        return doubleCheckDrive.id;
       }
 
       const fileName = `part_${partID}_${Date.now()}.png`;
-      console.log(`>>> [UPLOADING TO DRIVE] Sending ${safeBuffer.length} bytes to Drive for partID: ${partID}...`);
+      console.log(`>>> [UPLOADING TO DRIVE] Uploading ${safeBuffer.length} bytes for partID: ${partID}...`);
 
       const uploaded = await driveService.uploadFile({
         buffer: safeBuffer,
@@ -116,29 +134,29 @@ async function forceUploadToDrive(id: string, onshapeID: OnshapeID): Promise<str
         mimeType: "image/png",
         partID: partID,
       }).catch((err) => {
-        console.error(`>>> [DRIVE UPLOAD ERROR REASON] for ${partID}:`, err?.response?.data || err?.message || err);
+        console.error(`>>> [DRIVE UPLOAD ERROR] for ${partID}:`, err?.message || err);
         return null;
       });
 
-      if (!uploaded || !uploaded.id) {
-        console.error(`>>> [DRIVE UPLOAD FAILED] uploadFile returned null for ${partID}`);
-        return null;
-      }
+      if (!uploaded || !uploaded.id) return null;
 
-      console.log(`>>> [SUCCESS!] Uploaded file ${uploaded.id} to Google Drive for partID: ${partID}`);
+      console.log(`>>> [DRIVE SUCCESS] Successfully uploaded fileId ${uploaded.id} for partID: ${partID}`);
       return uploaded.id;
     } catch (err: any) {
       console.error(`>>> [SYNC EXCEPTION] Exception during upload for ${partID}:`, err?.message || err);
       return null;
-    } finally {
-      activeUploads.delete(partID);
     }
   })();
 
-  activeUploads.set(partID, uploadPromise);
-  return uploadPromise;
+  activePartUploads.set(partID, uploadPromise);
+  try {
+    const fileId = await uploadPromise;
+    return fileId;
+  } finally {
+    // Keep lock active briefly to absorb immediate parallel re-renders
+    setTimeout(() => activePartUploads.delete(partID), 1000);
+  }
 }
-
 
 export async function getAllParts(req: Request, res: Response, next: NextFunction) {
   try {
@@ -161,13 +179,11 @@ export async function getPartByID(req: Request<{ id: string }>, res: Response, n
     }
 
     if (!part) {
-      console.log(`>>> [AUTO-CREATE] Creating document shell for part ${id}...`);
       part = new Part({ id: id, onshapeID: onshapeIDObj || undefined });
       await part.save();
     }
 
     if (!part.driveFileId && onshapeIDObj) {
-      console.log(`>>> [TRIGGER UPLOAD] driveFileId missing for part ${id}. Executing forceUploadToDrive...`);
       const fileId = await forceUploadToDrive(id, onshapeIDObj);
       if (fileId) {
         part = await Part.findOneAndUpdate(
@@ -181,7 +197,6 @@ export async function getPartByID(req: Request<{ id: string }>, res: Response, n
           },
           { returnDocument: "after" }
         );
-        console.log(`>>> [MONGO PERSISTED] Drive ID ${fileId} saved to MongoDB for part ${id}`);
       }
     }
 

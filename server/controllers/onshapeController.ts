@@ -7,7 +7,7 @@ import onshapeService, {
 } from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
 
-console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH ATOMIC DB GUARD LOADED <<<");
+console.log(">>> [DEBUG] ONSHAPE CONTROLLER - NO DUPLICATES GUARANTEE LOADED <<<");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -20,8 +20,6 @@ if (process.env.GOOGLE_REFRESH_TOKEN) {
 }
 
 const driveService = new GoogleDriveService(oauth2Client);
-
-// Strict global lock map to block simultaneous duplicate requests in memory
 const activeUploads = new Map<string, Promise<{ id: string; webViewLink?: string } | null>>();
 
 interface OnshapePartParams {
@@ -88,71 +86,50 @@ async function syncPartThumbnailToDrive(
   const partID = params.partID;
   const dbId = formID(params);
 
-  console.log(`>>> [SYNC START] Processing thumbnail for partID: ${partID}...`);
-
-  // 1. Check DB Cache
+  // 1. Check MongoDB first
   const existingDoc = await Part.findOne({ id: dbId });
   if (existingDoc && existingDoc.driveFileId) {
-    console.log(`>>> [DB CACHE HIT] Reusing driveFileId for part ${partID}: ${existingDoc.driveFileId}`);
     return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
   }
 
   // 2. Concurrency Lock
   if (activeUploads.has(partID)) {
-    console.log(`>>> [CONCURRENCY LOCK] Awaiting active upload for part ${partID}...`);
     return activeUploads.get(partID)!;
   }
 
   const uploadPromise = (async () => {
     try {
-      // 3. Search Drive
+      // 3. Drive Recovery Search
       const existingDriveFile = await driveService.findFileByPartID(partID);
       if (existingDriveFile) {
-        console.log(`>>> [DRIVE FOUND] Recovered existing file ${existingDriveFile.id} for part ${partID}`);
         await Part.findOneAndUpdate(
           { id: dbId },
           { $set: { driveFileId: existingDriveFile.id, imageUrl: existingDriveFile.webViewLink, onshapeID: params } },
           { returnDocument: "after", upsert: true }
-        ).catch((err) => console.error(">>> [DB SAVE ERROR]:", err));
+        ).catch(() => {});
         return { id: existingDriveFile.id, webViewLink: existingDriveFile.webViewLink };
       }
 
-      // 4. Fetch from Onshape
-      console.log(`>>> [ONSHAPE API CALL] Fetching thumbnail for part ${partID}...`);
+      // 4. Fetch from Onshape API
       const thumbnail = await onshapeService.getPartThumbnail(params, size);
-      if (!thumbnail) {
-        console.error(`>>> [ONSHAPE ERROR] getPartThumbnail returned null for part ${partID}`);
-        return null;
-      }
+      if (!thumbnail) return null;
 
       const safeBuffer = ensureBuffer(thumbnail);
-      if (!safeBuffer) {
-        console.error(`>>> [BUFFER ERROR] Failed to convert thumbnail to Buffer for part ${partID}`);
-        return null;
-      }
+      if (!safeBuffer) return null;
 
       // 5. Upload to Google Drive
       const fileName = `part_${partID}_${Date.now()}.png`;
-      console.log(`>>> [UPLOADING TO DRIVE] Sending ${safeBuffer.length} bytes to Drive for part ${partID}...`);
-
-      const uploadedFile = await driveService
-        .uploadFile({
-          buffer: safeBuffer,
-          fileName: fileName,
-          mimeType: "image/png",
-          partID: partID,
-        })
-        .catch((driveErr) => {
-          console.error(`>>> [CRITICAL DRIVE UPLOAD ERROR] Part ${partID}:`, driveErr?.response?.data || driveErr?.message || driveErr);
-          return null;
-        });
-
-      if (!uploadedFile || !uploadedFile.id) {
-        console.error(`>>> [UPLOAD FAILED] driveService returned null for part ${partID}`);
+      const uploadedFile = await driveService.uploadFile({
+        buffer: safeBuffer,
+        fileName: fileName,
+        mimeType: "image/png",
+        partID: partID,
+      }).catch((err) => {
+        console.error(`>>> [DRIVE UPLOAD ERROR] Part ${partID}:`, err?.message || err);
         return null;
-      }
+      });
 
-      console.log(`>>> [DRIVE UPLOAD SUCCESS] Saved fileId: ${uploadedFile.id} for part ${partID}`);
+      if (!uploadedFile || !uploadedFile.id) return null;
 
       // 6. Save to MongoDB
       await Part.findOneAndUpdate(
@@ -165,15 +142,14 @@ async function syncPartThumbnailToDrive(
           },
         },
         { returnDocument: "after", upsert: true }
-      );
+      ).catch(() => {});
 
-      console.log(`>>> [MONGO SAVED SUCCESS] Updated database for part ${dbId}`);
       return uploadedFile;
     } catch (err: any) {
-      console.error(`>>> [SYNC EXCEPTION] Unexpected failure for part ${partID}:`, err?.message || err);
+      console.error(`>>> [SYNC EXCEPTION] Part ${partID}:`, err?.message || err);
       return null;
     } finally {
-      activeUploads.delete(partID);
+      setTimeout(() => activeUploads.delete(partID), 1000);
     }
   })();
 
@@ -181,48 +157,17 @@ async function syncPartThumbnailToDrive(
   return uploadPromise;
 }
 
-async function syncElementThumbnailToDrive(params: OnshapeBomParams, size?: string): Promise<{ id: string; webViewLink?: string } | null> {
-  try {
-    console.log(">>> [DEBUG] syncElementThumbnailToDrive started for element:", params.elementID);
-    
-    const thumbnail = await onshapeService.getElementThumbnail(params, size);
-    if (!thumbnail) return null;
-
-    const safeBuffer = ensureBuffer(thumbnail);
-    if (!safeBuffer) return null;
-
-    const fileName = `element_${params.elementID}_${Date.now()}.png`;
-    const uploadedFile = await driveService.uploadFile({
-      buffer: safeBuffer,
-      fileName: fileName,
-      mimeType: "image/png",
-    });
-
-    if (!uploadedFile || !uploadedFile.id) return null;
-
-    console.log(">>> [SUCCESS] Uploaded BOM element to Drive! File ID:", uploadedFile.id);
-    return uploadedFile;
-  } catch (err: any) {
-    console.error(">>> [CRITICAL ERROR] Failed to sync element thumbnail to Drive:", err?.response?.data || err.message || err);
-    return null;
-  }
-}
-
 export async function checkConnection(req: Request, res: Response) {
-  console.log(">>> [DEBUG] GET /onshape connection check hit");
   const connected = await onshapeService.checkConnection();
   return res.status(connected ? 200 : 503).json({ connected });
 }
 
 export async function getPart(req: Request<OnshapePartParams>, res: Response) {
-  console.log(">>> [DEBUG] GET part route hit:", req.params);
   try {
     const part = await onshapeService.getPartForDb(req.params);
 
     if (part && !(part as any).driveFileId) {
-      syncPartThumbnailToDrive(req.params).catch(e => 
-        console.error("Background Drive sync error for part:", e)
-      );
+      syncPartThumbnailToDrive(req.params).catch(() => {});
     }
 
     return res.status(200).json(part);
@@ -235,7 +180,6 @@ export async function updatePart(
   req: Request<OnshapePartParams, unknown, Record<string, unknown>>,
   res: Response,
 ) {
-  console.log(">>> [DEBUG] POST part route hit:", req.params);
   try {
     const part = await onshapeService.updatePart(req.params, req.body);
     return res.status(200).json(part);
@@ -245,7 +189,6 @@ export async function updatePart(
 }
 
 export async function getBom(req: Request<OnshapeBomParams>, res: Response) {
-  console.log(">>> [DEBUG] GET bom route hit:", req.params);
   try {
     const bom = await onshapeService.getBom(req.params);
     return res.status(200).json(bom["bomTable"]);
@@ -263,9 +206,8 @@ export async function updateBom(
     } | Record<string, unknown>>,
   res: Response
 ) {
-  console.log(">>> [DEBUG] POST bom route hit:", req.params);
   try {
-    const assembly = await onshapeService.updateAssembly(req.params, req.body)
+    const assembly = await onshapeService.updateAssembly(req.params, req.body);
     return res.status(200).json(assembly);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to update assembly in Onshape");
@@ -276,39 +218,42 @@ export async function getPartThumbnail(
   req: Request<OnshapePartParams & { size?: string }>,
   res: Response,
 ) {
-  console.log(">>> [DEBUG] GET part thumbnail route hit:", req.params);
   try {
     const dbId = formID(req.params);
     let driveFileId: string | undefined;
 
-    // 1. Check MongoDB first
     const dbPart = await Part.findOne({ id: dbId });
     if (dbPart && dbPart.driveFileId) {
       driveFileId = dbPart.driveFileId;
     }
 
-    // 2. If missing from DB, sync/upload
     if (!driveFileId) {
       const uploaded = await syncPartThumbnailToDrive(req.params, req.params.size);
       if (uploaded) driveFileId = uploaded.id;
     }
 
-    if (!driveFileId) {
-      return res.status(404).json({ message: "part thumbnail not found" });
+    if (driveFileId) {
+      const fileBuffer = await driveService.getFileContent(driveFileId).catch(() => null);
+      if (fileBuffer) {
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.status(200).send(fileBuffer);
+      }
     }
 
-    console.log(`[SERVE] Serving part thumbnail from Google Drive file ID:`, driveFileId);
-    const meta = await driveService.getFile(driveFileId).catch(() => null);
-    const fileBuffer = await driveService.getFileContent(driveFileId).catch(() => null);
-
-    if (!meta || !fileBuffer) {
-      return res.status(404).json({ message: "Thumbnail file not found in Google Drive" });
+    const directThumbnail = await onshapeService.getPartThumbnail(req.params, req.params.size);
+    if (!directThumbnail) {
+      return res.status(404).json({ message: "Part thumbnail not found" });
     }
 
-    res.setHeader("Content-Type", meta.mimeType || "image/png");
-    return res.status(200).send(fileBuffer);
+    const safeBuffer = ensureBuffer(directThumbnail);
+    if (!safeBuffer) {
+      return res.status(400).json({ message: "Invalid buffer from Onshape" });
+    }
+
+    res.setHeader("Content-Type", "image/png");
+    return res.status(200).send(safeBuffer);
   } catch (err: any) {
-    console.error(">>> [DEBUG ERROR] GOOGLE DRIVE PART UPLOAD ERROR:", err.response?.data || err.message || err);
     return handleOnshapeError(res, err, "Failed to fetch thumbnail for part");
   }
 }
@@ -317,7 +262,6 @@ export async function setPartThumbnail(
   req: Request<OnshapePartParams, unknown, Buffer>,
   res: Response,
 ) {
-  console.log(">>> [DEBUG] POST part thumbnail route hit:", req.params);
   try {
     const buffer = req.body;
     const safeBuffer = ensureBuffer(buffer);
@@ -334,22 +278,21 @@ export async function getElementThumbnail(
   req: Request<OnshapeBomParams & { size?: string }>,
   res: Response,
 ) {
-  console.log(">>> [DEBUG] GET element thumbnail route hit:", req.params);
   try {
-    const uploaded = await syncElementThumbnailToDrive(req.params, req.params.size);
-    if (!uploaded || !uploaded.id) {
-      return res.status(404).json({ message: "element thumbnail not found" });
+    const directThumbnail = await onshapeService.getElementThumbnail(req.params, req.params.size);
+    if (!directThumbnail) {
+      return res.status(404).json({ message: "Element thumbnail not found" });
     }
 
-    const fileBuffer = await driveService.getFileContent(uploaded.id).catch(() => null);
-    if (!fileBuffer) {
-      return res.status(404).json({ message: "Thumbnail file not found in Google Drive" });
+    const safeBuffer = ensureBuffer(directThumbnail);
+    if (!safeBuffer) {
+      return res.status(400).json({ message: "Invalid image buffer" });
     }
 
     res.setHeader("Content-Type", "image/png");
-    return res.status(200).send(fileBuffer);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.status(200).send(safeBuffer);
   } catch (err: any) {
-    console.error(">>> [DEBUG ERROR] GOOGLE DRIVE ELEMENT UPLOAD ERROR:", err.response?.data || err.message || err);
     return handleOnshapeError(res, err, "Failed to fetch thumbnail for element");
   }
 }
@@ -358,7 +301,6 @@ export async function setElementThumbnail(
   req: Request<OnshapeBomParams, unknown, Buffer>,
   res: Response,
 ) {
-  console.log(">>> [DEBUG] POST element thumbnail route hit:", req.params);
   try {
     const buffer = req.body;
     const safeBuffer = ensureBuffer(buffer);
@@ -375,10 +317,9 @@ export async function exportSTL(
   req: Request<OnshapePartParams>,
   res: Response
 ) {
-  console.log(">>> [DEBUG] GET export STL route hit:", req.params);
   try {
     const stl = await onshapeService.exportPartToStl(req.params);
-    if (!stl) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
+    if (!stl) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "model/stl");
     return res.status(200).send(stl);
@@ -391,10 +332,9 @@ export async function exportParasolid(
   req: Request<OnshapePartParams>,
   res: Response
 ) {
-  console.log(">>> [DEBUG] GET export parasolid route hit:", req.params);
   try {
     const parasolid = await onshapeService.exportPartToParasolid(req.params);
-    if (!parasolid) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
+    if (!parasolid) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "application/x-parasolid");
     return res.status(200).send(parasolid);
@@ -407,10 +347,9 @@ export async function exportSolidworks(
   req: Request<OnshapePartParams>,
   res: Response
 ) {
-  console.log(">>> [DEBUG] GET export solidworks route hit:", req.params);
   try {
     const solidworks = await onshapeService.exportPartToSolidworks(req.params);
-    if (!solidworks) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
+    if (!solidworks) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "application/sldprt");
     return res.status(200).send(solidworks);
