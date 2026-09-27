@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AuthenticatedImage, fetchFromApi, type ApiError } from "../util/ApiService";
-import { type BomModel, type WorkorderModel, type WorkorderPartModel as WorkOrderPartModel } from "../util/Models"
+import { type BomModel, type WorkorderModel, type WorkorderPartModel as WorkOrderPartModel } from "../util/Models";
 import { useThemeSync } from "../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 import { WorkOrderForm, type WorkOrderFormData } from "./CreatingWO";
@@ -89,10 +89,18 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
     }
   };
 
-  // Resolve image source hierarchy using Base64 avatarID or fallback to backend route
+  // Resolve assembly image hierarchy:
+  // 1. Google Drive Proxy Endpoint via driveFileId stored in MongoDB
+  // 2. Base64 avatarID
+  // 3. Fallback web imageUrl
+  // 4. Fallback Onshape thumbnail stream
   let imageSrc = "";
-  if (bom?.avatarID && typeof bom.avatarID === 'string' && bom.avatarID.startsWith("data:image")) {
+  if (bom?.driveFileId) {
+    imageSrc = `/api/drive/file/id/${bom.driveFileId}`;
+  } else if (bom?.avatarID && typeof bom.avatarID === 'string' && bom.avatarID.startsWith("data:image")) {
     imageSrc = bom.avatarID;
+  } else if (bom?.imageUrl) {
+    imageSrc = bom.imageUrl;
   } else if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
     const { documentID, wvmType = "w", wvmID, elementID } = bom.onshapeID;
     imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;

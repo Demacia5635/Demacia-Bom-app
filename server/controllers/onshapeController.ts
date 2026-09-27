@@ -1,13 +1,14 @@
 import { Request, Response } from "express";
 import { google } from "googleapis";
 import Part from "../models/Part";
+import Bom from "../models/Bom";
 import onshapeService, {
   OnshapeApiError,
   UnsupportedOnshapeOperationError,
 } from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
 
-console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH ONSHAPE FALLBACK LOADED <<<");
+console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH BOM DRIVE CACHING LOADED <<<");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -20,7 +21,8 @@ if (process.env.GOOGLE_REFRESH_TOKEN) {
 }
 
 const driveService = new GoogleDriveService(oauth2Client);
-const activeUploads = new Map<string, Promise<{ id: string; webViewLink?: string } | null>>();
+const activePartUploads = new Map<string, Promise<{ id: string; webViewLink?: string } | null>>();
+const activeElementUploads = new Map<string, Promise<{ id: string; webViewLink?: string } | null>>();
 
 interface OnshapePartParams {
   documentID: string;
@@ -37,8 +39,12 @@ interface OnshapeBomParams {
   elementID: string;
 }
 
-function formID(params: OnshapePartParams): string {
+function formPartID(params: OnshapePartParams): string {
   return `${params.documentID}_${params.wvmType}_${params.wvmID}_${params.elementID}_${params.partID}`;
+}
+
+function formBomID(params: OnshapeBomParams): string {
+  return `${params.documentID}_${params.wvmType}_${params.wvmID}_${params.elementID}`;
 }
 
 function handleOnshapeError(
@@ -84,22 +90,19 @@ async function syncPartThumbnailToDrive(
   size?: string
 ): Promise<{ id: string; webViewLink?: string } | null> {
   const partID = params.partID;
-  const dbId = formID(params);
+  const dbId = formPartID(params);
 
-  // 1. Check MongoDB first
   const existingDoc = await Part.findOne({ id: dbId });
   if (existingDoc && existingDoc.driveFileId) {
     return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
   }
 
-  // 2. Concurrency Lock
-  if (activeUploads.has(partID)) {
-    return activeUploads.get(partID)!;
+  if (activePartUploads.has(partID)) {
+    return activePartUploads.get(partID)!;
   }
 
   const uploadPromise = (async () => {
     try {
-      // 3. Drive Recovery Search
       const existingDriveFile = await driveService.findFileByPartID(partID).catch(() => null);
       if (existingDriveFile) {
         await Part.findOneAndUpdate(
@@ -110,14 +113,12 @@ async function syncPartThumbnailToDrive(
         return { id: existingDriveFile.id, webViewLink: existingDriveFile.webViewLink };
       }
 
-      // 4. Fetch from Onshape API
       const thumbnail = await onshapeService.getPartThumbnail(params, size);
       if (!thumbnail) return null;
 
       const safeBuffer = ensureBuffer(thumbnail);
       if (!safeBuffer) return null;
 
-      // 5. Upload to Google Drive
       const fileName = `part_${partID}_${Date.now()}.png`;
       const uploadedFile = await driveService.uploadFile({
         buffer: safeBuffer,
@@ -131,7 +132,6 @@ async function syncPartThumbnailToDrive(
 
       if (!uploadedFile || !uploadedFile.id) return null;
 
-      // 6. Save to MongoDB
       await Part.findOneAndUpdate(
         { id: dbId },
         {
@@ -149,11 +149,76 @@ async function syncPartThumbnailToDrive(
       console.error(`>>> [SYNC EXCEPTION] Part ${partID}:`, err?.message || err);
       return null;
     } finally {
-      setTimeout(() => activeUploads.delete(partID), 1000);
+      setTimeout(() => activePartUploads.delete(partID), 1000);
     }
   })();
 
-  activeUploads.set(partID, uploadPromise);
+  activePartUploads.set(partID, uploadPromise);
+  return uploadPromise;
+}
+
+async function syncElementThumbnailToDrive(
+  params: OnshapeBomParams,
+  size?: string
+): Promise<{ id: string; webViewLink?: string } | null> {
+  const elementID = params.elementID;
+  const dbIdPrefix = formBomID(params);
+
+  // 1. Check MongoDB first for existing BOM document with driveFileId
+  const existingDoc = await Bom.findOne({ id: { $regex: `^${dbIdPrefix}` }, driveFileId: { $exists: true,$ne: "" } });
+  if (existingDoc && existingDoc.driveFileId) {
+    return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
+  }
+
+  // 2. Concurrency Lock by elementID
+  if (activeElementUploads.has(elementID)) {
+    return activeElementUploads.get(elementID)!;
+  }
+
+  const uploadPromise = (async () => {
+    try {
+      // 3. Fetch thumbnail from Onshape API
+      const thumbnail = await onshapeService.getElementThumbnail(params, size);
+      if (!thumbnail) return null;
+
+      const safeBuffer = ensureBuffer(thumbnail);
+      if (!safeBuffer) return null;
+
+      // 4. Upload to Google Drive once
+      const fileName = `element_${elementID}_${Date.now()}.png`;
+      const uploadedFile = await driveService.uploadFile({
+        buffer: safeBuffer,
+        fileName: fileName,
+        mimeType: "image/png",
+      }).catch((err) => {
+        console.error(`>>> [DRIVE UPLOAD ERROR] Element ${elementID}:`, err?.message || err);
+        return null;
+      });
+
+      if (!uploadedFile || !uploadedFile.id) return null;
+
+      // 5. Persist driveFileId to matching BOM documents in MongoDB
+      await Bom.updateMany(
+        { id: { $regex: `^${dbIdPrefix}` } },
+        {
+          $set: {
+            driveFileId: uploadedFile.id,
+            imageUrl: uploadedFile.webViewLink || `https://lh3.googleusercontent.com/d/${uploadedFile.id}`,
+            onshapeID: params,
+          },
+        }
+      ).catch(() => {});
+
+      return uploadedFile;
+    } catch (err: any) {
+      console.error(`>>> [SYNC EXCEPTION] Element ${elementID}:`, err?.message || err);
+      return null;
+    } finally {
+      setTimeout(() => activeElementUploads.delete(elementID), 1000);
+    }
+  })();
+
+  activeElementUploads.set(elementID, uploadPromise);
   return uploadPromise;
 }
 
@@ -219,7 +284,7 @@ export async function getPartThumbnail(
   res: Response,
 ) {
   try {
-    const dbId = formID(req.params);
+    const dbId = formPartID(req.params);
     let driveFileId: string | undefined;
 
     const dbPart = await Part.findOne({ id: dbId });
@@ -279,6 +344,28 @@ export async function getElementThumbnail(
   res: Response,
 ) {
   try {
+    const dbIdPrefix = formBomID(req.params);
+    let driveFileId: string | undefined;
+
+    const dbBom = await Bom.findOne({ id: { $regex: `^${dbIdPrefix}` }, driveFileId: { $exists: true,$ne: "" } });
+    if (dbBom && dbBom.driveFileId) {
+      driveFileId = dbBom.driveFileId;
+    }
+
+    if (!driveFileId) {
+      const uploaded = await syncElementThumbnailToDrive(req.params, req.params.size);
+      if (uploaded) driveFileId = uploaded.id;
+    }
+
+    if (driveFileId) {
+      const fileBuffer = await driveService.getFileContent(driveFileId).catch(() => null);
+      if (fileBuffer) {
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.status(200).send(fileBuffer);
+      }
+    }
+
     const directThumbnail = await onshapeService.getElementThumbnail(req.params, req.params.size);
     if (!directThumbnail) {
       return res.status(404).json({ message: "Element thumbnail not found" });

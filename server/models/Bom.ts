@@ -6,7 +6,7 @@ const onshapeIDSchema = new mongoose.Schema(
     wvmType: { type: String, required: true },
     wvmID: { type: String, required: true },
     elementID: { type: String, required: true },
-    bomID: { type: String, required: true },
+    bomID: { type: String, required: false },
   },
   {
     _id: false,
@@ -44,18 +44,18 @@ const bomSchema = new mongoose.Schema(
 
     onshapeURL: { type: String },
     avatarID: { type: String },
-    
+
     // Added fields to support Google Drive caching:
-    driveFileId: { type: String },
-    imageUrl: { type: String },
+    driveFileId: { type: String, default: "" },
+    imageUrl: { type: String, default: "" },
 
     comments: { type: String },
     onshapeID: { type: onshapeIDSchema, required: false },
-    vendor: { type: String, },
+    vendor: { type: String },
   },
   { _id: false, timestamps: true },
 );
 
-const Bom = mongoose.model('Bom', bomSchema);
+const Bom = mongoose.model("Bom", bomSchema);
 
 export default Bom;
