@@ -33,11 +33,15 @@ const partSchema = new mongoose.Schema(
 
     comments: { type: String },
     onshapeID: { type: onshapeIDSchema, required: false },
-    vendor: { type: String, },
+    vendor: { type: String },
+
+    // CRITICAL FIX: Add driveFileId and imageUrl so Mongoose persists them!
+    driveFileId: { type: String },
+    imageUrl: { type: String },
   },
   { _id: false, timestamps: true },
 );
 
-const Part = mongoose.model('Part', partSchema);
+const Part = mongoose.model("Part", partSchema);
 
 export default Part;

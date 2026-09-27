@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 
-const BASE_URL = `${import.meta.env.VITE_CLIENT_URL}/api`;
+// Determine host: Use local backend if running in dev mode, otherwise use production VITE_CLIENT_URL
+const BACKEND_HOST = import.meta.env.DEV 
+  ? "http://localhost:5050" 
+  : (import.meta.env.VITE_CLIENT_URL || "");
 
 export interface ApiError {
   message: string;
@@ -14,11 +17,11 @@ export async function fetchFromApi<T>(endpoint: string): Promise<T> {
     throw { message: "VITE_CLIENT_SECRET is missing from environment variables." };
   }
 
-  // Prevent double /api/ if endpoint already starts with /api
-  const normalizedEndpoint = endpoint.startsWith("/api") ? endpoint.replace("/api", "") : endpoint;
+  const cleanEndpoint = endpoint.startsWith("/api") ? endpoint.replace("/api", "") : endpoint;
+  const targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
 
   try {
-    const response = await fetch(`${BASE_URL}${normalizedEndpoint}`, {
+    const response = await fetch(targetUrl, {
       headers: {
         "x-client-secret": secret,
       },
@@ -38,10 +41,6 @@ export async function fetchFromApi<T>(endpoint: string): Promise<T> {
   }
 }
 
-/**
- * Fetches a file from the backend server using the client secret header
- * and triggers a browser file download.
- */
 export async function downloadFile(
   url: string,
   filename: string,
@@ -52,7 +51,15 @@ export async function downloadFile(
     throw new Error("VITE_CLIENT_SECRET is missing from environment variables.");
   }
 
-  const response = await fetch(url, {
+  let targetUrl = url;
+  if (url.startsWith("/api")) {
+    const cleanEndpoint = url.replace("/api", "");
+    targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
+  } else if (!url.startsWith("http")) {
+    targetUrl = `${BACKEND_HOST}${url.startsWith("/") ? url : `/${url}`}`;
+  }
+
+  const response = await fetch(targetUrl, {
     headers: {
       "x-client-secret": secret,
     },
@@ -65,7 +72,7 @@ export async function downloadFile(
   const arrayBuffer = await response.arrayBuffer();
   const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
 
-  const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b; // '{'
+  const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
 
   let blob: Blob;
   if (looksLikeJson) {
@@ -115,12 +122,13 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
     const getPicture = async () => {
       try {
-        // Fix: Properly handle URL formatting to prevent /api/api/ duplication
         let targetUrl = src;
+
         if (src.startsWith("/api")) {
-          targetUrl = `${import.meta.env.VITE_CLIENT_URL}${src}`;
+          const cleanEndpoint = src.replace("/api", "");
+          targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
         } else if (!src.startsWith("http")) {
-          targetUrl = `${BASE_URL}${src.startsWith("/") ? src : `/${src}`}`;
+          targetUrl = `${BACKEND_HOST}${src.startsWith("/") ? src : `/${src}`}`;
         }
 
         const res = await fetch(targetUrl, {
@@ -131,7 +139,7 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
         const arrayBuffer = await res.arrayBuffer();
         const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
-        const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b; // '{'
+        const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
 
         let base64String;
         let mime = "image/png";
@@ -146,7 +154,6 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
             throw new Error(json.message || "Invalid image format");
           }
         } else {
-          // Fix: Corrected typo from "content=type" to "content-type"
           const responseContentType = res.headers.get("content-type");
           if (responseContentType && responseContentType.includes("image")) {
             mime = responseContentType;
@@ -188,7 +195,15 @@ export async function fetchFileBytes(url: string, mimeType?: string): Promise<Bl
     throw new Error("VITE_CLIENT_SECRET is missing from environment variables.");
   }
 
-  const response = await fetch(url, {
+  let targetUrl = url;
+  if (url.startsWith("/api")) {
+    const cleanEndpoint = url.replace("/api", "");
+    targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
+  } else if (!url.startsWith("http")) {
+    targetUrl = `${BACKEND_HOST}${url.startsWith("/") ? url : `/${url}`}`;
+  }
+
+  const response = await fetch(targetUrl, {
     headers: {
       "x-client-secret": secret,
     },
@@ -201,7 +216,7 @@ export async function fetchFileBytes(url: string, mimeType?: string): Promise<Bl
   const arrayBuffer = await response.arrayBuffer();
   const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
 
-  const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b; // '{'
+  const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
 
   if (looksLikeJson) {
     const text = new TextDecoder().decode(arrayBuffer);

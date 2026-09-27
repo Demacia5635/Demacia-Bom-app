@@ -18,7 +18,6 @@ export default function BomDetailsPage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
 
-  // States for the PartPortal modal popup & custom context menu & enlarged image preview
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
   const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -57,12 +56,17 @@ export default function BomDetailsPage() {
       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
       const currentAssemblyRowId = `${parentId ? parentId + "-" : ""}${bom.id}`;
 
-      // 1. Check MongoDB avatarID first. If missing, fallback to backend caching route.
       let assemblyAvatarUrl = "";
-      if (bom?.avatarID && typeof bom.avatarID === 'string' && bom.avatarID.startsWith("data:image")) {
+      if (bom?.avatarID && typeof bom.avatarID === "string" && bom.avatarID.startsWith("data:image")) {
         assemblyAvatarUrl = bom.avatarID;
+      } else if (bom?.imageUrl) {
+        assemblyAvatarUrl = bom.imageUrl;
       } else if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
-        const { documentID, wvmType = "w", wvmID, elementID } = bom.onshapeID;
+        const documentID = bom.onshapeID.documentID;
+        const wvmType = bom.onshapeID.wvmType || "w";
+        const wvmID = bom.onshapeID.wvmID || "";
+        const elementID = bom.onshapeID.elementID;
+
         assemblyAvatarUrl = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
       }
 
@@ -82,10 +86,10 @@ export default function BomDetailsPage() {
         quantity: 1,
         comments: bom.comments || "",
         documentID: bom.onshapeID?.documentID || "",
-        wvmType: bom.onshapeID?.wvmType || "",
+        wvmType: bom.onshapeID?.wvmType || "w",
         wvmID: bom.onshapeID?.wvmID || "",
         elementID: bom.onshapeID?.elementID || "",
-        entityID: bom.onshapeID?.bomID || "",
+        entityID: bom.onshapeID?.bomID || bom.id || "",
         onshapeURL: bom.onshapeURL || "",
         exportSTL: "",
         exportParasolid: "",
@@ -102,19 +106,34 @@ export default function BomDetailsPage() {
       for (const p of bom.parts || []) {
         const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
 
-        // 2. Check MongoDB avatarID for parts first. If missing, fallback to backend route.
         let partAvatarUrl = "";
-        if (part?.avatarID && typeof part.avatarID === 'string' && part.avatarID.startsWith("data:image")) {
+
+        // Route through local Google Drive stream if driveFileId exists
+        if (part?.driveFileId) {
+          partAvatarUrl = `/api/drive/file/id/${part.driveFileId}`;
+        } else if (part?.avatarID && typeof part.avatarID === "string" && part.avatarID.startsWith("data:image")) {
           partAvatarUrl = part.avatarID;
+        } else if (part?.imageUrl) {
+          partAvatarUrl = part.imageUrl;
         } else {
-          const docID = part?.onshapeID?.documentID;
-          const elemID = part?.onshapeID?.elementID;
-          
+          let docID = part?.onshapeID?.documentID;
+          let elemID = part?.onshapeID?.elementID;
+          let wvmType = part?.onshapeID?.wvmType || "w";
+          let wvmID = part?.onshapeID?.wvmID || "";
+          let targetPartID = part?.onshapeID?.partID || p.partID;
+
+          if (!docID && part?.id && part.id.includes("_")) {
+            const partsArr = part.id.split("_");
+            if (partsArr.length >= 5) {
+              docID = partsArr[0];
+              wvmType = partsArr[1];
+              wvmID = partsArr[2];
+              elemID = partsArr[3];
+              targetPartID = partsArr[4];
+            }
+          }
+
           if (docID && elemID) {
-            const wvmType = part.onshapeID?.wvmType || "w";
-            const wvmID = part.onshapeID?.wvmID || "";
-            const targetPartID = part.onshapeID?.partID || p.partID;
-            
             partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${targetPartID}/thumbnail`;
           }
         }
@@ -135,7 +154,7 @@ export default function BomDetailsPage() {
           quantity: p.quantity || 1,
           comments: part.comments || "",
           documentID: part.onshapeID?.documentID || "",
-          wvmType: part.onshapeID?.wvmType || "",
+          wvmType: part.onshapeID?.wvmType || "w",
           wvmID: part.onshapeID?.wvmID || "",
           elementID: part.onshapeID?.elementID || "",
           entityID: p.partID,
@@ -156,7 +175,6 @@ export default function BomDetailsPage() {
       .finally(() => setLoading(false));
   }, [bomId]);
 
-  // Handle table data alterations and save changes to MongoDB
   const handleTableDataChange = async (newData: BomTableRow[]) => {
     for (let i = 0; i < newData.length; i++) {
       const newRow = newData[i];

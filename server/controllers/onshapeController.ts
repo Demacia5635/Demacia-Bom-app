@@ -1,8 +1,28 @@
 import { Request, Response } from "express";
+import { google } from "googleapis";
+import Part from "../models/Part";
+import Bom from "../models/Bom";
 import onshapeService, {
   OnshapeApiError,
   UnsupportedOnshapeOperationError,
 } from "../services/onshapeService";
+import { GoogleDriveService } from "../services/driveService";
+
+console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH BOM DRIVE CACHING LOADED <<<");
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI,
+);
+
+if (process.env.GOOGLE_REFRESH_TOKEN) {
+  oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+}
+
+const driveService = new GoogleDriveService(oauth2Client);
+const activePartUploads = new Map<string, Promise<{ id: string; webViewLink?: string } | null>>();
+const activeElementUploads = new Map<string, Promise<{ id: string; webViewLink?: string } | null>>();
 
 interface OnshapePartParams {
   documentID: string;
@@ -19,11 +39,20 @@ interface OnshapeBomParams {
   elementID: string;
 }
 
+function formPartID(params: OnshapePartParams): string {
+  return `${params.documentID}_${params.wvmType}_${params.wvmID}_${params.elementID}_${params.partID}`;
+}
+
+function formBomID(params: OnshapeBomParams): string {
+  return `${params.documentID}_${params.wvmType}_${params.wvmID}_${params.elementID}`;
+}
+
 function handleOnshapeError(
   res: Response,
   err: unknown,
   fallbackMessage: string,
 ): Response {
+  console.error(">>> [DEBUG] handleOnshapeError caught:", err);
   if (err instanceof UnsupportedOnshapeOperationError) {
     return res.status(501).json({ message: err.message });
   }
@@ -56,6 +85,143 @@ function ensureBuffer(data: any): Buffer | null {
   }
 }
 
+async function syncPartThumbnailToDrive(
+  params: OnshapePartParams,
+  size?: string
+): Promise<{ id: string; webViewLink?: string } | null> {
+  const partID = params.partID;
+  const dbId = formPartID(params);
+
+  const existingDoc = await Part.findOne({ id: dbId });
+  if (existingDoc && existingDoc.driveFileId) {
+    return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
+  }
+
+  if (activePartUploads.has(partID)) {
+    return activePartUploads.get(partID)!;
+  }
+
+  const uploadPromise = (async () => {
+    try {
+      const existingDriveFile = await driveService.findFileByPartID(partID).catch(() => null);
+      if (existingDriveFile) {
+        await Part.findOneAndUpdate(
+          { id: dbId },
+          { $set: { driveFileId: existingDriveFile.id, imageUrl: existingDriveFile.webViewLink, onshapeID: params } },
+          { returnDocument: "after", upsert: true }
+        ).catch(() => {});
+        return { id: existingDriveFile.id, webViewLink: existingDriveFile.webViewLink };
+      }
+
+      const thumbnail = await onshapeService.getPartThumbnail(params, size);
+      if (!thumbnail) return null;
+
+      const safeBuffer = ensureBuffer(thumbnail);
+      if (!safeBuffer) return null;
+
+      const fileName = `part_${partID}_${Date.now()}.png`;
+      const uploadedFile = await driveService.uploadFile({
+        buffer: safeBuffer,
+        fileName: fileName,
+        mimeType: "image/png",
+        partID: partID,
+      }).catch((err) => {
+        console.error(`>>> [DRIVE UPLOAD ERROR] Part ${partID}:`, err?.message || err);
+        return null;
+      });
+
+      if (!uploadedFile || !uploadedFile.id) return null;
+
+      await Part.findOneAndUpdate(
+        { id: dbId },
+        {
+          $set: {
+            driveFileId: uploadedFile.id,
+            imageUrl: uploadedFile.webViewLink || `https://lh3.googleusercontent.com/d/${uploadedFile.id}`,
+            onshapeID: params,
+          },
+        },
+        { returnDocument: "after", upsert: true }
+      ).catch(() => {});
+
+      return uploadedFile;
+    } catch (err: any) {
+      console.error(`>>> [SYNC EXCEPTION] Part ${partID}:`, err?.message || err);
+      return null;
+    } finally {
+      setTimeout(() => activePartUploads.delete(partID), 1000);
+    }
+  })();
+
+  activePartUploads.set(partID, uploadPromise);
+  return uploadPromise;
+}
+
+async function syncElementThumbnailToDrive(
+  params: OnshapeBomParams,
+  size?: string
+): Promise<{ id: string; webViewLink?: string } | null> {
+  const elementID = params.elementID;
+  const dbIdPrefix = formBomID(params);
+
+  // 1. Check MongoDB first for existing BOM document with driveFileId
+  const existingDoc = await Bom.findOne({ id: { $regex: `^${dbIdPrefix}` }, driveFileId: { $exists: true,$ne: "" } });
+  if (existingDoc && existingDoc.driveFileId) {
+    return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
+  }
+
+  // 2. Concurrency Lock by elementID
+  if (activeElementUploads.has(elementID)) {
+    return activeElementUploads.get(elementID)!;
+  }
+
+  const uploadPromise = (async () => {
+    try {
+      // 3. Fetch thumbnail from Onshape API
+      const thumbnail = await onshapeService.getElementThumbnail(params, size);
+      if (!thumbnail) return null;
+
+      const safeBuffer = ensureBuffer(thumbnail);
+      if (!safeBuffer) return null;
+
+      // 4. Upload to Google Drive once
+      const fileName = `element_${elementID}_${Date.now()}.png`;
+      const uploadedFile = await driveService.uploadFile({
+        buffer: safeBuffer,
+        fileName: fileName,
+        mimeType: "image/png",
+      }).catch((err) => {
+        console.error(`>>> [DRIVE UPLOAD ERROR] Element ${elementID}:`, err?.message || err);
+        return null;
+      });
+
+      if (!uploadedFile || !uploadedFile.id) return null;
+
+      // 5. Persist driveFileId to matching BOM documents in MongoDB
+      await Bom.updateMany(
+        { id: { $regex: `^${dbIdPrefix}` } },
+        {
+          $set: {
+            driveFileId: uploadedFile.id,
+            imageUrl: uploadedFile.webViewLink || `https://lh3.googleusercontent.com/d/${uploadedFile.id}`,
+            onshapeID: params,
+          },
+        }
+      ).catch(() => {});
+
+      return uploadedFile;
+    } catch (err: any) {
+      console.error(`>>> [SYNC EXCEPTION] Element ${elementID}:`, err?.message || err);
+      return null;
+    } finally {
+      setTimeout(() => activeElementUploads.delete(elementID), 1000);
+    }
+  })();
+
+  activeElementUploads.set(elementID, uploadPromise);
+  return uploadPromise;
+}
+
 export async function checkConnection(req: Request, res: Response) {
   const connected = await onshapeService.checkConnection();
   return res.status(connected ? 200 : 503).json({ connected });
@@ -64,6 +230,11 @@ export async function checkConnection(req: Request, res: Response) {
 export async function getPart(req: Request<OnshapePartParams>, res: Response) {
   try {
     const part = await onshapeService.getPartForDb(req.params);
+
+    if (part && !(part as any).driveFileId) {
+      syncPartThumbnailToDrive(req.params).catch(() => {});
+    }
+
     return res.status(200).json(part);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to fetch part from Onshape");
@@ -101,7 +272,7 @@ export async function updateBom(
   res: Response
 ) {
   try {
-    const assembly = await onshapeService.updateAssembly(req.params, req.body)
+    const assembly = await onshapeService.updateAssembly(req.params, req.body);
     return res.status(200).json(assembly);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to update assembly in Onshape");
@@ -113,33 +284,41 @@ export async function getPartThumbnail(
   res: Response,
 ) {
   try {
-    // 1. Check if the database record already contains a cached Base64 avatarID string
-    const existingPart = await onshapeService.getPartForDb(req.params).catch(() => null);
-    if (existingPart && typeof (existingPart as any).avatarID === 'string' && (existingPart as any).avatarID.startsWith("data:image")) {
-      console.log(`[CACHE HIT] Part thumbnail served from DB.`);
-      const b64Data = (existingPart as any).avatarID.split(",")[1];
-      const buffer = Buffer.from(b64Data, 'base64');
-      res.setHeader("Content-Type", "image/png");
-      return res.status(200).send(buffer);
+    const dbId = formPartID(req.params);
+    let driveFileId: string | undefined;
+
+    const dbPart = await Part.findOne({ id: dbId });
+    if (dbPart && dbPart.driveFileId) {
+      driveFileId = dbPart.driveFileId;
     }
 
-    console.log(`[CACHE MISS] Fetching Part thumbnail from Onshape...`);
-
-    // 2. Fetch from Onshape if not cached
-    const thumbnail = await onshapeService.getPartThumbnail(req.params, req.params.size);
-    if (!thumbnail) return res.status(404).json({ message: "part thumbnail not found" });
-
-    // 3. Convert to Base64 and save to MongoDB via service update
-    const safeBuffer = ensureBuffer(thumbnail);
-    if (safeBuffer) {
-      const base64String = `data:image/png;base64,${safeBuffer.toString("base64")}`;
-      await onshapeService.updatePart(req.params, { avatarID: base64String })
-        .catch(e => console.error("Failed to cache part avatarID to DB:", e));
+    if (!driveFileId) {
+      const uploaded = await syncPartThumbnailToDrive(req.params, req.params.size);
+      if (uploaded) driveFileId = uploaded.id;
     }
-    
+
+    if (driveFileId) {
+      const fileBuffer = await driveService.getFileContent(driveFileId).catch(() => null);
+      if (fileBuffer) {
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.status(200).send(fileBuffer);
+      }
+    }
+
+    const directThumbnail = await onshapeService.getPartThumbnail(req.params, req.params.size);
+    if (!directThumbnail) {
+      return res.status(404).json({ message: "Part thumbnail not found" });
+    }
+
+    const safeBuffer = ensureBuffer(directThumbnail);
+    if (!safeBuffer) {
+      return res.status(400).json({ message: "Invalid buffer from Onshape" });
+    }
+
     res.setHeader("Content-Type", "image/png");
-    return res.status(200).send(safeBuffer || thumbnail);
-  } catch (err) {
+    return res.status(200).send(safeBuffer);
+  } catch (err: any) {
     return handleOnshapeError(res, err, "Failed to fetch thumbnail for part");
   }
 }
@@ -165,38 +344,43 @@ export async function getElementThumbnail(
   res: Response,
 ) {
   try {
-    // 1. Check if the database record already contains a cached Base64 avatarID string
-    const existingBom = await onshapeService.getBom(req.params).catch(() => null);
-    if (existingBom && typeof (existingBom as any).avatarID === 'string' && (existingBom as any).avatarID.startsWith("data:image")) {
-      console.log(`[CACHE HIT] BOM element thumbnail served from DB.`);
-      const b64Data = (existingBom as any).avatarID.split(",")[1];
-      const buffer = Buffer.from(b64Data, 'base64');
-      res.setHeader("Content-Type", "image/png");
-      return res.status(200).send(buffer);
+    const dbIdPrefix = formBomID(req.params);
+    let driveFileId: string | undefined;
+
+    const dbBom = await Bom.findOne({ id: { $regex: `^${dbIdPrefix}` }, driveFileId: { $exists: true,$ne: "" } });
+    if (dbBom && dbBom.driveFileId) {
+      driveFileId = dbBom.driveFileId;
     }
 
-    console.log(`[CACHE MISS] Fetching BOM element thumbnail from Onshape...`);
+    if (!driveFileId) {
+      const uploaded = await syncElementThumbnailToDrive(req.params, req.params.size);
+      if (uploaded) driveFileId = uploaded.id;
+    }
 
-    // 2. Fetch from Onshape if not cached
-    const thumbnail = await onshapeService.getElementThumbnail(req.params, req.params.size);
-    if (!thumbnail) return res.status(404).json({ message: "element thumbnail not found" });
+    if (driveFileId) {
+      const fileBuffer = await driveService.getFileContent(driveFileId).catch(() => null);
+      if (fileBuffer) {
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.status(200).send(fileBuffer);
+      }
+    }
 
-    // 3. Convert to Base64 and save to MongoDB via service update
-    const safeBuffer = ensureBuffer(thumbnail);
-    if (safeBuffer) {
-      const base64String = `data:image/png;base64,${safeBuffer.toString("base64")}`;
-      await onshapeService.updateAssembly(req.params, { avatarID: base64String })
-        .catch(e => console.error("Failed to cache element avatarID to DB:", e));
+    const directThumbnail = await onshapeService.getElementThumbnail(req.params, req.params.size);
+    if (!directThumbnail) {
+      return res.status(404).json({ message: "Element thumbnail not found" });
+    }
+
+    const safeBuffer = ensureBuffer(directThumbnail);
+    if (!safeBuffer) {
+      return res.status(400).json({ message: "Invalid image buffer" });
     }
 
     res.setHeader("Content-Type", "image/png");
-    return res.status(200).send(safeBuffer || thumbnail);
-  } catch (err) {
-    return handleOnshapeError(
-      res,
-      err,
-      "Failed to fetch thumbnail for element",
-    );
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.status(200).send(safeBuffer);
+  } catch (err: any) {
+    return handleOnshapeError(res, err, "Failed to fetch thumbnail for element");
   }
 }
 
@@ -222,7 +406,7 @@ export async function exportSTL(
 ) {
   try {
     const stl = await onshapeService.exportPartToStl(req.params);
-    if (!stl) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
+    if (!stl) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "model/stl");
     return res.status(200).send(stl);
@@ -237,7 +421,7 @@ export async function exportParasolid(
 ) {
   try {
     const parasolid = await onshapeService.exportPartToParasolid(req.params);
-    if (!parasolid) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
+    if (!parasolid) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "application/x-parasolid");
     return res.status(200).send(parasolid);
@@ -252,7 +436,7 @@ export async function exportSolidworks(
 ) {
   try {
     const solidworks = await onshapeService.exportPartToSolidworks(req.params);
-    if (!solidworks) return res.status(404).json({ message: `part not found ${JSON.stringify(req.params)}`});
+    if (!solidworks) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
 
     res.setHeader("Content-Type", "application/sldprt");
     return res.status(200).send(solidworks);

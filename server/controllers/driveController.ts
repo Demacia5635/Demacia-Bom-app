@@ -37,19 +37,32 @@ export async function getFileFromId(
 ) {
   try {
     const fileID = req.params.fileID;
-    if (!fileID)
-      return res.status(400).json({ message: "file id is required" });
+    if (!fileID) {
+      return res.status(400).json({ message: "File ID is required" });
+    }
 
-    const meta = await client.getFile(fileID);
-    const file = await client.getFileContent(fileID);
+    const fileContent = await client.getFileContent(fileID).catch((err: any) => {
+      const errorDetails = err?.response?.data || err?.message || err;
+      console.error(`>>> [DRIVE GET CONTENT ERROR] fileID: ${fileID}:`, errorDetails);
 
-    if (!meta || !file)
-      return res.status(404).json({ message: `file ${fileID} not found` });
+      if (typeof errorDetails === "object" && errorDetails?.error === "unauthorized_client") {
+        console.error(">>> [CRITICAL OAUTH MISMATCH] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET does not match the app that created GOOGLE_REFRESH_TOKEN.");
+      }
+      return null;
+    });
 
-    res.setHeader("Content-Type", meta.mimeType);
-    return res.status(200).json(file);
-  } catch (err) {
-    return next(err);
+    if (!fileContent) {
+      return res.status(401).json({ 
+        message: `Failed to stream file from Google Drive for ID: ${fileID}. Check GOOGLE_CLIENT_ID and GOOGLE_REFRESH_TOKEN pairing.` 
+      });
+    }
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.status(200).send(fileContent);
+  } catch (err: any) {
+    console.error(">>> [DRIVE CONTROLLER UNCAUGHT ERROR]:", err?.message || err);
+    return res.status(500).json({ message: "Failed to stream file from Google Drive", error: err?.message });
   }
 }
 
@@ -78,7 +91,7 @@ export async function uploadFile(
       safeBuffer = Buffer.from((buffer as any).data);
     } else {
       return res.status(400).json({
-        message: `Invalid buffer provided for file upload: exprected Buffer, got ${typeof buffer}`,
+        message: `Invalid buffer provided for file upload: expected Buffer, got ${typeof buffer}`,
       });
     }
 
@@ -103,7 +116,7 @@ export async function deleteFile(
     const id = req.params.fileID;
     if (!id) return res.status(400).json({ message: "file id is required" });
     await client.deleteFile(id);
-    return res.status(204);
+    return res.status(204).send();
   } catch (err) {
     return next(err);
   }
