@@ -6,13 +6,11 @@ import morgan from "morgan";
 
 const app: Express = express();
 
-// Parse comma-separated origins dynamically, trimming whitespace
 const envOrigins = (process.env.ALLOWED_ORIGINS || '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-// Defaults for local dev and standard Render deployments
 const defaultOrigins = [
     "http://localhost:5173",
     "http://localhost:5050",
@@ -23,12 +21,11 @@ export const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigi
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (e.g., mobile apps, curl, server health checks)
+        // Allow requests with no origin (e.g. mobile apps, curl, server-side checks)
         if (!origin) {
             return callback(null, true);
         }
 
-        // Clean trailing slashes for accurate origin matching
         const cleanOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
 
         const isAllowed = allowedOrigins.some((allowed) => {
@@ -37,19 +34,30 @@ app.use(cors({
         });
 
         if (isAllowed) {
-            callback(null, true);
+            return callback(null, true);
         } else {
-            console.warn(`>>> [CORS BLOCKED] Origin rejected: "${origin}". Allowed origins:`, allowedOrigins);
-            callback(new Error(`CORS policy violation: Access denied for origin ${origin}`));
+            console.warn(`>>> [CORS BLOCKED] Origin rejected: "${origin}". Allowed:`, allowedOrigins);
+            // Return false instead of throwing Error to prevent 500 preflight response
+            return callback(null, false);
         }
     },
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"]
 }));
 
 app.use(express.json());
 app.use(morgan("dev"));
 
-// Selective Authentication Middleware: Bypass checkAuth for Drive file image streams
+// Ensure preflight OPTIONS requests bypass auth checks and return 204
+app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+    }
+    next();
+});
+
+// Selective Auth Middleware: Bypass checkAuth for public Drive image streams
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith('/drive/file/id/')) {
         return next();
