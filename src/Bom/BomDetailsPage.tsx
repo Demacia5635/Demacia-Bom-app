@@ -108,20 +108,14 @@ export default function BomDetailsPage() {
 
         let partAvatarUrl = "";
 
-        // 1. Prefer Google Drive Proxy via driveFileId stored in MongoDB
+        // Route through local Google Drive stream if driveFileId exists
         if (part?.driveFileId) {
           partAvatarUrl = `/api/drive/file/id/${part.driveFileId}`;
-        } 
-        // 2. Inline base64 image fallback
-        else if (part?.avatarID && typeof part.avatarID === "string" && part.avatarID.startsWith("data:image")) {
+        } else if (part?.avatarID && typeof part.avatarID === "string" && part.avatarID.startsWith("data:image")) {
           partAvatarUrl = part.avatarID;
-        } 
-        // 3. Drive view link / webViewLink fallback
-        else if (part?.imageUrl) {
+        } else if (part?.imageUrl) {
           partAvatarUrl = part.imageUrl;
-        } 
-        // 4. Final fallback to Onshape proxy thumbnail stream
-        else {
+        } else {
           let docID = part?.onshapeID?.documentID;
           let elemID = part?.onshapeID?.elementID;
           let wvmType = part?.onshapeID?.wvmType || "w";

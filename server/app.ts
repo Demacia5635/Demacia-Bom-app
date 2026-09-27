@@ -24,7 +24,13 @@ app.use(cors({
 app.use(express.json());
 app.use(morgan("dev"));
 
-app.use('/api', checkAuth, apiRoutes)
+// Selective Authentication Middleware: Bypass checkAuth for Drive file image streams
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/drive/file/id/')) {
+        return next();
+    }
+    return checkAuth(req, res, next);
+}, apiRoutes);
 
 app.use((req, res) => {
     res.status(404).json({ message: `Route ${req.method} ${req.originalUrl} not found`});

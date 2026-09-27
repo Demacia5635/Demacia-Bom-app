@@ -7,7 +7,7 @@ import onshapeService, {
 } from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
 
-console.log(">>> [DEBUG] ONSHAPE CONTROLLER - NO DUPLICATES GUARANTEE LOADED <<<");
+console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH ONSHAPE FALLBACK LOADED <<<");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -100,7 +100,7 @@ async function syncPartThumbnailToDrive(
   const uploadPromise = (async () => {
     try {
       // 3. Drive Recovery Search
-      const existingDriveFile = await driveService.findFileByPartID(partID);
+      const existingDriveFile = await driveService.findFileByPartID(partID).catch(() => null);
       if (existingDriveFile) {
         await Part.findOneAndUpdate(
           { id: dbId },

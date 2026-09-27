@@ -42,18 +42,18 @@ export async function getFileFromId(
     }
 
     const fileContent = await client.getFileContent(fileID).catch((err: any) => {
-      const errorResponse = err?.response?.data || err?.message || err;
-      console.error(`>>> [DRIVE STREAM ERROR] fileID: ${fileID}:`, errorResponse);
+      const errorDetails = err?.response?.data || err?.message || err;
+      console.error(`>>> [DRIVE GET CONTENT ERROR] fileID: ${fileID}:`, errorDetails);
 
-      if (typeof errorResponse === "object" && errorResponse?.error === "invalid_grant") {
-        console.error(">>> [CRITICAL] GOOGLE_REFRESH_TOKEN is invalid or expired! Generate a new token in OAuth Playground.");
+      if (typeof errorDetails === "object" && errorDetails?.error === "unauthorized_client") {
+        console.error(">>> [CRITICAL OAUTH MISMATCH] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET does not match the app that created GOOGLE_REFRESH_TOKEN.");
       }
       return null;
     });
 
     if (!fileContent) {
       return res.status(401).json({ 
-        message: `Failed to retrieve Google Drive file for ID: ${fileID}. OAuth refresh token may be invalid or expired. Check backend logs.` 
+        message: `Failed to stream file from Google Drive for ID: ${fileID}. Check GOOGLE_CLIENT_ID and GOOGLE_REFRESH_TOKEN pairing.` 
       });
     }
 
