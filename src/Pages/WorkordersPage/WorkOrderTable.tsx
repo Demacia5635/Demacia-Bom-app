@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AuthenticatedImage } from "../util/ApiService";
-import { useThemeSync } from "../util/misc/useThemeSync";
+import { AuthenticatedImage } from "../../util/ApiService";
+import { useThemeSync } from "../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
-import type { BomSummary } from "../home/HomePage";
+import type { WorkorderSummary } from "./WorkOrderPage";
 
-export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
+export const WorkOrderTable: React.FC<{ workOrders: WorkorderSummary[] }> = ({ workOrders }) => {
     const navigate = useNavigate();
     const { isLight } = useThemeSync();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
@@ -22,40 +22,49 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
                 <thead>
                     <tr className={`${headerBg} border-b ${borderCol} text-xs font-semibold uppercase tracking-wider`}>
                         <th className="py-3.5 px-4 w-24">Image</th>
-                        <th className="py-3.5 px-4">Assembly Name</th>
-                        <th className="py-3.5 px-4">Engineer</th>
+                        <th className="py-3.5 px-4">Work Order Name</th>
+                        <th className="py-3.5 px-4">Catalog Number</th>
+                        <th className="py-3.5 px-4">BOM Name</th>
+                        <th className="py-3.5 px-4">Owner</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                    {boms.map((bom) => {
-                        const bomOnshapeID = (bom as any).onshapeID;
+                    {workOrders.map((wo) => {
+                        const rawWO = wo as any;
                         let imageSrc = "";
 
-                        // Priority Hierarchy:
-                        // 1. Direct local Google Drive stream via driveFileId
-                        if ((bom as any)?.driveFileId) {
-                            imageSrc = `/api/drive/file/id/${(bom as any).driveFileId}`;
-                        } 
-                        // 2. Base64 avatarID
-                        else if (bom?.avatarID && typeof bom.avatarID === "string" && bom.avatarID.startsWith("data:image")) {
-                            imageSrc = bom.avatarID;
-                        } 
-                        // 3. Drive view link / web image URL
-                        else if ((bom as any)?.imageUrl) {
-                            imageSrc = (bom as any).imageUrl;
-                        } 
-                        // 4. Fallback to Onshape thumbnail route
-                        else if (bomOnshapeID?.documentID && bomOnshapeID?.elementID) {
-                            const { documentID, wvmType = "w", wvmID = "", elementID } = bomOnshapeID;
-                            imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-                        } else if ((bom as any)?.thumbnailURL) {
-                            imageSrc = (bom as any).thumbnailURL;
+                        if (rawWO?.driveFileId) {
+                            imageSrc = `/api/drive/file/id/${rawWO.driveFileId}`;
+                        } else if (rawWO?.bomDriveFileId) {
+                            imageSrc = `/api/drive/file/id/${rawWO.bomDriveFileId}`;
+                        } else if (rawWO?.bomID && typeof rawWO.bomID === "string" && rawWO.bomID.includes("_")) {
+                            const bomParts = rawWO.bomID.split("_");
+                            if (bomParts.length >= 4) {
+                                const documentID = bomParts[0];
+                                const wvmType = bomParts[1] || "w";
+                                const wvmID = bomParts[2] || "";
+                                const elementID = bomParts[3];
+                                imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+                            }
+                        }
+
+                        if (!imageSrc) {
+                            if (wo?.avatarID && typeof wo.avatarID === "string" && wo.avatarID.startsWith("data:image")) {
+                                imageSrc = wo.avatarID;
+                            } else if (wo?.avatarID && wo.avatarID.length > 10) {
+                                imageSrc = `/api/drive/file/id/${wo.avatarID}`;
+                            } else if (rawWO?.imageUrl) {
+                                imageSrc = rawWO.imageUrl;
+                            } else if (rawWO?.onshapeID?.documentID && rawWO?.onshapeID?.elementID) {
+                                const { documentID, wvmType = "w", wvmID = "", elementID } = rawWO.onshapeID;
+                                imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+                            }
                         }
 
                         return (
                             <tr
-                                key={bom.id}
-                                onClick={() => navigate(`/bom/${bom.id}`)}
+                                key={wo.id}
+                                onClick={() => navigate(`/workOrder/${wo.id}`)}
                                 className={`${rowHover} cursor-pointer transition-colors`}
                             >
                                 <td 
@@ -72,7 +81,7 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
                                         {imageSrc ? (
                                             <AuthenticatedImage
                                                 src={imageSrc}
-                                                alt={bom.name || "BOM"}
+                                                alt={wo.name || "Work Order"}
                                                 className="w-full h-full object-cover"
                                             />
                                         ) : (
@@ -81,10 +90,16 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
                                     </div>
                                 </td>
                                 <td className="py-3 px-4 font-medium text-sm">
-                                    {bom.name || "Unnamed BOM"}
+                                    {wo.name || "Unnamed Work Order"}
                                 </td>
                                 <td className={`py-3 px-4 text-sm ${textMuted}`}>
-                                    {bom.engineer || "N/A"}
+                                    {wo.catalogNumber || "N/A"}
+                                </td>
+                                <td className={`py-3 px-4 text-sm ${textMuted}`}>
+                                    {wo.bomName || "N/A"}
+                                </td>
+                                <td className={`py-3 px-4 text-sm ${textMuted}`}>
+                                    {wo.workOrderOwner || "N/A"}
                                 </td>
                             </tr>
                         );
@@ -92,7 +107,6 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
                 </tbody>
             </table>
 
-            {/* Enlarged Image Preview Overlay Modal Portal */}
             {enlargedImageSrc && createPortal(
                 <div 
                     className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
@@ -126,4 +140,4 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
     );
 };
 
-export default BomTable;
+export default WorkOrderTable;

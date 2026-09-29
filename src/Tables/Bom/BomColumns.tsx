@@ -1,5 +1,5 @@
-import type { ColumnConfig } from "../components/Table";
-import { downloadFile } from "../util/ApiService";
+import type { ColumnConfig } from "../../components/Table";
+import { downloadFile } from "../../util/ApiService";
 import type BomTableRow from "./BomTableRow";
 
 const BomColumns: ColumnConfig[] = [

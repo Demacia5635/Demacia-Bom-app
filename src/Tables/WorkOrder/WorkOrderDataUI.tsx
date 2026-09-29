@@ -1,7 +1,7 @@
 import { useState } from "react";
-import type { WorkorderModel } from "../util/Models";
-import { AuthenticatedImage } from "../util/ApiService";
-import { useThemeSync } from "../util/misc/useThemeSync";
+import type { WorkorderModel } from "../../util/Models";
+import { AuthenticatedImage } from "../../util/ApiService";
+import { useThemeSync } from "../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 
 interface WorkOrderDataUIProps {

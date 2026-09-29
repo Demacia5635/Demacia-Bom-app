@@ -1,7 +1,7 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
-import { AuthenticatedImage, downloadFile, fetchFromApi } from "../util/ApiService";
-import { useThemeSync } from "../util/misc/useThemeSync";
-import type { PartModel, BomModel } from "../util/Models";
+import { AuthenticatedImage, downloadFile, fetchFromApi } from "../../util/ApiService";
+import { useThemeSync } from "../../util/misc/useThemeSync";
+import type { PartModel, BomModel } from "../../util/Models";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 

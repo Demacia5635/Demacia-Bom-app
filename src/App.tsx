@@ -1,11 +1,12 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import './css/App.css';
 import MainLayout from './components/MainLayout';
-import HomeScreen from './home/HomePage';
-import BomDetailsPage from './Bom/BomDetailsPage';
-import WorkOrderDetailsPage from './WorkOrder/WorkOrderDetailsPage';
-import PartsSearchPage from './searchParts/SearchParts';
+import HomeScreen from './Pages/BomPage/BomsPage';
+import BomDetailsPage from './Tables/Bom/BomDetailsPage';
+import WorkOrderDetailsPage from './Tables/WorkOrder/WorkOrderDetailsPage';
+import PartsSearchPage from './Pages/searchPartsPage/SearchPartsPage';
 import AssemblyBomPage from './assembly-extension/AssemblyBomPage';
+import WorkOrdersPage from './Pages/WorkordersPage/WorkOrderPage';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/home" element={<HomeScreen />} />
           <Route path="/onshape" element={<AssemblyBomPage />} />
           <Route path="/bom/:bomId" element={<BomDetailsPage />} />
+          <Route path="/workorders" element={<WorkOrdersPage />} />
           <Route path="/workOrder/:workOrderID" element={<WorkOrderDetailsPage />} />
           <Route path="/partSearch" element={<PartsSearchPage />} />
 

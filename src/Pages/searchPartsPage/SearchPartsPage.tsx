@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
-import { AuthenticatedImage, fetchFromApi } from "../util/ApiService";
-import { useThemeSync } from "../util/misc/useThemeSync";
-import type { PartModel } from "../util/Models";
+import { AuthenticatedImage, fetchFromApi } from "../../util/ApiService";
+import { useThemeSync } from "../../util/misc/useThemeSync";
+import type { PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";
 import PartPortal from "./PartPortal";
 

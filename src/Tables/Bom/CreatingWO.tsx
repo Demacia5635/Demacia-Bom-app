@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ChangeEvent } from "react";
-import { useThemeSync } from "../util/misc/useThemeSync";
+import { useThemeSync } from "../../util/misc/useThemeSync";
 
 export interface WorkOrderFormData {
     name: string;

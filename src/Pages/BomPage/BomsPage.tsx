@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
-import { fetchFromApi, type ApiError } from "../util/ApiService";
-import { useThemeSync } from "../util/misc/useThemeSync";
+import { fetchFromApi, type ApiError } from "../../util/ApiService";
+import { useThemeSync } from "../../util/misc/useThemeSync";
 import BomTable from "./BomTable";
-import WorkOrderTable from "./WorkOrderTable";
-import type { BomModel, WorkorderModel } from "../util/Models";
+import type { BomModel } from "../../util/Models";
 
 export type BomSummary = Omit<BomModel, 'description' | 'comments' | 'onshapeURL' | 'onshapeID' | 'parts' | 'subAssemblies' | 'createdAt'>;
-export type WorkorderSummary = Omit<WorkorderModel, 'bomID' | 'description' | 'parts' | 'comments' | 'createdAt'>
 
 export default function HomeScreen() {
   const { isLight, toggleTheme } = useThemeSync();
 
   const [boms, setBoms] = useState<BomSummary[]>([]);
-  const [workOrders, setWorkOrders] = useState<WorkorderSummary[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -32,24 +29,10 @@ export default function HomeScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    fetchFromApi<WorkorderSummary[]>("/db/workOrder/all")
-      .then((data) => {
-        const sorted = data.sort((a, b) => {
-          const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-          const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-          return timeB - timeA;
-        });
-        setWorkOrders(sorted);
-      })
-      .catch((err: ApiError) => setError(err))
-      .finally(() => setLoading(false));
-  }, [])
-
   const textHeading = isLight ? "text-zinc-900" : "text-zinc-100";
 
   if (loading) {
-    return <div className={`p-8 text-center min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50 text-zinc-500" : "bg-zinc-950 text-zinc-400"}`}>Loading BOMs and Work Orders...</div>;
+    return <div className={`p-8 text-center min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50 text-zinc-500" : "bg-zinc-950 text-zinc-400"}`}>Loading BOMs...</div>;
   }
 
   return (
@@ -74,12 +57,6 @@ export default function HomeScreen() {
       )}
 
       <BomTable boms={boms} />
-
-      <br/>
-
-      <h1 className={`text-2xl font-bold mb-6 mt-6 ${textHeading}`}>Work Orders</h1>
-
-      <WorkOrderTable workOrders={workOrders} />
     </div>
   );
 }

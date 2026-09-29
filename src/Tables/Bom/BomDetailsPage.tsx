@@ -1,13 +1,13 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
-import Table from "../components/Table";
-import { fetchFromApi, AuthenticatedImage, type ApiError } from "../util/ApiService";
-import { useThemeSync } from "../util/misc/useThemeSync";
-import type { BomModel, PartModel } from "../util/Models";
+import Table from "../../components/Table";
+import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../util/ApiService";
+import { useThemeSync } from "../../util/misc/useThemeSync";
+import type { BomModel, PartModel } from "../../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
 import BomColumns from "./BomColumns";
-import PartPortal from "../searchParts/PartPortal";
+import PartPortal from "../../Pages/searchPartsPage/PartPortal";
 
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
@@ -44,63 +44,11 @@ export default function BomDetailsPage() {
   useEffect(() => {
     if (!bomId) return;
 
-    const visitedBoms = new Set<string>();
-
-    async function fetchBomRecursively(
-      targetBomId: string,
-      parentId: string | null = null
-    ): Promise<BomTableRow[]> {
-      if (visitedBoms.has(targetBomId)) return [];
-      visitedBoms.add(targetBomId);
-
+    async function fetchFlatBomData(targetBomId: string): Promise<BomTableRow[]> {
       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
-      const currentAssemblyRowId = `${parentId ? parentId + "-" : ""}${bom.id}`;
+      const collectedRows: BomTableRow[] = [];
 
-      let assemblyAvatarUrl = "";
-      if (bom?.driveFileId) {
-        assemblyAvatarUrl = `/api/drive/file/id/${bom.driveFileId}`;
-      } else if (bom?.avatarID && typeof bom.avatarID === "string" && bom.avatarID.startsWith("data:image")) {
-        assemblyAvatarUrl = bom.avatarID;
-      } else if (bom?.imageUrl) {
-        assemblyAvatarUrl = bom.imageUrl;
-      } else if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
-        const documentID = bom.onshapeID.documentID;
-        const wvmType = bom.onshapeID.wvmType || "w";
-        const wvmID = bom.onshapeID.wvmID || "";
-        const elementID = bom.onshapeID.elementID;
-
-        assemblyAvatarUrl = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-      }
-
-      const assemblyRow: BomTableRow = {
-        id: currentAssemblyRowId,
-        parentId: parentId === bomId ? null : parentId,
-        isExpanded: true,
-        avatar: assemblyAvatarUrl,
-        name: bom.name || targetBomId,
-        catalogNumber: bom.catalogNumber || "",
-        revision: "-",
-        description: bom.description || "",
-        engineer: bom.engineer || "",
-        material: "-",
-        mass: 0,
-        price: 0,
-        quantity: 1,
-        comments: bom.comments || "",
-        documentID: bom.onshapeID?.documentID || "",
-        wvmType: bom.onshapeID?.wvmType || "w",
-        wvmID: bom.onshapeID?.wvmID || "",
-        elementID: bom.onshapeID?.elementID || "",
-        entityID: bom.onshapeID?.bomID || bom.id || "",
-        onshapeURL: bom.onshapeURL || "",
-        exportSTL: "",
-        exportParasolid: "",
-        vendor: bom.vendor || "",
-      };
-
-      const collectedRows: BomTableRow[] = targetBomId === bomId ? [] : [assemblyRow];
-
-      // Recursively fetch sub-assemblies and properly resolve their individual BOM database records for Drive caching
+      // Process sub-assemblies as flat rows without expanding their children
       for (const sub of bom.subAssemblies || []) {
         const subBomRecord = await fetchFromApi<BomModel>(`/db/bom/id/${sub.bomID}`).catch(() => null);
         let subAvatarUrl = "";
@@ -118,21 +66,42 @@ export default function BomDetailsPage() {
           const elemID = subBomRecord.onshapeID.elementID;
           subAvatarUrl = `/api/onshape/bom/d/${docID}/wvmT/${wType}/wvmI/${wID}/e/${elemID}/thumbnail`;
         } else {
-          // Fallback parsing from sub.bomID if structured
           const partsArr = sub.bomID.split("_");
           if (partsArr.length >= 4) {
             subAvatarUrl = `/api/onshape/bom/d/${partsArr[0]}/wvmT/${partsArr[1] || "w"}/wvmI/${partsArr[2] || ""}/e/${partsArr[3]}/thumbnail`;
           }
         }
 
-        const subRows = await fetchBomRecursively(sub.bomID, currentAssemblyRowId);
-        // Ensure sub-assembly row gets its resolved avatar URL if not overwritten
-        if (subRows.length > 0 && subAvatarUrl) {
-          subRows[0].avatar = subAvatarUrl;
-        }
-        collectedRows.push(...subRows);
+        const subAssemblyRow: BomTableRow = {
+          id: `sub-${sub.bomID}`,
+          parentId: null,
+          isExpanded: false,
+          avatar: subAvatarUrl,
+          name: subBomRecord?.name || sub.bomID,
+          catalogNumber: subBomRecord?.catalogNumber || "",
+          revision: "-",
+          description: subBomRecord?.description || "",
+          engineer: subBomRecord?.engineer || "",
+          material: "-",
+          mass: 0,
+          price: 0,
+          quantity: sub.quantity || 1,
+          comments: subBomRecord?.comments || "",
+          documentID: subBomRecord?.onshapeID?.documentID || "",
+          wvmType: subBomRecord?.onshapeID?.wvmType || "w",
+          wvmID: subBomRecord?.onshapeID?.wvmID || "",
+          elementID: subBomRecord?.onshapeID?.elementID || "",
+          entityID: subBomRecord?.onshapeID?.bomID || subBomRecord?.id || sub.bomID,
+          onshapeURL: subBomRecord?.onshapeURL || "",
+          exportSTL: "",
+          exportParasolid: "",
+          vendor: subBomRecord?.vendor || "",
+        };
+
+        collectedRows.push(subAssemblyRow);
       }
 
+      // Process direct parts as flat rows
       for (const p of bom.parts || []) {
         const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
 
@@ -168,8 +137,8 @@ export default function BomDetailsPage() {
         }
 
         const partRow: BomTableRow = {
-          id: `${currentAssemblyRowId}-part-${part.id}`,
-          parentId: currentAssemblyRowId === bomId ? null : currentAssemblyRowId,
+          id: `part-${part.id}`,
+          parentId: null,
           isExpanded: false,
           avatar: partAvatarUrl,
           name: part.name || p.partID,
@@ -194,11 +163,12 @@ export default function BomDetailsPage() {
         };
         collectedRows.push(partRow);
       }
+
       return collectedRows;
     }
 
     setLoading(true);
-    fetchBomRecursively(bomId)
+    fetchFlatBomData(bomId)
       .then((data) => setRows(data))
       .catch((err: ApiError) => setError(err))
       .finally(() => setLoading(false));
@@ -341,7 +311,7 @@ export default function BomDetailsPage() {
       )}
 
       {loading ? (
-        <div className={`p-8 text-center ${loadingText}`}>Recursively fetching BOM tree...</div>
+        <div className={`p-8 text-center ${loadingText}`}>Fetching single-level BOM data...</div>
       ) : (
         <div 
           onClick={handleTableClick}

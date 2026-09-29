@@ -1,15 +1,15 @@
-import { HomeIcon, SearchIcon, X, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, X, type LucideProps } from "lucide-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
-import { useLocation, useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom";
 
-export const Sidebar: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ isOpen, onClose }) => {
+export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const navItems: { label: string, path: string, icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
+    const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
-        // { label: 'Onshape', path: '/onshape', icon: FileBox },
         { label: 'Search Parts', path: '/partSearch', icon: SearchIcon },
+        { label: 'Work Orders', path: '/workorders', icon: ClipboardList },
     ];
 
     const handleNavigation = (path: string) => {
@@ -19,10 +19,12 @@ export const Sidebar: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ is
 
     return (
         <div>
-            <div onClick={onClose}
-                className={`fixed insert-0 bg-black/70 z-40 transition-opacity duration-300 
-                            ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`} />
-            <aside className={`h-full fixed top-0 left-0 buttom-0 w-64 bg-gray-900 border-r border-gray-800 shadow-2x1 z-50 transform transition-transform duration-300 ease-in-out flex flex-col
+            <div
+                onClick={onClose}
+                className={`fixed inset-0 bg-black/70 z-40 transition-opacity duration-300 
+                            ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}
+            />
+            <aside className={`h-full fixed top-0 left-0 bottom-0 w-64 bg-gray-900 border-r border-gray-800 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col
                                             ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 <div className="h-12 flex items-center justify-between px-4 border-b border-gray-800 bg-gray-900/50">
                     <span className="font-semibold text-sm text-gray-300 uppercase tracking-wider">Sidebar</span>
@@ -30,7 +32,7 @@ export const Sidebar: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ is
                         onClick={onClose}
                         aria-label="Close Sidebar"
                         className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors">
-                        <X className="w-5 g-5" />
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 
@@ -48,10 +50,10 @@ export const Sidebar: React.FC<{ isOpen: boolean, onClose: () => void }> = ({ is
                                 <Icon className="w-4 h-4 text-indigo-400" />
                                 <span>{item.label}</span>
                             </button>
-                        )
+                        );
                     })}
                 </nav>
             </aside>
         </div>
     );
-}
+};
