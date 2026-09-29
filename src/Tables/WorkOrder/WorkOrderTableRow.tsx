@@ -10,8 +10,10 @@ export default interface WorkOrderTableRow extends RowData {
     statusCode: string;
     approxArrivalDate: string;     
     manufacturingMethod: string;  
-    importance: string;             
+    material: string;
+    Priority: string;             
     comments: string;
+    links: string;
     onshapeURL: string;
     exportSTL: string;
     exportParasolid: string;

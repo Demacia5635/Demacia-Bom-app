@@ -13,27 +13,29 @@ const WorkOrderColumns: ColumnConfig[] = [
         key: "statusCode", 
         label: "Status", 
         type: "select", 
-        options: ['In creation', 'Finished creation', 'Given to assembly kit'] 
+        options: ['CATNUM Written', 'In Planning', 'Manufacturing approved', 'In manufacturing', 'Finished Manufacturing'] 
     },
     { key: "approxArrivalDate", label: "Approx. Arrival Date", type: "string" },
     { 
         key: "manufacturingMethod", 
         label: "Manufacturing Method", 
         type: "select", 
-        options: ['Manual', 'Milled', 'Lathed', 'CNC'] 
+        options: ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced'] 
     },
+    { key: "material", label: "Material", type: "string" },
     { 
-        key: "importance", 
-        label: "Importance", 
+        key: "Priority", 
+        label: "Priority", 
         type: "select", 
-        options: ['High', 'Medium', 'Low'] 
+        options: ['High', 'Medium', 'Low', 'Untracked', 'Finished'] 
     },
     { key: "comments", label: "Comments", type: "string" },
+    { key: "links", label: "Links", type: "string" },
     
     // Actions / Links at the end
     {
         key: "onshapeURL",
-        label: "Links",
+        label: "CAD Link",
         type: "button",
         buttonText: "Open CAD",
         isDisabled: () => true,

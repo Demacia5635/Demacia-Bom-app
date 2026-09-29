@@ -369,11 +369,13 @@ body.dark-theme-active .table-page-container,
 }
 
 body.dark-theme-active .table-td:has(.cell-select.status-bg-orange),
-body.dark-theme-active .table-td:has(.cell-select[value="In creation"]),
+body.dark-theme-active .table-td:has(.cell-select[value="In Planning"]),
+body.dark-theme-active .table-td:has(.cell-select[value="In manufacturing"]),
 body.dark-theme-active .table-td:has(.cell-select[value="Medium"]),
 body.dark-theme-active .table-td:has(.cell-select[value="Manual"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-orange),
-.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="In creation"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="In Planning"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="In manufacturing"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Medium"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Manual"]) {
   background-color: rgba(249, 115, 22, 0.5);
@@ -381,32 +383,42 @@ body.dark-theme-active .table-td:has(.cell-select[value="Manual"]),
 }
 
 body.dark-theme-active .table-td:has(.cell-select.status-bg-blue),
-body.dark-theme-active .table-td:has(.cell-select[value="Finished creation"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Manufacturing approved"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Untracked"]),
 body.dark-theme-active .table-td:has(.cell-select[value="Milled"]),
 body.dark-theme-active .table-td:has(.cell-select[value="Lathed"]),
 body.dark-theme-active .table-td:has(.cell-select[value="CNC"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Printed"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Externally produced"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-blue),
-.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Finished creation"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Manufacturing approved"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Untracked"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Milled"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Lathed"]),
-.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="CNC"]) {
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="CNC"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Printed"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Externally produced"]) {
   background-color: rgba(59, 130, 246, 0.5);
   color: #bfdbfe;
 }
 
 body.dark-theme-active .table-td:has(.cell-select.status-bg-green),
-body.dark-theme-active .table-td:has(.cell-select[value="Given to assembly kit"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Finished Manufacturing"]),
+body.dark-theme-active .table-td:has(.cell-select[value="Finished"]),
 body.dark-theme-active .table-td:has(.cell-select[value="Low"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-green),
-.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Given to assembly kit"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Finished Manufacturing"]),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Finished"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select[value="Low"]) {
   background-color: rgba(34, 197, 94, 0.5);
   color: #bbf7d0;
 }
 
 body.dark-theme-active .table-td:has(.cell-select.status-bg-red),
+body.dark-theme-active .table-td:has(.cell-select[value="CATNUM Written"]),
 body.dark-theme-active .table-td:has(.cell-select[value="High"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select.status-bg-red),
+.table-page-container:not(.theme-light) .table-td:has(.cell-select[value="CATNUM Written"]),
 .table-page-container:not(.theme-light) .table-td:has(.cell-select[value="High"]) {
   background-color: rgba(239, 68, 68, 0.5);
   color: #fecaca;

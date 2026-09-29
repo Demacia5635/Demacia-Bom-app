@@ -19,7 +19,6 @@ export default function WorkOrderDetailsPage() {
     const [workOrderData, setworkOrderData] = useState<WorkorderModel | null>(null);
     const [assemblyThumbnailUrl, setAssemblyThumbnailUrl] = useState<string>("");
 
-    // States for the PartPortal modal popup & custom context menu & image preview
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
     const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
     const [contextMenu, setContextMenu] = useState<{
@@ -29,13 +28,14 @@ export default function WorkOrderDetailsPage() {
     } | null>(null);
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
-    // Map to keep track of partID per row id
     const rowPartMapRef = useRef<Map<string, string>>(new Map());
 
     const parseStatusToString = (code: number | string | undefined): string => {
-        if (code === 1 || code === '1' || code === 'Finished creation') return 'Finished creation';
-        if (code === 2 || code === '2' || code === 'Given to assembly kit') return 'Given to assembly kit';
-        return 'In creation';
+        if (code === 1 || code === '1' || code === 'In Planning') return 'In Planning';
+        if (code === 2 || code === '2' || code === 'Manufacturing approved') return 'Manufacturing approved';
+        if (code === 3 || code === '3' || code === 'In manufacturing') return 'In manufacturing';
+        if (code === 4 || code === '4' || code === 'Finished Manufacturing') return 'Finished Manufacturing';
+        return 'CATNUM Written';
     };
 
     useEffect(() => {
@@ -50,17 +50,14 @@ export default function WorkOrderDetailsPage() {
             const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
             setworkOrderData(data);
 
-            // If workOrder directly holds an onshapeID, construct thumbnail URL immediately
             if ((data as any)?.onshapeID?.documentID && (data as any)?.onshapeID?.elementID) {
                 const { documentID, wvmType = "w", wvmID, elementID } = (data as any).onshapeID;
                 setAssemblyThumbnailUrl(`/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`);
             }
         }
-
         getWOData();
     }, [workOrderID]);
 
-    // Force-sync select element values and classes to the DOM so CSS rules catch them
     useEffect(() => {
         const syncSelectElements = () => {
             const selects = document.querySelectorAll(".cell-select");
@@ -71,13 +68,13 @@ export default function WorkOrderDetailsPage() {
                 select.setAttribute("value", val);
                 select.classList.remove("status-bg-orange", "status-bg-blue", "status-bg-green", "status-bg-red");
 
-                if (["In creation", "Medium", "Manual"].includes(val)) {
+                if (["In Planning", "In manufacturing", "Medium", "Manual"].includes(val)) {
                     select.classList.add("status-bg-orange");
-                } else if (["Finished creation", "Milled", "Lathed", "CNC"].includes(val)) {
+                } else if (["Manufacturing approved", "Milled", "Lathed", "CNC", "Printed", "Externally produced", "Untracked"].includes(val)) {
                     select.classList.add("status-bg-blue");
-                } else if (["Given to assembly kit", "Low"].includes(val)) {
+                } else if (["Finished Manufacturing", "Low", "Finished"].includes(val)) {
                     select.classList.add("status-bg-green");
-                } else if (val === "High") {
+                } else if (["CATNUM Written", "High"].includes(val)) {
                     select.classList.add("status-bg-red");
                 }
             });
@@ -103,7 +100,6 @@ export default function WorkOrderDetailsPage() {
         ): Promise<Map<string, number>> {
             const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
 
-            // If this is the root BOM, generate the assembly thumbnail URL from its onshapeID
             if (targetBomId === workOrderData?.bomID && currentBom?.onshapeID) {
                 const { documentID, wvmType = "w", wvmID, elementID } = currentBom.onshapeID;
                 if (documentID && elementID) {
@@ -157,8 +153,10 @@ export default function WorkOrderDetailsPage() {
                     statusCode: parseStatusToString(existingWoPart?.statusCode),
                     approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
                     manufacturingMethod: (existingWoPart as any)?.manufacturingMethod || (part as any)?.manufacturingMethod || "Manual",
-                    importance: (existingWoPart as any)?.importance || "Medium",
-                    comments: (existingWoPart as any)?.comments || (part as any)?.comments || "",
+                    material: (existingWoPart as any)?.material || part.material || "",
+                    Priority: (existingWoPart as any)?.Priority || "Medium",
+                    comments: (existingWoPart as any)?.comments || part.comments || "",
+                    links: (existingWoPart as any)?.links || (part as any)?.links || "",
                     onshapeURL: part.onshapeURL || "",
                     exportSTL: part.stlLink || "",
                     exportParasolid: part.parasolidLink || "",
@@ -176,7 +174,6 @@ export default function WorkOrderDetailsPage() {
             .finally(() => setLoading(false));
     }, [workOrderID, workOrderData]);
 
-    // Handle table data changes and save updates to part database (MongoDB)
     const handleTableDataChange = async (newData: WorkOrderTableRow[]) => {
         for (let i = 0; i < newData.length; i++) {
             const newRow = newData[i];
@@ -187,7 +184,9 @@ export default function WorkOrderDetailsPage() {
                 oldRow.name !== newRow.name ||
                 oldRow.catalogNumber !== newRow.catalogNumber ||
                 oldRow.comments !== newRow.comments ||
-                oldRow.manufacturingMethod !== newRow.manufacturingMethod
+                oldRow.manufacturingMethod !== newRow.manufacturingMethod ||
+                oldRow.material !== newRow.material ||
+                oldRow.links !== newRow.links
             )) {
                 try {
                     const payload = {
@@ -195,6 +194,8 @@ export default function WorkOrderDetailsPage() {
                         catalogNumber: newRow.catalogNumber,
                         comments: newRow.comments,
                         manufacturingMethod: newRow.manufacturingMethod,
+                        material: newRow.material,
+                        links: newRow.links
                     };
 
                     await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${partId}`, {
@@ -214,7 +215,6 @@ export default function WorkOrderDetailsPage() {
         setRows(newData);
     };
 
-    // Left click handler to catch clicks specifically on the avatar cell (column index 0)
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const cellEl = target.closest(".table-td, td");
@@ -321,7 +321,6 @@ export default function WorkOrderDetailsPage() {
                         setData={(newData) => handleTableDataChange(newData as WorkOrderTableRow[])}
                     />
 
-                    {/* Custom Context Menu */}
                     {contextMenu && (
                         <div
                             className="context-menu"
@@ -339,7 +338,6 @@ export default function WorkOrderDetailsPage() {
                 </div>
             )}
 
-            {/* PartPortal Modal Popup Overlay */}
             {isPartPortalOpen && selectedPart && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
                     <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -355,7 +353,6 @@ export default function WorkOrderDetailsPage() {
                 </div>
             )}
 
-            {/* Enlarged Image Preview Overlay Modal */}
             {enlargedImageSrc && (
                 <div 
                     className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"

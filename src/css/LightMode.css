@@ -416,11 +416,13 @@ body.light-theme-active .cell-select option,
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-orange),
-body.light-theme-active .table-td:has(.cell-select[value="In creation"]),
+body.light-theme-active .table-td:has(.cell-select[value="In Planning"]),
+body.light-theme-active .table-td:has(.cell-select[value="In manufacturing"]),
 body.light-theme-active .table-td:has(.cell-select[value="Medium"]),
 body.light-theme-active .table-td:has(.cell-select[value="Manual"]),
 .table-page-container.theme-light .table-td:has(.cell-select.status-bg-orange),
-.table-page-container.theme-light .table-td:has(.cell-select[value="In creation"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="In Planning"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="In manufacturing"]),
 .table-page-container.theme-light .table-td:has(.cell-select[value="Medium"]),
 .table-page-container.theme-light .table-td:has(.cell-select[value="Manual"]) {
   background-color: #ffedd5;
@@ -429,25 +431,33 @@ body.light-theme-active .table-td:has(.cell-select[value="Manual"]),
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-blue),
-body.light-theme-active .table-td:has(.cell-select[value="Finished creation"]),
+body.light-theme-active .table-td:has(.cell-select[value="Manufacturing approved"]),
+body.light-theme-active .table-td:has(.cell-select[value="Untracked"]),
 body.light-theme-active .table-td:has(.cell-select[value="Milled"]),
 body.light-theme-active .table-td:has(.cell-select[value="Lathed"]),
 body.light-theme-active .table-td:has(.cell-select[value="CNC"]),
+body.light-theme-active .table-td:has(.cell-select[value="Printed"]),
+body.light-theme-active .table-td:has(.cell-select[value="Externally produced"]),
 .table-page-container.theme-light .table-td:has(.cell-select.status-bg-blue),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Finished creation"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="Manufacturing approved"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="Untracked"]),
 .table-page-container.theme-light .table-td:has(.cell-select[value="Milled"]),
 .table-page-container.theme-light .table-td:has(.cell-select[value="Lathed"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="CNC"]) {
+.table-page-container.theme-light .table-td:has(.cell-select[value="CNC"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="Printed"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="Externally produced"]) {
   background-color: #dbeafe;
   color: #1e40af;
   font-weight: 700;
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-green),
-body.light-theme-active .table-td:has(.cell-select[value="Given to assembly kit"]),
+body.light-theme-active .table-td:has(.cell-select[value="Finished Manufacturing"]),
+body.light-theme-active .table-td:has(.cell-select[value="Finished"]),
 body.light-theme-active .table-td:has(.cell-select[value="Low"]),
 .table-page-container.theme-light .table-td:has(.cell-select.status-bg-green),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Given to assembly kit"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="Finished Manufacturing"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="Finished"]),
 .table-page-container.theme-light .table-td:has(.cell-select[value="Low"]) {
   background-color: #dcfce7;
   color: #166534;
@@ -455,9 +465,11 @@ body.light-theme-active .table-td:has(.cell-select[value="Low"]),
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-red),
+body.light-theme-active .table-td:has(.cell-select[value="CATNUM Written"]),
 body.light-theme-active .table-td:has(.cell-select[value="High"]),
 .table-page-container.theme-light .table-td:has(.cell-select.status-bg-red),
-.theme-light .table-td:has(.cell-select[value="High"]) {
+.table-page-container.theme-light .table-td:has(.cell-select[value="CATNUM Written"]),
+.table-page-container.theme-light .table-td:has(.cell-select[value="High"]) {
   background-color: #fee2e2;
   color: #991b1b;
   font-weight: 700;
