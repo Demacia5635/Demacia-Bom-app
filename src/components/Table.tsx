@@ -60,6 +60,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, rowId: null });
 
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const bottomScrollRef = useRef<HTMLDivElement>(null);
+    const [tableWidth, setTableWidth] = useState<number>(0);
     const [autoLastColWidth, setAutoLastColWidth] = useState<number | null>(null);
 
     const [columns, setColumns] = useState<ColumnConfig[]>(columnsData);
@@ -72,6 +74,48 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         e.stopPropagation();
         setRowContextMenu({ visible: true, x: e.clientX, y: e.clientY, rowId });
     };
+
+    // Synchronize horizontal scrolling between the main table wrapper and the bottom scrollbar
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        const bottomScroll = bottomScrollRef.current;
+        if (!wrapper || !bottomScroll) return;
+
+        const handleWrapperScroll = () => {
+            if (bottomScroll.scrollLeft !== wrapper.scrollLeft) {
+                bottomScroll.scrollLeft = wrapper.scrollLeft;
+            }
+        };
+
+        const handleBottomScroll = () => {
+            if (wrapper.scrollLeft !== bottomScroll.scrollLeft) {
+                wrapper.scrollLeft = bottomScroll.scrollLeft;
+            }
+        };
+
+        wrapper.addEventListener('scroll', handleWrapperScroll);
+        bottomScroll.addEventListener('scroll', handleBottomScroll);
+
+        return () => {
+            wrapper.removeEventListener('scroll', handleWrapperScroll);
+            bottomScroll.removeEventListener('scroll', handleBottomScroll);
+        };
+    }, []);
+
+    // Track table content width for the synced bottom scrollbar spacer
+    useEffect(() => {
+        const table = wrapperRef.current?.querySelector('table');
+        if (!table) return;
+
+        const updateWidth = () => {
+            setTableWidth(table.scrollWidth);
+        };
+
+        updateWidth();
+        const observer = new ResizeObserver(updateWidth);
+        observer.observe(table);
+        return () => observer.disconnect();
+    }, [columns, data, columnWidths]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -89,9 +133,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
     const activeContextMenuRow = data.find(r => r.id === rowContextMenu.rowId);
 
-    // Recompute the auto-fill width for the last column whenever the
-    // wrapper resizes, the visible column set changes, or any column
-    // width (manual or otherwise) changes.
     useEffect(() => {
         const wrapper = wrapperRef.current;
         if (!wrapper) return;
@@ -103,9 +144,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         }
 
         const recompute = () => {
-            // If the user has manually resized this specific column
-            // (it has an explicit entry in columnWidths), respect that
-            // and stop auto-filling it.
             if (Object.prototype.hasOwnProperty.call(columnWidths, lastCol.key)) {
                 setAutoLastColWidth(null);
                 return;
@@ -146,8 +184,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         let isActive = true;
         let rafId: number | null = null;
 
-        const EDGE_ZONE = 40; // px from screen edge that triggers auto-growth
-        const MAX_EDGE_SPEED = 40; // px of column growth per frame at the very edge
+        const EDGE_ZONE = 40;
+        const MAX_EDGE_SPEED = 40;
 
         const targetElement = e.target as HTMLElement;
         targetElement.setPointerCapture(e.pointerId);
@@ -158,11 +196,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             if (table) table.style.width = 'max-content';
         };
 
-        // Persistent per-frame loop: runs continuously from pointerdown to
-        // pointerup regardless of whether new pointermove events arrive.
-        // This lets holding the cursor at the screen edge keep growing the
-        // column indefinitely, since the loop doesn't depend on the cursor
-        // actually moving any further.
         const tick = () => {
             if (!isActive) return;
 
@@ -175,9 +208,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
             applyWidth(initialWidth + scaledDelta);
 
-            // Infinite expansion while the cursor rests near/at the right
-            // edge of the screen: grow proportionally to how deep into the
-            // edge zone the cursor is, every frame, with no upper bound.
             const distanceIntoRightEdge = latestClientX - (window.innerWidth - EDGE_ZONE);
             if (distanceIntoRightEdge > 0) {
                 const growth = Math.min(MAX_EDGE_SPEED, (distanceIntoRightEdge / EDGE_ZONE) * MAX_EDGE_SPEED);
@@ -189,8 +219,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                 applyWidth(currentWidth - shrink);
             }
 
-            // Keep the wrapper scrolled to follow growth even away from the
-            // hard screen edge, once the cursor nears the wrapper's own edge.
             if (wrapper && !isShrinking) {
                 const wrapperRect = wrapper.getBoundingClientRect();
                 if (latestClientX > wrapperRect.right - 100) {
@@ -332,12 +360,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             data.map(row => {
                 if (row.id !== rowId) return row;
                 const updatedRow = { ...row };
-
-                if (col.type === 'number') {
-                    (updatedRow as any)[col.key] = rawValue;
-                } else {
-                    (updatedRow as any)[col.key] = rawValue;
-                }
+                (updatedRow as any)[col.key] = rawValue;
                 return updatedRow;
             }));
     };
@@ -357,12 +380,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             return;
         }
 
-        if (processed.startsWith('.')) {
-            processed = '0' + processed;
-        }
-        if (processed.endsWith('.')) {
-            processed = processed.slice(0, -1);
-        }
+        if (processed.startsWith('.')) processed = '0' + processed;
+        if (processed.endsWith('.')) processed = processed.slice(0, -1);
 
         const num = Number(processed);
         const finalVal = isNaN(num) ? 0 : num;
@@ -382,7 +401,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         setSortConfig(prev => {
             if (!prev || prev.key !== key) return { key, direction: 'asc' };
             if (prev.direction === 'asc') return { key, direction: 'desc' };
-            return null; // third click clears sorting for this column
+            return null;
         });
     };
 
@@ -618,16 +637,19 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                 </table>
             </div>
 
+            {/* Synced Bottom Horizontal Scrollbar */}
+            <div
+                ref={bottomScrollRef}
+                className="overflow-x-auto sticky bottom-0 z-20 bg-zinc-900/40 backdrop-blur-sm border-t border-zinc-800/60"
+                style={{ height: '14px', marginTop: '2px' }}
+            >
+                <div style={{ width: `${tableWidth}px`, height: '1px' }} />
+            </div>
+
             {contextMenu.visible && (
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => { if (contextMenu.columnIndex > 0) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex - 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === 0}>Move Left</button>
                     <button onClick={() => { if (contextMenu.columnIndex < columns.length - 1) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex + 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === columns.length - 1}>Move Right</button>
-                </div>
-            )}
-            
-            {rowContextMenu.visible && activeContextMenuRow && newRowFunction && (
-                <div className="context-menu" style={{ top: rowContextMenu.y, left: rowContextMenu.x }} onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => handleAddRow(activeContextMenuRow.id)}>add item inside</button>
                 </div>
             )}
         </div>

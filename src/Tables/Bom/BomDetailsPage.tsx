@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import Table from "../../components/Table";
 import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
@@ -11,6 +11,7 @@ import PartPortal from "../../Pages/searchPartsPage/PartPortal";
 
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
+  const navigate = useNavigate();
   const { isLight, toggleTheme } = useThemeSync();
 
   const [rows, setRows] = useState<BomTableRow[]>([]);
@@ -76,7 +77,8 @@ export default function BomDetailsPage() {
           id: `sub-${sub.bomID}`,
           parentId: null,
           isExpanded: false,
-          isSubAssembly: true, // <--- Added flag to identify sub-assemblies
+          isSubAssembly: true,
+          subBomId: sub.bomID,
           avatar: subAvatarUrl,
           name: subBomRecord?.name || sub.bomID,
           catalogNumber: subBomRecord?.catalogNumber || "",
@@ -141,6 +143,7 @@ export default function BomDetailsPage() {
           id: `part-${part.id}`,
           parentId: null,
           isExpanded: false,
+          isSubAssembly: false,
           avatar: partAvatarUrl,
           name: part.name || p.partID,
           catalogNumber: part.catalogNumber || "",
@@ -156,7 +159,7 @@ export default function BomDetailsPage() {
           wvmType: part.onshapeID?.wvmType || "w",
           wvmID: part.onshapeID?.wvmID || "",
           elementID: part.onshapeID?.elementID || "",
-          entityID: part.onshapeID?.partID || p.partID,
+          entityID: p.partID,
           onshapeURL: part.onshapeURL || "",
           exportSTL: part.stlLink || "",
           exportParasolid: part.parasolidLink || "",
@@ -180,7 +183,7 @@ export default function BomDetailsPage() {
       const newRow = newData[i];
       const oldRow = rows.find(r => r.id === newRow.id);
 
-      if (oldRow && newRow.entityID && (
+      if (oldRow && !newRow.isSubAssembly && newRow.entityID && (
         oldRow.name !== newRow.name ||
         oldRow.catalogNumber !== newRow.catalogNumber ||
         oldRow.revision !== newRow.revision ||
@@ -285,6 +288,14 @@ export default function BomDetailsPage() {
     }
   };
 
+  const handleGoToSubBom = (row: BomTableRow) => {
+    setContextMenu(null);
+    const subBomId = (row as any).subBomId;
+    if (subBomId) {
+      navigate(`/bom/${subBomId}`);
+    }
+  };
+
   const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
   const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
 
@@ -333,12 +344,21 @@ export default function BomDetailsPage() {
               style={{ top: contextMenu.y, left: contextMenu.x }}
               onClick={(e) => e.stopPropagation()}
             >
-              <button
-                type="button"
-                onClick={() => handleShowPartData(contextMenu.row)}
-              >
-                Show Part Data
-              </button>
+              {contextMenu.row.isSubAssembly ? (
+                <button
+                  type="button"
+                  onClick={() => handleGoToSubBom(contextMenu.row)}
+                >
+                  Go to Subassembly BOM
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleShowPartData(contextMenu.row)}
+                >
+                  Show Part Data
+                </button>
+              )}
             </div>
           )}
         </div>
