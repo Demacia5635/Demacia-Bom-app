@@ -5,9 +5,14 @@ interface SubPartBody {
   partID: string;
   quantityTotal?: number;
   quantityMade?: number;
-  statusCode?: number;
+  statusCode?: number | string;
+  Priority?: string;
+  manufacturingMethod?: string;
   productionGCOwner?: string;
   productionMakingOwner?: string;
+  comments?: string;
+  links?: string;                 // Added Links interface field
+  approxArrivalDate?: string;     // Added Arrival Date interface field
   lastUpdate?: Date;
   firstAdded?: Date;
 }
@@ -61,11 +66,12 @@ export async function upsertWorkOrderByID(
   try {
     const id = req.params.id;
     const existing = await WorkOrder.findOne({ id: id });
+    
     const workOrder = await WorkOrder.findOneAndUpdate(
       { id: id },
-      { ...req.body, id: id },
+      { $set: { ...req.body, id: id } },
       {
-        new: true,
+        returnDocument: 'after', // Fixed deprecation warning
         upsert: true,
         runValidators: true,
         setDefaultsOnInsert: true,

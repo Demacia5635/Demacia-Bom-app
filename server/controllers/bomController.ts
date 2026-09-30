@@ -81,7 +81,7 @@ export async function upsertBomByID(
             { id: id },
             { ...req.body, id: id },
             {
-                new: true,
+                returnDocument: 'after',
                 upsert: true,
                 runValidators: true,
                 setDefaultsOnInsert: true

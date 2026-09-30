@@ -4,7 +4,7 @@ import Part from "../models/Part";
 import onshapeService from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
 
-console.log(">>> [DEBUG] PART CONTROLLER WITH FIXED DRIVE FOLDERS LOADED <<<");
+console.log(">>> [DEBUG] CLEAN PART CONTROLLER LOADED <<<");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -47,6 +47,9 @@ interface PartBody {
   onshapeID?: OnshapeID;
   driveFileId?: string;
   imageUrl?: string;
+  statusCode?: string;
+  Priority?: string;
+  manufacturingMethod?: string;
 }
 
 function formID(OnshapeID: OnshapeID): string {
@@ -129,20 +132,17 @@ async function forceUploadStlToDrive(onshapeID: OnshapeID): Promise<string | nul
       const existingInDb = await Part.findOne({ "onshapeID.partID": partID, stlLink: { $exists: true,$ne: "" } });
       if (existingInDb?.stlLink) return existingInDb.stlLink;
 
-      console.log(`>>> [STL EXPORT] Fetching STL for part ${partID} from Onshape...`);
       const stlData = await onshapeService.exportPartToStl(onshapeID);
       const safeBuffer = ensureBuffer(stlData);
       if (!safeBuffer) return null;
 
       const folderId = process.env.GOOGLE_DRIVE_STL_FOLDER_ID;
-      console.log(`>>> [STL UPLOAD] Uploading STL for part ${partID} to folder ID: ${folderId}...`);
-
       const uploaded = await driveService.uploadFile({
         buffer: safeBuffer,
         fileName: `part_${partID}_${Date.now()}.stl`,
         mimeType: "model/stl",
-        partID: `${partID}_stl`, // Unique lock/identifier suffix for STL
-        folderId: folderId, // Correct parameter name matching UploadFileParams
+        partID: `${partID}_stl`,
+        folderId: folderId,
       });
 
       return uploaded?.id || null;
@@ -166,20 +166,17 @@ async function forceUploadParasolidToDrive(onshapeID: OnshapeID): Promise<string
       const existingInDb = await Part.findOne({ "onshapeID.partID": partID, parasolidLink: { $exists: true,$ne: "" } });
       if (existingInDb?.parasolidLink) return existingInDb.parasolidLink;
 
-      console.log(`>>> [PARASOLID EXPORT] Fetching Parasolid for part ${partID} from Onshape...`);
       const parasolidData = await onshapeService.exportPartToParasolid(onshapeID);
       const safeBuffer = ensureBuffer(parasolidData);
       if (!safeBuffer) return null;
 
       const folderId = process.env.GOOGLE_DRIVE_PARASOLID_FOLDER_ID;
-      console.log(`>>> [PARASOLID UPLOAD] Uploading Parasolid for part ${partID} to folder ID: ${folderId}...`);
-
       const uploaded = await driveService.uploadFile({
         buffer: safeBuffer,
         fileName: `part_${partID}_${Date.now()}.x_t`,
         mimeType: "application/x-parasolid",
-        partID: `${partID}_parasolid`, // Unique lock/identifier suffix for Parasolid
-        folderId: folderId, // Correct parameter name matching UploadFileParams
+        partID: `${partID}_parasolid`,
+        folderId: folderId,
       });
 
       return uploaded?.id || null;
@@ -205,30 +202,26 @@ export async function getAllParts(req: Request, res: Response, next: NextFunctio
 export async function getPartByID(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const id = req.params.id;
-    let part = await Part.findOne({ id: id });
+    const onshapeIDObj = parseOnshapeIDFromCompoundKey(id);
 
-    let onshapeIDObj = part?.onshapeID;
-    if (!onshapeIDObj || !onshapeIDObj.documentID) {
-      const parsed = parseOnshapeIDFromCompoundKey(id);
-      if (parsed) onshapeIDObj = parsed;
-    }
-
-    if (!part) {
-      part = new Part({ id: id, onshapeID: onshapeIDObj || undefined });
-      await part.save();
-    }
+    // Atomically find or create using findOneAndUpdate (no manual .save() required)
+    let part = await Part.findOneAndUpdate(
+      { id: id },
+      { $setOnInsert: { id: id, onshapeID: onshapeIDObj || undefined } },
+      { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
+    );
 
     let updatedFields: any = {};
-    if (onshapeIDObj && onshapeIDObj.documentID) {
-      const { documentID, wvmType = "w", wvmID, elementID, partID } = onshapeIDObj;
-      updatedFields.onshapeURL = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
-      updatedFields.onshapeID = onshapeIDObj;
-    }
+    const effectiveOnshapeID = onshapeIDObj || part?.onshapeID;
 
-    // Trigger async background tasks for Drive assets if missing
-    if (onshapeIDObj && onshapeIDObj.documentID) {
+    if (effectiveOnshapeID && effectiveOnshapeID.documentID) {
+      const { documentID, wvmType = "w", wvmID, elementID, partID } = effectiveOnshapeID;
+      updatedFields.onshapeURL = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
+      updatedFields.onshapeID = effectiveOnshapeID;
+
+      // Trigger async background tasks for Drive assets if missing
       if (!part.driveFileId) {
-        forceUploadToDrive(id, onshapeIDObj).then((fileId) => {
+        forceUploadToDrive(id, effectiveOnshapeID).then((fileId) => {
           if (fileId) {
             Part.updateOne({ id: id }, { $set: { driveFileId: fileId, imageUrl: `https://lh3.googleusercontent.com/d/${fileId}` } }).catch(() => {});
           }
@@ -236,7 +229,7 @@ export async function getPartByID(req: Request<{ id: string }>, res: Response, n
       }
 
       if (!part.stlLink) {
-        forceUploadStlToDrive(onshapeIDObj).then((stlId) => {
+        forceUploadStlToDrive(effectiveOnshapeID).then((stlId) => {
           if (stlId) {
             Part.updateOne({ id: id }, { $set: { stlLink: stlId } }).catch(() => {});
           }
@@ -244,7 +237,7 @@ export async function getPartByID(req: Request<{ id: string }>, res: Response, n
       }
 
       if (!part.parasolidLink) {
-        forceUploadParasolidToDrive(onshapeIDObj).then((parasolidId) => {
+        forceUploadParasolidToDrive(effectiveOnshapeID).then((parasolidId) => {
           if (parasolidId) {
             Part.updateOne({ id: id }, { $set: { parasolidLink: parasolidId } }).catch(() => {});
           }

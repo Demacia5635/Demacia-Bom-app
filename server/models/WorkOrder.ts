@@ -3,11 +3,16 @@ import mongoose from "mongoose";
 const subPartSchema = new mongoose.Schema(
   {
     partID: { type: String, required: true },
-    quantityToal: { type: Number, default: 1 },
+    quantityTotal: { type: Number, default: 1 },
     quantityMade: { type: Number, default: 1 },
-    statusCode: { type: Number, default: -1 },
+    statusCode: { type: mongoose.Schema.Types.Mixed, default: "In Planning" },
+    Priority: { type: String, default: "Medium" },
+    manufacturingMethod: { type: String, default: "Manual" },
     productionGCOwner: { type: String },
     productionMakingOwner: { type: String },
+    comments: { type: String },
+    links: { type: String },                 // Added Links schema definition
+    approxArrivalDate: { type: String },     // Added Arrival Date schema definition
     updatedAt: { type: Date },
     createdAt: { type: Date },
   },

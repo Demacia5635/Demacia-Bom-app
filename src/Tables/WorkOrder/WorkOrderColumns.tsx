@@ -6,7 +6,7 @@ const WorkOrderColumns: ColumnConfig[] = [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: (row) => row.vendor !== "" },
     { key: "lastUpadte", label: "Last Updated", type: "string", isDisabled: () => true },
     { key: "productionMakingOwner", label: "Production Making Owner", type: "string" },
-    { key: "catalogNumber", label: "Catalogue Number", type: "string", isDisabled: (row) => row.vendor !== "" },
+    { key: "catalogNumber", label: "Catalogue Number", type: "string", isDisabled: () => true }, // Read-only
     { key: "name", label: "Name", type: "string", isDisabled: (row) => row.vendor !== "" },
     { key: "quantityTotal", label: "Qty Per Assembly", type: "number", isDisabled: () => true },
     { 
@@ -22,14 +22,14 @@ const WorkOrderColumns: ColumnConfig[] = [
         type: "select", 
         options: ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced'] 
     },
-    { key: "material", label: "Material", type: "string" },
+    { key: "material", label: "Material", type: "string", isDisabled: () => true }, // Read-only
     { 
         key: "Priority", 
         label: "Priority", 
         type: "select", 
         options: ['High', 'Medium', 'Low', 'Untracked', 'Finished'] 
     },
-    { key: "comments", label: "Comments", type: "string" },
+    { key: "comments", label: "Comments", type: "string", isDisabled: () => true }, // Read-only
     { key: "links", label: "Links", type: "string" },
     
     // Actions / Links at the end

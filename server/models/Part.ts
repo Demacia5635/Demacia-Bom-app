@@ -40,7 +40,7 @@ const partSchema = new mongoose.Schema(
     driveFileId: { type: String },
     imageUrl: { type: String },
   },
-  { _id: false, timestamps: true },
+  {timestamps: true },
 );
 
 const Part = mongoose.model("Part", partSchema);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type MouseEvent } from "react";
+import { useEffect, useState, useRef, useCallback, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
 import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
@@ -16,7 +16,7 @@ export default function WorkOrderDetailsPage() {
     const [rows, setRows] = useState<WorkOrderTableRow[]>([]);
     const [error, setError] = useState<ApiError | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
-    const [workOrderData, setworkOrderData] = useState<WorkorderModel | null>(null);
+    const [workOrderData, setWorkOrderData] = useState<WorkorderModel | null>(null);
     const [assemblyThumbnailUrl, setAssemblyThumbnailUrl] = useState<string>("");
 
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
@@ -29,6 +29,7 @@ export default function WorkOrderDetailsPage() {
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
     const rowPartMapRef = useRef<Map<string, string>>(new Map());
+    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'In Planning') return 'In Planning';
@@ -36,7 +37,7 @@ export default function WorkOrderDetailsPage() {
         if (code === 3 || code === '3' || code === 'In manufacturing') return 'In manufacturing';
         if (code === 4 || code === '4' || code === 'Finished Manufacturing') return 'Finished Manufacturing';
         if (code === 'Untracked') return 'Untracked';
-        return 'CATNUM Written';
+        return typeof code === 'string' && code.trim() !== '' ? code : 'In Planning';
     };
 
     useEffect(() => {
@@ -45,13 +46,14 @@ export default function WorkOrderDetailsPage() {
         return () => window.removeEventListener("click", handleClickOutside);
     }, []);
 
+    // Select color sync effect
     useEffect(() => {
         const syncSelectElements = () => {
             const selects = document.querySelectorAll(".cell-select");
             selects.forEach((el) => {
                 const select = el as HTMLSelectElement;
                 const val = select.value;
-                
+
                 select.setAttribute("value", val);
                 select.classList.remove("status-bg-orange", "status-bg-blue", "status-bg-green", "status-bg-red");
 
@@ -69,24 +71,28 @@ export default function WorkOrderDetailsPage() {
 
         const timer = setTimeout(syncSelectElements, 30);
         const handleChange = () => setTimeout(syncSelectElements, 10);
-        
+
         document.addEventListener("change", handleChange);
         return () => {
             clearTimeout(timer);
             document.removeEventListener("change", handleChange);
         };
     }, [rows, isLight]);
-    
+
     useEffect(() => {
         if (!workOrderID) return;
 
         async function getWOData() {
-            const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
-            setworkOrderData(data);
+            try {
+                const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
+                setWorkOrderData(data);
 
-            if ((data as any)?.onshapeID?.documentID && (data as any)?.onshapeID?.elementID) {
-                const { documentID, wvmType = "w", wvmID, elementID } = (data as any).onshapeID;
-                setAssemblyThumbnailUrl(`/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`);
+                if ((data as any)?.onshapeID?.documentID && (data as any)?.onshapeID?.elementID) {
+                    const { documentID, wvmType = "w", wvmID, elementID } = (data as any).onshapeID;
+                    setAssemblyThumbnailUrl(`/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`);
+                }
+            } catch (err: any) {
+                setError(err);
             }
         }
         getWOData();
@@ -123,7 +129,7 @@ export default function WorkOrderDetailsPage() {
 
             for (const [partID, totalQty] of aggregatedQuantities.entries()) {
                 let part: PartModel | null = null;
-                
+
                 try {
                     part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
                 } catch {
@@ -157,7 +163,7 @@ export default function WorkOrderDetailsPage() {
                     isExpanded: false,
                     avatar: avatarUrl,
                     lastUpadte: existingWoPart?.updatedAt || new Date(),
-                    productionMakingOwner: existingWoPart?.productionMakingOwner || "",
+                    productionMakingOwner: (existingWoPart as any)?.productionMakingOwner || "",
                     catalogNumber: part?.catalogNumber || "",
                     name: part?.name || partID,
                     quantityTotal: totalQty,
@@ -185,19 +191,61 @@ export default function WorkOrderDetailsPage() {
             .finally(() => setLoading(false));
     }, [workOrderID, workOrderData]);
 
-    const handleTableDataChange = async (newData: WorkOrderTableRow[]) => {
-        // Apply automated conditional logic rules cleanly
+    // Debounced background sync to Work Order collection in DB
+    const debouncedSaveToDb = useCallback((currentRows: WorkOrderTableRow[]) => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+        saveTimeoutRef.current = setTimeout(async () => {
+            if (!workOrderID) return;
+
+            try {
+                const partsPayload = currentRows.map((row) => {
+                    const partId = rowPartMapRef.current.get(row.id);
+                    return {
+                        partID: partId,
+                        quantityTotal: row.quantityTotal,
+                        statusCode: row.statusCode,
+                        Priority: row.Priority,
+                        manufacturingMethod: row.manufacturingMethod,
+                        productionMakingOwner: row.productionMakingOwner,
+                        comments: row.comments,
+                        links: row.links,                         // Added Links
+                        approxArrivalDate: row.approxArrivalDate, // Added Approx Arrival Date
+                        updatedAt: new Date(),
+                    };
+                });
+
+                console.log(">>> [DEBUG] Saving Work Order payload:", workOrderID, partsPayload);
+
+                // Use relative path so it routes correctly through development/production proxies
+                const response = await fetch(`/api/db/workOrder/id/${workOrderID}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "x-client-secret": import.meta.env.VITE_CLIENT_SECRET || "",
+                    },
+                    body: JSON.stringify({ parts: partsPayload }),
+                });
+
+                const result = await response.json();
+                console.log(">>> [DEBUG] Server save response:", response.status, result);
+            } catch (err) {
+                console.error(">>> [DEBUG] Failed to sync work order changes to database:", err);
+            }
+        }, 600);
+    }, [workOrderID]);
+    const handleTableDataChange = (newData: WorkOrderTableRow[]) => {
         const processedData = newData.map((newRow) => {
             const oldRow = rows.find(r => r.id === newRow.id);
             const updated = { ...newRow };
 
             if (oldRow) {
-                // Rule 1: "Externally produced" -> Status becomes "Untracked"
+                // Rule 1: Externally produced -> Untracked
                 if (oldRow.manufacturingMethod !== updated.manufacturingMethod && updated.manufacturingMethod === 'Externally produced') {
                     updated.statusCode = 'Untracked';
                 }
 
-                // Rule 2: Status "Finished Manufacturing" <-> Priority "Finished"
+                // Rule 2: Finished Manufacturing <-> Finished Priority
                 if (oldRow.statusCode !== updated.statusCode && updated.statusCode === 'Finished Manufacturing') {
                     updated.Priority = 'Finished';
                 } else if (oldRow.Priority !== updated.Priority && updated.Priority === 'Finished') {
@@ -208,46 +256,8 @@ export default function WorkOrderDetailsPage() {
             return updated;
         });
 
-        for (let i = 0; i < processedData.length; i++) {
-            const newRow = processedData[i];
-            const oldRow = rows.find(r => r.id === newRow.id);
-            const partId = rowPartMapRef.current.get(newRow.id);
-
-            if (oldRow && partId && (
-                oldRow.name !== newRow.name ||
-                oldRow.catalogNumber !== newRow.catalogNumber ||
-                oldRow.comments !== newRow.comments ||
-                oldRow.manufacturingMethod !== newRow.manufacturingMethod ||
-                oldRow.material !== newRow.material ||
-                oldRow.links !== newRow.links ||
-                oldRow.statusCode !== newRow.statusCode ||
-                oldRow.Priority !== newRow.Priority
-            )) {
-                try {
-                    const payload = {
-                        name: newRow.name,
-                        catalogNumber: newRow.catalogNumber,
-                        comments: newRow.comments,
-                        manufacturingMethod: newRow.manufacturingMethod,
-                        material: newRow.material,
-                        links: newRow.links
-                    };
-
-                    await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${partId}`, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                            "x-client-secret": import.meta.env.VITE_CLIENT_SECRET,
-                        },
-                        body: JSON.stringify(payload),
-                    });
-                } catch (err) {
-                    console.error("Failed to sync work order grid updates to part database:", err);
-                }
-            }
-        }
-
         setRows(processedData);
+        debouncedSaveToDb(processedData);
     };
 
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -328,9 +338,9 @@ export default function WorkOrderDetailsPage() {
             </div>
 
             {workOrderData && (
-                <WorkOrderDataUI 
-                    workOrder={workOrderData} 
-                    assemblyThumbnailURL={assemblyThumbnailUrl} 
+                <WorkOrderDataUI
+                    workOrder={workOrderData}
+                    assemblyThumbnailURL={assemblyThumbnailUrl}
                 />
             )}
             {error && (
@@ -344,9 +354,9 @@ export default function WorkOrderDetailsPage() {
             {loading ? (
                 <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
             ) : (
-                <div 
+                <div
                     onClick={handleTableClick}
-                    onContextMenuCapture={handleTableContextMenuCapture} 
+                    onContextMenuCapture={handleTableContextMenuCapture}
                     className="relative cursor-pointer"
                 >
                     <Table
@@ -389,7 +399,7 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {enlargedImageSrc && (
-                <div 
+                <div
                     className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
                     onClick={() => setEnlargedImageSrc(null)}
                 >
