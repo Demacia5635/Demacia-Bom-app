@@ -127,7 +127,38 @@ export default function WorkOrderDetailsPage() {
             rowPartMapRef.current.clear();
 
             for (const [partID, totalQty] of aggregatedQuantities.entries()) {
-                const part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
+                let part: PartModel | null = null;
+                
+                // Attempt to fetch from database, if it fails or returns 404, create/save it
+                try {
+                    part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
+                } catch {
+                    // Part not found in DB, post/save a default entry
+                    part = {
+                        id: partID,
+                        name: partID,
+                        catalogNumber: "",
+                        material: "",
+                        comments: "",
+                        onshapeURL: "",
+                        stlLink: "",
+                        parasolidLink: "",
+                    } as any;
+
+                    try {
+                        await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${partID}`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "x-client-secret": import.meta.env.VITE_CLIENT_SECRET,
+                            },
+                            body: JSON.stringify(part),
+                        });
+                    } catch (saveErr) {
+                        console.error("Failed to auto-create missing part in DB:", saveErr);
+                    }
+                }
+
                 const existingWoPart = workOrderData?.parts?.find(p => p.partID === partID);
 
                 let avatarUrl = "";
@@ -147,20 +178,20 @@ export default function WorkOrderDetailsPage() {
                     avatar: avatarUrl,
                     lastUpadte: existingWoPart?.updatedAt || new Date(),
                     productionMakingOwner: existingWoPart?.productionMakingOwner || "",
-                    catalogNumber: part.catalogNumber || "",
-                    name: part.name || "",
+                    catalogNumber: part?.catalogNumber || "",
+                    name: part?.name || partID,
                     quantityTotal: totalQty,
                     statusCode: parseStatusToString(existingWoPart?.statusCode),
                     approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
                     manufacturingMethod: (existingWoPart as any)?.manufacturingMethod || (part as any)?.manufacturingMethod || "Manual",
-                    material: (existingWoPart as any)?.material || part.material || "",
+                    material: (existingWoPart as any)?.material || part?.material || "",
                     Priority: (existingWoPart as any)?.Priority || "Medium",
-                    comments: (existingWoPart as any)?.comments || part.comments || "",
+                    comments: (existingWoPart as any)?.comments || part?.comments || "",
                     links: (existingWoPart as any)?.links || (part as any)?.links || "",
-                    onshapeURL: part.onshapeURL || "",
-                    exportSTL: part.stlLink || "",
-                    exportParasolid: part.parasolidLink || "",
-                    vendor: part.vendor || ""
+                    onshapeURL: part?.onshapeURL || "",
+                    exportSTL: part?.stlLink || "",
+                    exportParasolid: part?.parasolidLink || "",
+                    vendor: part?.vendor || ""
                 };
                 collectedRows.push(partRow);
             }

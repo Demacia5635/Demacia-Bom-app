@@ -28,14 +28,15 @@ const partSchema = new mongoose.Schema(
 
     onshapeURL: { type: String },
     avatarID: { type: String },
+
     stlLink: { type: String },
     parasolidLink: { type: String },
+    links: { type: String },
 
     comments: { type: String },
     onshapeID: { type: onshapeIDSchema, required: false },
     vendor: { type: String },
 
-    // CRITICAL FIX: Add driveFileId and imageUrl so Mongoose persists them!
     driveFileId: { type: String },
     imageUrl: { type: String },
   },

@@ -285,20 +285,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
     const visibleData = getVisibleData();
 
-    const handleDeleteRowClick = () => {
-        if (rowContextMenu.rowId !== null) {
-            const idsToDelete = new Set<string>();
-            const queue = [rowContextMenu.rowId];
-            while (queue.length > 0) {
-                const currentId = queue.shift()!;
-                idsToDelete.add(currentId);
-                data.forEach(row => { if (row.parentId === currentId) queue.push(row.id); });
-            }
-            setData(data.filter(row => !idsToDelete.has(row.id)));
-        }
-        closeContextMenu();
-    };
-
     const handleAddRow = (parentId: string | null = null) => {
         const newId = Date.now().toString();
         if (!newRowFunction) return;
@@ -556,7 +542,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                                 e.stopPropagation();
                                                                 col.onButtonClick?.(row);
                                                             }}
-                                                            disabled={!row[col.key]}
+                                                            disabled={isCellDisabled}
                                                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                                                         >
                                                             {col.buttonText || "Action"}
@@ -638,15 +624,10 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                     <button onClick={() => { if (contextMenu.columnIndex < columns.length - 1) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex + 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === columns.length - 1}>Move Right</button>
                 </div>
             )}
-            {rowContextMenu.visible && activeContextMenuRow && (
+            
+            {rowContextMenu.visible && activeContextMenuRow && newRowFunction && (
                 <div className="context-menu" style={{ top: rowContextMenu.y, left: rowContextMenu.x }} onClick={(e) => e.stopPropagation()}>
-                    {
-                        newRowFunction && (<div>
-                            <button onClick={() => handleAddRow(activeContextMenuRow.id)}>add item inside</button>
-                            <div className="context-divider" />
-                        </div>)
-                    }
-                    <button onClick={handleDeleteRowClick} className="delete-btn">Delete Row</button>
+                    <button onClick={() => handleAddRow(activeContextMenuRow.id)}>add item inside</button>
                 </div>
             )}
         </div>

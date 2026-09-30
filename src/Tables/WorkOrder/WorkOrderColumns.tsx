@@ -38,9 +38,14 @@ const WorkOrderColumns: ColumnConfig[] = [
         label: "CAD Link",
         type: "button",
         buttonText: "Open CAD",
-        isDisabled: () => true,
-        onButtonClick: (row) => {
-            if (row.onshapeURL) window.open(row.onshapeURL, "_blank");
+        isDisabled: (row: WorkOrderTableRow) => !row.onshapeURL && !(row as any).onshapeID?.documentID,
+        onButtonClick: (row: WorkOrderTableRow) => {
+            let url = row.onshapeURL;
+            if (!url && (row as any).onshapeID) {
+                const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
+                url = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
+            }
+            if (url) window.open(url, "_blank");
         },
     },
     {
@@ -48,10 +53,16 @@ const WorkOrderColumns: ColumnConfig[] = [
         label: "Export STL",
         type: "button",
         buttonText: "Download",
-        isDisabled: () => true,
+        isDisabled: (row: WorkOrderTableRow) => !row.exportSTL && !(row as any).onshapeID?.documentID,
         onButtonClick: (row: WorkOrderTableRow) => {
+            let downloadUrl = "";
             if (row.exportSTL) {
-                const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${row.exportSTL}`;
+                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${row.exportSTL}`;
+            } else if ((row as any).onshapeID) {
+                const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
+                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${partID}/stl`;
+            }
+            if (downloadUrl) {
                 downloadFile(downloadUrl, `${row.name || "part"}.stl`);
             }
         },
@@ -61,10 +72,16 @@ const WorkOrderColumns: ColumnConfig[] = [
         label: "Export Parasolid",
         type: "button",
         buttonText: "Download",
-        isDisabled: () => true,
+        isDisabled: (row: WorkOrderTableRow) => !row.exportParasolid && !(row as any).onshapeID?.documentID,
         onButtonClick: (row: WorkOrderTableRow) => {
+            let downloadUrl = "";
             if (row.exportParasolid) {
-                const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${row.exportParasolid}`;
+                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${row.exportParasolid}`;
+            } else if ((row as any).onshapeID) {
+                const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
+                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${partID}/parasolid`;
+            }
+            if (downloadUrl) {
                 downloadFile(downloadUrl, `${row.name || "part"}.parasolid`);
             }
         },
