@@ -9,6 +9,40 @@ import type { BomModel, PartModel, WorkorderModel } from "../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
 import PartPortal from "../../Pages/searchPartsPage/PartPortal";
 
+// Comprehensive sanitizer to check all potential database fields for the real Onshape name
+const getCleanPartName = (record: any, entityID: string) => {
+    // 1. Check alternative database / Onshape metadata fields
+    if (record?.title && typeof record.title === 'string' && !record.title.includes('_')) return record.title;
+    if (record?.partName && typeof record.partName === 'string' && !record.partName.includes('_')) return record.partName;
+    if (record?.fileName && typeof record.fileName === 'string' && !record.fileName.includes('_')) return record.fileName;
+    if (record?.properties?.name && typeof record.properties.name === 'string' && !record.properties.name.includes('_')) return record.properties.name;
+    if (record?.metadata?.name && typeof record.metadata.name === 'string' && !record.metadata.name.includes('_')) return record.metadata.name;
+
+    const rawName = record?.name;
+    
+    // 2. If rawName is a clean human-readable name (does not contain underscores)
+    if (rawName && typeof rawName === 'string' && !rawName.includes('_') && rawName.length < 50) {
+        return rawName;
+    }
+
+    // 3. Fall back to catalog number or description if they contain clean text
+    if (record?.catalogNumber && typeof record.catalogNumber === 'string' && record.catalogNumber.trim() !== '' && !record.catalogNumber.includes('_')) {
+        return record.catalogNumber;
+    }
+    if (record?.description && typeof record.description === 'string' && record.description.trim() !== '' && !record.description.includes('_') && record.description.length < 50) {
+        return record.description;
+    }
+
+    // 4. Final fallback: If the database record genuinely only has the compound ID, 
+    // display a clean fallback or part identifier rather than a blank cell or raw ID string.
+    if (entityID && entityID.includes('_')) {
+        const segments = entityID.split('_');
+        return `Part ${segments[segments.length - 1]}`;
+    }
+
+    return rawName || entityID;
+};
+
 export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
     const { isLight, toggleTheme } = useThemeSync();
@@ -46,14 +80,14 @@ export default function WorkOrderDetailsPage() {
         return () => window.removeEventListener("click", handleClickOutside);
     }, []);
 
-    // Select color sync effect
+    // Select color sync effect for dropdowns
     useEffect(() => {
         const syncSelectElements = () => {
             const selects = document.querySelectorAll(".cell-select");
             selects.forEach((el) => {
                 const select = el as HTMLSelectElement;
                 const val = select.value;
-
+                
                 select.setAttribute("value", val);
                 select.classList.remove("status-bg-orange", "status-bg-blue", "status-bg-green", "status-bg-red");
 
@@ -71,14 +105,14 @@ export default function WorkOrderDetailsPage() {
 
         const timer = setTimeout(syncSelectElements, 30);
         const handleChange = () => setTimeout(syncSelectElements, 10);
-
+        
         document.addEventListener("change", handleChange);
         return () => {
             clearTimeout(timer);
             document.removeEventListener("change", handleChange);
         };
     }, [rows, isLight]);
-
+    
     useEffect(() => {
         if (!workOrderID) return;
 
@@ -129,7 +163,7 @@ export default function WorkOrderDetailsPage() {
 
             for (const [partID, totalQty] of aggregatedQuantities.entries()) {
                 let part: PartModel | null = null;
-
+                
                 try {
                     part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
                 } catch {
@@ -165,7 +199,7 @@ export default function WorkOrderDetailsPage() {
                     lastUpadte: existingWoPart?.updatedAt || new Date(),
                     productionMakingOwner: (existingWoPart as any)?.productionMakingOwner || "",
                     catalogNumber: part?.catalogNumber || "",
-                    name: part?.name || partID,
+                    name: getCleanPartName(part, partID),
                     quantityTotal: totalQty,
                     statusCode: parseStatusToString(existingWoPart?.statusCode),
                     approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
@@ -209,16 +243,13 @@ export default function WorkOrderDetailsPage() {
                         manufacturingMethod: row.manufacturingMethod,
                         productionMakingOwner: row.productionMakingOwner,
                         comments: row.comments,
-                        links: row.links,                         // Added Links
-                        approxArrivalDate: row.approxArrivalDate, // Added Approx Arrival Date
+                        links: row.links,
+                        approxArrivalDate: row.approxArrivalDate,
                         updatedAt: new Date(),
                     };
                 });
 
-                console.log(">>> [DEBUG] Saving Work Order payload:", workOrderID, partsPayload);
-
-                // Use relative path so it routes correctly through development/production proxies
-                const response = await fetch(`/api/db/workOrder/id/${workOrderID}`, {
+                await fetch(`/api/db/workOrder/id/${workOrderID}`, {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -226,26 +257,22 @@ export default function WorkOrderDetailsPage() {
                     },
                     body: JSON.stringify({ parts: partsPayload }),
                 });
-
-                const result = await response.json();
-                console.log(">>> [DEBUG] Server save response:", response.status, result);
             } catch (err) {
-                console.error(">>> [DEBUG] Failed to sync work order changes to database:", err);
+                console.error("Failed to sync work order changes to database:", err);
             }
         }, 600);
     }, [workOrderID]);
+
     const handleTableDataChange = (newData: WorkOrderTableRow[]) => {
         const processedData = newData.map((newRow) => {
             const oldRow = rows.find(r => r.id === newRow.id);
             const updated = { ...newRow };
 
             if (oldRow) {
-                // Rule 1: Externally produced -> Untracked
                 if (oldRow.manufacturingMethod !== updated.manufacturingMethod && updated.manufacturingMethod === 'Externally produced') {
                     updated.statusCode = 'Untracked';
                 }
 
-                // Rule 2: Finished Manufacturing <-> Finished Priority
                 if (oldRow.statusCode !== updated.statusCode && updated.statusCode === 'Finished Manufacturing') {
                     updated.Priority = 'Finished';
                 } else if (oldRow.Priority !== updated.Priority && updated.Priority === 'Finished') {
@@ -338,9 +365,9 @@ export default function WorkOrderDetailsPage() {
             </div>
 
             {workOrderData && (
-                <WorkOrderDataUI
-                    workOrder={workOrderData}
-                    assemblyThumbnailURL={assemblyThumbnailUrl}
+                <WorkOrderDataUI 
+                    workOrder={workOrderData} 
+                    assemblyThumbnailURL={assemblyThumbnailUrl} 
                 />
             )}
             {error && (
@@ -354,9 +381,9 @@ export default function WorkOrderDetailsPage() {
             {loading ? (
                 <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
             ) : (
-                <div
+                <div 
                     onClick={handleTableClick}
-                    onContextMenuCapture={handleTableContextMenuCapture}
+                    onContextMenuCapture={handleTableContextMenuCapture} 
                     className="relative cursor-pointer"
                 >
                     <Table
@@ -399,7 +426,7 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {enlargedImageSrc && (
-                <div
+                <div 
                     className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
                     onClick={() => setEnlargedImageSrc(null)}
                 >

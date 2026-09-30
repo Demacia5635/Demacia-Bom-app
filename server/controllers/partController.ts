@@ -259,15 +259,22 @@ export async function getPartByID(req: Request<{ id: string }>, res: Response, n
   }
 }
 
-export async function upsertPartByID(req: Request<{ id: string }, unknown, PartBody>, res: Response, next: NextFunction) {
+// Inside partController.ts (or wherever parts are upserted/fetched)
+export async function upsertPartByID(
+  req: Request<{ id: string }, unknown, any>,
+  res: Response,
+  next: NextFunction,
+) {
   try {
     const id = req.params.id;
     const existing = await Part.findOne({ id: id });
 
     const updateData: any = { ...req.body, id: id };
-    if (!updateData.onshapeID) {
-      const parsed = parseOnshapeIDFromCompoundKey(id);
-      if (parsed) updateData.onshapeID = parsed;
+
+    // Ensure we never save a raw compound key string or ID into the name field
+    if (!updateData.name || updateData.name.includes('_') || updateData.name === id) {
+      // Try extracting a cleaner name from title, metadata, or catalog number if available
+      updateData.name = updateData.title || updateData.catalogNumber || (updateData.onshapeID?.partID ? `Part ${updateData.onshapeID.partID}` : "Unnamed Part");
     }
 
     const part = await Part.findOneAndUpdate(
@@ -286,7 +293,6 @@ export async function upsertPartByID(req: Request<{ id: string }, unknown, PartB
     return next(err);
   }
 }
-
 export async function deletePartByID(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const id = req.params.id;
