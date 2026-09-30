@@ -76,6 +76,7 @@ export default function BomDetailsPage() {
           id: `sub-${sub.bomID}`,
           parentId: null,
           isExpanded: false,
+          isSubAssembly: true, // <--- Added flag to identify sub-assemblies
           avatar: subAvatarUrl,
           name: subBomRecord?.name || sub.bomID,
           catalogNumber: subBomRecord?.catalogNumber || "",
@@ -155,7 +156,7 @@ export default function BomDetailsPage() {
           wvmType: part.onshapeID?.wvmType || "w",
           wvmID: part.onshapeID?.wvmID || "",
           elementID: part.onshapeID?.elementID || "",
-          entityID: p.partID,
+          entityID: part.onshapeID?.partID || p.partID,
           onshapeURL: part.onshapeURL || "",
           exportSTL: part.stlLink || "",
           exportParasolid: part.parasolidLink || "",
