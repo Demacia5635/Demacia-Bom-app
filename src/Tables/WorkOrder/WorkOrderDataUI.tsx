@@ -1,6 +1,6 @@
-import { useState } from "react";
-import type { WorkorderModel } from "../../util/Models";
-import { AuthenticatedImage } from "../../util/ApiService";
+import { useState, useEffect } from "react";
+import type { WorkorderModel, BomModel } from "../../util/Models";
+import { AuthenticatedImage, fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 
@@ -12,6 +12,15 @@ interface WorkOrderDataUIProps {
 const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyThumbnailURL }) => {
     const { isLight } = useThemeSync();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+    const [bomData, setBomData] = useState<BomModel | null>(null);
+
+    // Fetch the parent BOM data using workOrder.bomID to get its exact image source
+    useEffect(() => {
+        if (!workOrder?.bomID) return;
+        fetchFromApi<BomModel>(`/db/bom/id/${workOrder.bomID}`)
+            .then((bom) => setBomData(bom))
+            .catch(() => {});
+    }, [workOrder?.bomID]);
 
     const containerBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
     const imageBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
@@ -20,12 +29,31 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyTh
     const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
     const dividerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
 
-    // Resolve image source hierarchy safely
-    let imageSrc = assemblyThumbnailURL || workOrder?.thumbnailURL || "";
+    // Resolve image source hierarchy matching the parent BOM exactly
+    let imageSrc = assemblyThumbnailURL || "";
+    if (!imageSrc && bomData) {
+        if (bomData.driveFileId) {
+            imageSrc = `/api/drive/file/id/${bomData.driveFileId}`;
+        } else if (bomData.avatarID && typeof bomData.avatarID === 'string' && bomData.avatarID.startsWith("data:image")) {
+            imageSrc = bomData.avatarID;
+        } else if (bomData.imageUrl) {
+            imageSrc = bomData.imageUrl;
+        } else if (bomData.onshapeID?.documentID && bomData.onshapeID?.elementID) {
+            const { documentID, wvmType = "w", wvmID, elementID } = bomData.onshapeID;
+            imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+        }
+    }
     
-    if (!imageSrc && workOrder?.onshapeID?.documentID && workOrder?.onshapeID?.elementID) {
-        const { documentID, wvmType = "w", wvmID, elementID } = workOrder.onshapeID;
-        imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+    // Fallback to workOrder properties if parent BOM isn't loaded yet
+    if (!imageSrc) {
+        if (workOrder?.avatarID && typeof workOrder.avatarID === 'string' && workOrder.avatarID.startsWith("data:image")) {
+            imageSrc = workOrder.avatarID;
+        } else if (workOrder?.imageUrl) {
+            imageSrc = workOrder.imageUrl;
+        } else if (workOrder?.onshapeID?.documentID && workOrder?.onshapeID?.elementID) {
+            const { documentID, wvmType = "w", wvmID, elementID } = workOrder.onshapeID;
+            imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
+        }
     }
 
     return (
