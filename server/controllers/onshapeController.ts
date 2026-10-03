@@ -7,8 +7,9 @@ import onshapeService, {
   UnsupportedOnshapeOperationError,
 } from "../services/onshapeService";
 import { GoogleDriveService } from "../services/driveService";
+import { getOnshapeKeysFromRequest } from "../../src/util/sec/onshapeKeys";
 
-console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH STRICT COMPOSITE PART ID SYNC LOADED <<<");
+console.log(">>> [DEBUG] ONSHAPE CONTROLLER WITH PER-USER MULTI-TENANT KEYS LOADED <<<");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
@@ -86,32 +87,30 @@ function ensureBuffer(data: any): Buffer | null {
 }
 
 async function syncPartThumbnailToDrive(
+  req: Request,
   params: OnshapePartParams,
   size?: string
 ): Promise<{ id: string; webViewLink?: string } | null> {
-  const dbId = formPartID(params); // Strictly scoped unique composite ID per part instance
+  const dbId = formPartID(params);
+  const userKeys = await getOnshapeKeysFromRequest(req);
 
-  // 1. Check MongoDB strictly by unique composite dbId
   const existingDoc = await Part.findOne({ id: dbId });
   if (existingDoc && existingDoc.driveFileId) {
     return { id: existingDoc.driveFileId, webViewLink: existingDoc.imageUrl };
   }
 
-  // 2. Concurrency Lock by unique dbId
   if (activePartUploads.has(dbId)) {
     return activePartUploads.get(dbId)!;
   }
 
   const uploadPromise = (async () => {
     try {
-      // 3. Fetch fresh thumbnail specifically for this unique part instance from Onshape
-      const thumbnail = await onshapeService.getPartThumbnail(params, size);
+      const thumbnail = await onshapeService.getPartThumbnail(params, size, userKeys);
       if (!thumbnail) return null;
 
       const safeBuffer = ensureBuffer(thumbnail);
       if (!safeBuffer) return null;
 
-      // 4. Upload uniquely to Google Drive with instance-specific filename
       const fileName = `part_${params.documentID}_${params.partID}_${Date.now()}.png`;
       const uploadedFile = await driveService.uploadFile({
         buffer: safeBuffer,
@@ -125,7 +124,6 @@ async function syncPartThumbnailToDrive(
 
       if (!uploadedFile || !uploadedFile.id) return null;
 
-      // 5. Save strictly to MongoDB using the unique composite dbId upsert
       await Part.findOneAndUpdate(
         { id: dbId },
         {
@@ -152,11 +150,13 @@ async function syncPartThumbnailToDrive(
 }
 
 async function syncElementThumbnailToDrive(
+  req: Request,
   params: OnshapeBomParams,
   size?: string
 ): Promise<{ id: string; webViewLink?: string } | null> {
   const elementID = params.elementID;
   const dbIdPrefix = formBomID(params);
+  const userKeys = await getOnshapeKeysFromRequest(req);
 
   const existingDoc = await Bom.findOne({ id: { $regex: `^${dbIdPrefix}` }, driveFileId: { $exists: true,$ne: "" } });
   if (existingDoc && existingDoc.driveFileId) {
@@ -169,7 +169,7 @@ async function syncElementThumbnailToDrive(
 
   const uploadPromise = (async () => {
     try {
-      const thumbnail = await onshapeService.getElementThumbnail(params, size);
+      const thumbnail = await onshapeService.getElementThumbnail(params, size, userKeys);
       if (!thumbnail) return null;
 
       const safeBuffer = ensureBuffer(thumbnail);
@@ -212,16 +212,22 @@ async function syncElementThumbnailToDrive(
 }
 
 export async function checkConnection(req: Request, res: Response) {
-  const connected = await onshapeService.checkConnection();
-  return res.status(connected ? 200 : 503).json({ connected });
+  try {
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const connected = await onshapeService.checkConnection(userKeys);
+    return res.status(connected ? 200 : 503).json({ connected });
+  } catch (err: any) {
+    return res.status(401).json({ message: err.message });
+  }
 }
 
 export async function getPart(req: Request<OnshapePartParams>, res: Response) {
   try {
-    const part = await onshapeService.getPartForDb(req.params);
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const part = await onshapeService.getPartForDb(req.params, userKeys);
 
     if (part && !(part as any).driveFileId) {
-      syncPartThumbnailToDrive(req.params).catch(() => {});
+      syncPartThumbnailToDrive(req, req.params).catch(() => {});
     }
 
     return res.status(200).json(part);
@@ -235,7 +241,8 @@ export async function updatePart(
   res: Response,
 ) {
   try {
-    const part = await onshapeService.updatePart(req.params, req.body);
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const part = await onshapeService.updatePart(req.params, req.body, userKeys);
     return res.status(200).json(part);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to update part in Onshape");
@@ -244,7 +251,8 @@ export async function updatePart(
 
 export async function getBom(req: Request<OnshapeBomParams>, res: Response) {
   try {
-    const bom = await onshapeService.getBom(req.params);
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const bom = await onshapeService.getBom(req.params, userKeys);
     return res.status(200).json(bom["bomTable"]);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to fetch bom from Onshape");
@@ -261,7 +269,8 @@ export async function updateBom(
   res: Response
 ) {
   try {
-    const assembly = await onshapeService.updateAssembly(req.params, req.body);
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const assembly = await onshapeService.updateAssembly(req.params, req.body, userKeys);
     return res.status(200).json(assembly);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to update assembly in Onshape");
@@ -273,6 +282,7 @@ export async function getPartThumbnail(
   res: Response,
 ) {
   try {
+    const userKeys = await getOnshapeKeysFromRequest(req);
     const dbId = formPartID(req.params);
     let driveFileId: string | undefined;
 
@@ -282,7 +292,7 @@ export async function getPartThumbnail(
     }
 
     if (!driveFileId) {
-      const uploaded = await syncPartThumbnailToDrive(req.params, req.params.size);
+      const uploaded = await syncPartThumbnailToDrive(req, req.params, req.params.size);
       if (uploaded) driveFileId = uploaded.id;
     }
 
@@ -295,7 +305,7 @@ export async function getPartThumbnail(
       }
     }
 
-    const directThumbnail = await onshapeService.getPartThumbnail(req.params, req.params.size);
+    const directThumbnail = await onshapeService.getPartThumbnail(req.params, req.params.size, userKeys);
     if (!directThumbnail) {
       return res.status(404).json({ message: "Part thumbnail not found" });
     }
@@ -317,11 +327,12 @@ export async function setPartThumbnail(
   res: Response,
 ) {
   try {
+    const userKeys = await getOnshapeKeysFromRequest(req);
     const buffer = req.body;
     const safeBuffer = ensureBuffer(buffer);
     if (!safeBuffer) return res.status(400).json({ message: `Invalid buffer provided` });
 
-    await onshapeService.setPartThumbnail(req.params, safeBuffer);
+    await onshapeService.setPartThumbnail(req.params, safeBuffer, userKeys);
     return res.sendStatus(204);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to set thumbnail for part");
@@ -333,6 +344,7 @@ export async function getElementThumbnail(
   res: Response,
 ) {
   try {
+    const userKeys = await getOnshapeKeysFromRequest(req);
     const dbIdPrefix = formBomID(req.params);
     let driveFileId: string | undefined;
 
@@ -342,7 +354,7 @@ export async function getElementThumbnail(
     }
 
     if (!driveFileId) {
-      const uploaded = await syncElementThumbnailToDrive(req.params, req.params.size);
+      const uploaded = await syncElementThumbnailToDrive(req, req.params, req.params.size);
       if (uploaded) driveFileId = uploaded.id;
     }
 
@@ -355,7 +367,7 @@ export async function getElementThumbnail(
       }
     }
 
-    const directThumbnail = await onshapeService.getElementThumbnail(req.params, req.params.size);
+    const directThumbnail = await onshapeService.getElementThumbnail(req.params, req.params.size, userKeys);
     if (!directThumbnail) {
       return res.status(404).json({ message: "Element thumbnail not found" });
     }
@@ -378,11 +390,12 @@ export async function setElementThumbnail(
   res: Response,
 ) {
   try {
+    const userKeys = await getOnshapeKeysFromRequest(req);
     const buffer = req.body;
     const safeBuffer = ensureBuffer(buffer);
     if (!safeBuffer) return res.status(400).json({ message: `Invalid buffer provided` });
 
-    await onshapeService.setElementThumbnail(req.params, safeBuffer);
+    await onshapeService.setElementThumbnail(req.params, safeBuffer, userKeys);
     return res.sendStatus(204);
   } catch (err) {
     return handleOnshapeError(res, err, "Failed to set thumbnail for element");
@@ -394,8 +407,9 @@ export async function exportSTL(
   res: Response
 ) {
   try {
-    const stl = await onshapeService.exportPartToStl(req.params);
-    if (!stl) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const stl = await onshapeService.exportPartToStl(req.params, userKeys);
+    if (!stl) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}` });
 
     res.setHeader("Content-Type", "model/stl");
     return res.status(200).send(stl);
@@ -409,8 +423,9 @@ export async function exportParasolid(
   res: Response
 ) {
   try {
-    const parasolid = await onshapeService.exportPartToParasolid(req.params);
-    if (!parasolid) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const parasolid = await onshapeService.exportPartToParasolid(req.params, userKeys);
+    if (!parasolid) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}` });
 
     res.setHeader("Content-Type", "application/x-parasolid");
     return res.status(200).send(parasolid);
@@ -424,8 +439,9 @@ export async function exportSolidworks(
   res: Response
 ) {
   try {
-    const solidworks = await onshapeService.exportPartToSolidworks(req.params);
-    if (!solidworks) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}`});
+    const userKeys = await getOnshapeKeysFromRequest(req);
+    const solidworks = await onshapeService.exportPartToSolidworks(req.params, userKeys);
+    if (!solidworks) return res.status(404).json({ message: `Part not found ${JSON.stringify(req.params)}` });
 
     res.setHeader("Content-Type", "application/sldprt");
     return res.status(200).send(solidworks);

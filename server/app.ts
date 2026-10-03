@@ -21,7 +21,6 @@ export const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigi
 
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. mobile apps, curl, server-side checks)
         if (!origin) {
             return callback(null, true);
         }
@@ -37,13 +36,13 @@ app.use(cors({
             return callback(null, true);
         } else {
             console.warn(`>>> [CORS BLOCKED] Origin rejected: "${origin}". Allowed:`, allowedOrigins);
-            // Return false instead of throwing Error to prevent 500 preflight response
             return callback(null, false);
         }
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"]
+    // Added "x-username" to allowedHeaders so CORS doesn't block it
+    allowedHeaders: ["Content-Type", "x-client-secret", "x-username", "Authorization"]
 }));
 
 app.use(express.json());
@@ -57,9 +56,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     next();
 });
 
-// Selective Auth Middleware: Bypass checkAuth for public Drive image streams
+// Selective Auth Middleware: Bypass checkAuth for public Drive streams and Auth routes
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith('/drive/file/id/')) {
+    if (req.path.startsWith('/drive/file/id/') || req.path.startsWith('/auth/')) {
         return next();
     }
     return checkAuth(req, res, next);
