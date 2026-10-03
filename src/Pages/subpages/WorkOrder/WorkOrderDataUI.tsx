@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import type { WorkorderModel, BomModel } from "../../util/Models";
-import { AuthenticatedImage, fetchFromApi } from "../../util/ApiService";
-import { useThemeSync } from "../../util/misc/useThemeSync";
+import type { WorkorderModel, BomModel } from "../../../util/Models";
+import { AuthenticatedImage, fetchFromApi } from "../../../util/ApiService";
+import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 
 interface WorkOrderDataUIProps {

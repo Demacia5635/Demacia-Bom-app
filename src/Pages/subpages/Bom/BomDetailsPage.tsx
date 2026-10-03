@@ -1,13 +1,13 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import Table from "../../components/Table";
-import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../util/ApiService";
-import { useThemeSync } from "../../util/misc/useThemeSync";
-import type { BomModel, PartModel } from "../../util/Models";
+import Table from "../../../components/Table";
+import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
+import { useThemeSync } from "../../../util/misc/useThemeSync";
+import type { BomModel, PartModel } from "../../../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
 import BomColumns from "./BomColumns";
-import PartPortal from "../../Pages/searchPartsPage/PartPortal";
+import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
@@ -46,6 +46,9 @@ const getCleanPartName = (record: any, entityID: string) => {
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
+
+  // 👉 Defined isLight from useThemeSync to prevent reference errors
+  const { isLight } = useThemeSync();
 
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -242,7 +245,7 @@ export default function BomDetailsPage() {
             vendor: newRow.vendor
           };
 
-          await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${partId}`, {
+          await fetch(`${import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com"}/api/db/part/id/${partId}`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

@@ -1,4 +1,4 @@
-import type { RowData } from "../../components/Table";
+import type { RowData } from "../../../components/Table";
 
 export default interface WorkOrderTableRow extends RowData {
     avatar: string;

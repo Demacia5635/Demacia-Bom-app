@@ -1,13 +1,13 @@
 import { useEffect, useState, useRef, useCallback, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
-import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../util/ApiService";
-import { useThemeSync } from "../../util/misc/useThemeSync";
-import Table from "../../components/Table";
+import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
+import { useThemeSync } from "../../../util/misc/useThemeSync";
+import Table from "../../../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
-import type { BomModel, PartModel, WorkorderModel } from "../../util/Models";
+import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
-import PartPortal from "../../Pages/searchPartsPage/PartPortal";
+import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {

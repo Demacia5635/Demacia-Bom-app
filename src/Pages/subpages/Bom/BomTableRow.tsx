@@ -1,4 +1,4 @@
-import type { RowData } from "../../components/Table";
+import type { RowData } from "../../../components/Table";
 
 export default interface BomTableRow extends RowData {
   avatar: string;
