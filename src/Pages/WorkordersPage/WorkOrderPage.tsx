@@ -70,13 +70,7 @@ export function WorkOrdersPage() {
                         <div className={`text-xs ${textMuted} font-mono`}>
                             Results: <span className={`${textValue} font-bold`}>{filteredWorkOrders.length}</span>
                         </div>
-                        <button
-                            type="button"
-                            onClick={toggleTheme}
-                            className={`px-3 py-1.5 rounded font-medium text-xs ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
-                        >
-                            {isLight ? "🌙 Dark Mode" : "☀️ Light Mode"}
-                        </button>
+                        
                     </div>
                 </div>
 

@@ -39,13 +39,7 @@ export default function HomeScreen() {
     <div className={`p-8 max-w-7xl mx-auto min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50" : "bg-zinc-950 text-zinc-100"}`}>
       <div className="flex justify-between items-center mb-6">
         <h1 className={`text-2xl font-bold ${textHeading}`}>Boms</h1>
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className={`px-3 py-2 rounded font-medium text-sm ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
-        >
-          {isLight ? "🌙 Dark Mode" : "☀️ Light Mode"}
-        </button>
+        
       </div>
 
       {error && (

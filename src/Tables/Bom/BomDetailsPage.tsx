@@ -336,13 +336,7 @@ export default function BomDetailsPage() {
   return (
     <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
       <div className="flex justify-end mb-4">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className={`px-3 py-2 rounded font-medium text-sm ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
-        >
-          {isLight ? "🌙 Dark Mode" : "☀️ Light Mode"}
-        </button>
+        
       </div>
 
       {mainBomData && (

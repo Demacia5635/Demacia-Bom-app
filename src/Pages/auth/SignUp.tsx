@@ -50,13 +50,7 @@ export default function Signup() {
     return (
         <div className={`min-h-screen flex flex-col items-center justify-center p-6 transition-colors duration-200 ${pageBg}`}>
             <div className="absolute top-6 right-6">
-                <button
-                    type="button"
-                    onClick={toggleTheme}
-                    className={`px-3 py-2 rounded font-medium text-sm ${isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200"}`}
-                >
-                    {isLight ? "🌙 Dark Mode" : "☀️ Light Mode"}
-                </button>
+                
             </div>
 
             <div className={`w-full max-w-md border rounded-2xl p-8 shadow-2xl ${cardBg}`}>
