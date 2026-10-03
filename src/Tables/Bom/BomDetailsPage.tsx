@@ -46,7 +46,6 @@ const getCleanPartName = (record: any, entityID: string) => {
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
-  const { isLight, toggleTheme } = useThemeSync();
 
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
