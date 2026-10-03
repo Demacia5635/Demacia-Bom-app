@@ -7,7 +7,8 @@ import WorkOrderDetailsPage from './Tables/WorkOrder/WorkOrderDetailsPage';
 import PartsSearchPage from './Pages/searchPartsPage/SearchPartsPage';
 import AssemblyBomPage from './assembly-extension/AssemblyBomPage';
 import WorkOrdersPage from './Pages/WorkordersPage/WorkOrderPage';
-
+import SignIn from "./Pages/auth/SignIn";
+import Signup from "./Pages/auth/SignUp";
 export default function App() {
   return (
     <HashRouter>
@@ -20,7 +21,8 @@ export default function App() {
           <Route path="/workorders" element={<WorkOrdersPage />} />
           <Route path="/workOrder/:workOrderID" element={<WorkOrderDetailsPage />} />
           <Route path="/partSearch" element={<PartsSearchPage />} />
-
+          <Route path="/signin" element={<SignIn />} />
+          <Route path="/signup" element={<Signup />} />
           <Route path="*" element={<HomeScreen />} />
         </Route>
       </Routes>
