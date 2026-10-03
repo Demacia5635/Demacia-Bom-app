@@ -720,23 +720,6 @@ export default function AssemblyBomPage() {
           </div>
         )}
       </div>
-
-      {/* Debug Side Panel */}
-      <div className="w-80 shrink-0 border border-yellow-500/40 bg-yellow-500/10 p-4 rounded-xl text-xs space-y-3 h-fit sticky top-6">
-        <h3 className="font-bold uppercase tracking-wider text-yellow-500">🐛 Debug: User Credentials</h3>
-        <div>
-          <span className="font-semibold text-zinc-400 block">Logged-in User:</span>
-          <span className="font-mono text-zinc-200">{debugUsername || "None"}</span>
-        </div>
-        <div>
-          <span className="font-semibold text-zinc-400 block">Access Key:</span>
-          <span className="font-mono text-zinc-200 break-all">{debugAccessKey}</span>
-        </div>
-        <div>
-          <span className="font-semibold text-zinc-400 block">Secret Key (Decrypted):</span>
-          <span className="font-mono text-zinc-200 break-all">{debugSecretKey}</span>
-        </div>
-      </div>
     </div>
   );
 }
