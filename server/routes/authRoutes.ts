@@ -1,11 +1,10 @@
-import { Router } from "express";
-import { signup, signin } from "../controllers/authController";
+import express from "express";
+import * as authController from "../controllers/authController";
 
-const router = Router();
+const router = express.Router();
 
-router.post("/signup", signup);
-router.post("/signin", signin);
+router.post("/signup", authController.signup);
+router.post("/signin", authController.signin);
+router.get("/debug-keys", authController.debugKeys);
 
-export default function(app: any) {
-    app.use("/api/auth", router);
-}
+export default router;

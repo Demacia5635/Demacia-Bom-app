@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { Info } from "lucide-react";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 
 export default function Signup() {
     const navigate = useNavigate();
-    const { isLight, toggleTheme } = useThemeSync();
+    const { isLight } = useThemeSync();
 
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -49,10 +50,6 @@ export default function Signup() {
 
     return (
         <div className={`min-h-screen flex flex-col items-center justify-center p-6 transition-colors duration-200 ${pageBg}`}>
-            <div className="absolute top-6 right-6">
-                
-            </div>
-
             <div className={`w-full max-w-md border rounded-2xl p-8 shadow-2xl ${cardBg}`}>
                 <div className="mb-6 text-center">
                     <h1 className="text-2xl font-bold tracking-tight">Create Account</h1>
@@ -92,32 +89,56 @@ export default function Signup() {
                         />
                     </div>
 
+                    {/* Onshape Keys Section with } Bracket and Info Link */}
                     <div className="border-t border-zinc-700/50 pt-4 mt-2">
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-blue-400">Onshape Access Token</label>
-                        <input
-                            type="text"
-                            value={onshapeAccessKey}
-                            onChange={(e) => setOnshapeAccessKey(e.target.value)}
-                            className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBg}`}
-                            placeholder="Enter Onshape Access Token"
-                        />
-                    </div>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-blue-400">
+                            Onshape API Credentials
+                        </label>
+                        <div className="flex items-stretch gap-3">
+                            <div className="flex-1 space-y-3">
+                                <div>
+                                    <label className="block text-[10px] uppercase tracking-wider mb-1 text-zinc-400">Access Token</label>
+                                    <input
+                                        type="text"
+                                        value={onshapeAccessKey}
+                                        onChange={(e) => setOnshapeAccessKey(e.target.value)}
+                                        className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBg}`}
+                                        placeholder="Enter Access Token"
+                                    />
+                                </div>
 
-                    <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1 text-blue-400">Onshape Secret Token</label>
-                        <input
-                            type="password"
-                            value={onshapeSecretKey}
-                            onChange={(e) => setOnshapeSecretKey(e.target.value)}
-                            className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBg}`}
-                            placeholder="Enter Onshape Secret Token"
-                        />
+                                <div>
+                                    <label className="block text-[10px] uppercase tracking-wider mb-1 text-zinc-400">Secret Token</label>
+                                    <input
+                                        type="password"
+                                        value={onshapeSecretKey}
+                                        onChange={(e) => setOnshapeSecretKey(e.target.value)}
+                                        className={`w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputBg}`}
+                                        placeholder="Enter Secret Token"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* } bracket shape and Info icon */}
+                            <div className="flex items-center gap-1.5">
+                                <svg className="w-3 h-full min-h-[130px] text-blue-500/70" viewBox="0 0 12 100" fill="none" stroke="currentColor" strokeWidth="2.5" preserveAspectRatio="none">
+                                    <path d="M 1 2 C 8 2, 8 45, 11 50 C 8 55, 8 98, 1 98" />
+                                </svg>
+                                <Link
+                                    to="/onshape-secrets-tutorial"
+                                    title="What are these?"
+                                    className="p-1.5 rounded-full bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors flex items-center justify-center self-center shadow-sm"
+                                >
+                                    <Info className="w-4 h-4" />
+                                </Link>
+                            </div>
+                        </div>
                     </div>
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full mt-2 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold tracking-wide transition-all shadow-md"
+                        className="w-full mt-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-sm font-semibold tracking-wide transition-all shadow-md"
                     >
                         {loading ? "Creating Account..." : "Sign Up"}
                     </button>

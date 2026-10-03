@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Table from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
@@ -47,6 +48,7 @@ interface ResolvedNode {
 }
 
 export default function AssemblyBomPage() {
+  const navigate = useNavigate();
   const context = useOnshapeContext();
   const client = useOnshapeClient({ context });
 
@@ -61,6 +63,32 @@ export default function AssemblyBomPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
+  // Debug states for showing credentials on the side
+  const [debugUsername, setDebugUsername] = useState<string>("");
+  const [debugAccessKey, setDebugAccessKey] = useState<string>("Loading...");
+  const [debugSecretKey, setDebugSecretKey] = useState<string>("Loading...");
+
+  // Force authentication guard & load debug keys
+  useEffect(() => {
+    const username = localStorage.getItem("username");
+    if (!username) {
+      navigate("/signin", { replace: true });
+      return;
+    }
+    setDebugUsername(username);
+
+    // Fetch user credentials for debugging display
+    fetchFromApi(`/api/auth/debug-keys?username=${username}`)
+      .then((data: any) => {
+        setDebugAccessKey(data.onshapeAccessKey || "None configured");
+        setDebugSecretKey(data.onshapeSecretKey || "None configured");
+      })
+      .catch(() => {
+        setDebugAccessKey("Failed to fetch");
+        setDebugSecretKey("Failed to fetch");
+      });
+  }, [navigate]);
+
   const wvm = resolveWvm(context);
   const rootKey: OnshapeKey | null =
     context.documentId && wvm && context.elementId
@@ -68,10 +96,21 @@ export default function AssemblyBomPage() {
       : null;
 
   /**
+   * Helper to fetch data with the logged-in user's username header attached 
+   * so the backend automatically uses their stored Onshape API keys.
+   */
+  const fetchWithUserKeys = useCallback(async (url: string, options: RequestInit = {}) => {
+    const username = localStorage.getItem("username") || "";
+    const headers = {
+      ...options.headers,
+      "x-username": username,
+    };
+    return fetchFromApi(url, { ...options, headers });
+  }, []);
+
+  /**
    * Resolves one BOM node (root or sub-assembly): fetches its live Onshape
-   * BOM (needed regardless, both for the bomID and as a fallback data
-   * source), then checks whether that bomID already exists in the database.
-   * DB data wins when present; Onshape data fills the gaps otherwise.
+   * BOM using the user's keys, then checks whether that bomID already exists in the database.
    */
   const resolveBomNode = useCallback(
     async (key: OnshapeKey, parentRowId: string | null, rootBom: BomModel | null | 'root'): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
@@ -86,19 +125,11 @@ export default function AssemblyBomPage() {
       }
       const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${bomID}`;
 
-      // const isPublished = (Boolean(dbBom) && rootIsPublished && rootBomDB && (
-      //   parentRowId
-      //     ? await (async () => {
-      //       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${parentRowId}`);
-      //       return bom.subAssemblies.find((c) => c.bomID === rowId);
-      //     })() :
-      //     Boolean(rootBomDB.subAssemblies.find((c) => c.bomID === rowId))
-      // )) || key === rootKey;
       const isPublished = Boolean(dbBom);
       const isExist = isPublished && rootBom !== 'root' && rootBom !== null && (
         parentRowId
           ? await (async () => {
-            const bom = await fetchFromApi<BomModel>(`/db/bom/id/${parentRowId}`);
+            const bom = await fetchWithUserKeys(`/db/bom/id/${parentRowId}`) as BomModel;
             return bom.subAssemblies.find((c) => c.bomID === rowId);
           })() :
           Boolean(rootBom.subAssemblies.find((c) => c.bomID === rowId))
@@ -136,7 +167,7 @@ export default function AssemblyBomPage() {
 
       return { node: { row, key, bomID, onshapeBom }, dbBom };
     },
-    [context.server]
+    [context.server, fetchWithUserKeys]
   );
 
   const resolvePartRow = useCallback(
@@ -150,10 +181,6 @@ export default function AssemblyBomPage() {
       const partID = parsedItem.itemSource.partId || "";
 
       let dbPart: PartModel | null = null;
-      // Only worth checking the DB if the part could plausibly be there -
-      // if the parent assembly itself was never published, its parts can't
-      // be either (per the publish-cascades-down model), but we still check
-      // in case this exact part was independently published elsewhere.
       try {
         dbPart = await getPartByOnshapeKey(key, partID);
       } catch {
@@ -161,11 +188,11 @@ export default function AssemblyBomPage() {
       }
       const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${partID}`;
 
-      const isPublished = Boolean(dbPart)
+      const isPublished = Boolean(dbPart);
       const isExist = isPublished && rootBom !== null && (
         parentRowId
           ? await (async () => {
-            const bom = await fetchFromApi<BomModel>(`/db/bom/id/${parentRowId}`);
+            const bom = await fetchWithUserKeys(`/db/bom/id/${parentRowId}`) as BomModel;
             return bom.parts.find((c) => c.partID === rowId);
           })() :
           Boolean(rootBom.parts.find((c) => c.partID === rowId))
@@ -201,7 +228,7 @@ export default function AssemblyBomPage() {
         vendor: dbPart?.vendor || parsedItem.vendor || "",
       };
     },
-    [context.server]
+    [context.server, fetchWithUserKeys]
   );
 
   const loadTree = useCallback(async () => {
@@ -219,8 +246,6 @@ export default function AssemblyBomPage() {
       setRootIsPublished(Boolean(dbBom));
       setRootOnshapeBom(rootNode.onshapeBom ?? null);
       visitedBomIds.add(rootNode.bomID!);
-      // The root assembly itself isn't shown as a row (mirrors BomDetailsPage) -
-      // its identity is shown via the page header instead.
 
       async function expand(node: ResolvedNode, isRoot: boolean) {
         const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
@@ -255,7 +280,7 @@ export default function AssemblyBomPage() {
     } finally {
       setLoading(false);
     }
-  }, [rootKey, resolveBomNode, resolvePartRow, rootBomDB]);
+  }, [rootKey, resolveBomNode, resolvePartRow]);
 
   useEffect(() => {
     loadTree();
@@ -351,13 +376,13 @@ export default function AssemblyBomPage() {
 
         if (row.parentId !== null) {
           if (row.isAssembly) {
-            const children = await fetchFromApi<BomModel>(`/db/bom/id/${row.parentId}`);
+            const children = await fetchWithUserKeys(`/db/bom/id/${row.parentId}`) as BomModel;
             if (children.subAssemblies.length === 0) return;
             await upsertBomById(row.parentId, {
               subAssemblies: [...children.subAssemblies, { bomID: row.id, quantity: row.quantity || 1 }]
             });
           } else {
-            const children = await fetchFromApi<BomModel>(`/db/bom/id/${row.parentId}`);
+            const children = await fetchWithUserKeys(`/db/bom/id/${row.parentId}`) as BomModel;
             if (children.parts.length === 0) return;
             await upsertBomById(row.parentId, {
               parts: [...children.parts, { partID: row.id, quantity: row.quantity || 1 }]
@@ -366,13 +391,13 @@ export default function AssemblyBomPage() {
         } else {
           const rootID = rootBomDB?.id || `${rootKey.documentID}_${rootKey.wvmType}_${rootKey.wvmID}_${rootKey.elementID}_${rootOnshapeBom?.id}` || "wrong id";
           if (row.isAssembly) {
-            const children = await fetchFromApi<BomModel>(`/db/bom/id/${rootID}`);
+            const children = await fetchWithUserKeys(`/db/bom/id/${rootID}`) as BomModel;
             if (children.subAssemblies.length === 0) return;
             await upsertBomById(rootID, {
               subAssemblies: [...children.subAssemblies, { bomID: row.id, quantity: row.quantity || 1 }]
             });
           } else {
-            const children = await fetchFromApi<BomModel>(`/db/bom/id/${rootID}`);
+            const children = await fetchWithUserKeys(`/db/bom/id/${rootID}`) as BomModel;
             if (children.parts.length === 0) return;
             await upsertBomById(rootID, {
               parts: [...children.parts, { partID: row.id, quantity: row.quantity || 1 }]
@@ -387,13 +412,11 @@ export default function AssemblyBomPage() {
         client.showMessageBubble(`Publish failed: ${apiErr.message}`);
       }
     },
-    [rows, client, loadTree]
+    [rows, client, loadTree, rootBomDB, rootKey, rootOnshapeBom?.id, fetchWithUserKeys]
   );
 
   const handleTableEdit = useCallback(
     (newData: AssemblyBomRow[]) => {
-      // Find which row actually changed so we know what to persist. Table
-      // only ever mutates one row per interaction (a single cell commit).
       const previousById = new Map(rows.map((r) => [r.id, r]));
       const changed = newData.find((r) => {
         const prev = previousById.get(r.id);
@@ -407,7 +430,6 @@ export default function AssemblyBomPage() {
       setRows(newData);
 
       if (!rootIsPublished) {
-
         const key: OnshapeKey = {
           documentID: changed.documentID,
           wvmType: changed.wvmType,
@@ -477,8 +499,6 @@ export default function AssemblyBomPage() {
               price: changed.price,
               comments: changed.comments,
             });
-            // Best-effort mirror of the editable fields back onto Onshape's
-            // own part metadata. Never blocks or reverts the DB save.
             try {
               await updateOnshapePartMetadata(key, changed.entityID, {
                 name: changed.name,
@@ -641,62 +661,82 @@ export default function AssemblyBomPage() {
   const displayName = rootBomDB?.name || rootOnshapeBom?.name.slice(6) || "Assembly";
 
   return (
-    <div className="p-8">
-      <div className="assembly-bom-header">
-        <div>
-          <h1 className="assembly-bom-title">{displayName}</h1>
-          {rootBomDB?.description && <p className="assembly-bom-subtitle">{rootBomDB.description}</p>}
+    <div className="p-8 flex gap-6">
+      {/* Main Content */}
+      <div className="flex-1">
+        <div className="assembly-bom-header">
+          <div>
+            <h1 className="assembly-bom-title">{displayName}</h1>
+            {rootBomDB?.description && <p className="assembly-bom-subtitle">{rootBomDB.description}</p>}
+            {!rootIsPublished && (
+              <p className="assembly-bom-unpublished-hint">
+                This assembly isn't in the database yet - it's showing live Onshape data.
+              </p>
+            )}
+          </div>
           {!rootIsPublished && (
-            <p className="assembly-bom-unpublished-hint">
-              This assembly isn't in the database yet - it's showing live Onshape data.
-            </p>
+            <button
+              type="button"
+              className="publish-btn-primary"
+              onClick={() => setPublishOpen(true)}
+              disabled={loading}
+            >
+              {rootIsPublished ? "Update published BOM" : "Publish to database"}
+            </button>
           )}
         </div>
-        {!rootIsPublished && (
-          <button
-            type="button"
-            className="publish-btn-primary"
-            onClick={() => setPublishOpen(true)}
-            disabled={loading}
-          >
-            {rootIsPublished ? "Update published BOM" : "Publish to database"}
-          </button>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
+            <p className="font-semibold">Error Loading BOM Data</p>
+            <p>{error.message}</p>
+            {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="p-8 text-center text-zinc-400">Resolving assembly tree...</div>
+        ) : (
+          <Table
+            data={rows}
+            columnsData={columns}
+            setData={(newData) => handleTableEdit(newData as AssemblyBomRow[])}
+            newRowFunction={undefined}
+            initialSort={{ key: "catalogNumber", direction: "asc" }}
+          />
+        )}
+
+        <PublishBomModal
+          open={publishOpen}
+          initialName={rootBomDB?.name || rootOnshapeBom?.name || ""}
+          onCancel={() => (publishing ? undefined : setPublishOpen(false))}
+          onSubmit={handlePublish}
+          submitting={publishing}
+        />
+
+        {publishError && !publishOpen && (
+          <div className="mt-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
+            {publishError}
+          </div>
         )}
       </div>
 
-      {error && (
-        <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-          <p className="font-semibold">Error Loading BOM Data</p>
-          <p>{error.message}</p>
-          {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
+      {/* Debug Side Panel */}
+      <div className="w-80 shrink-0 border border-yellow-500/40 bg-yellow-500/10 p-4 rounded-xl text-xs space-y-3 h-fit sticky top-6">
+        <h3 className="font-bold uppercase tracking-wider text-yellow-500">🐛 Debug: User Credentials</h3>
+        <div>
+          <span className="font-semibold text-zinc-400 block">Logged-in User:</span>
+          <span className="font-mono text-zinc-200">{debugUsername || "None"}</span>
         </div>
-      )}
-
-      {loading ? (
-        <div className="p-8 text-center text-zinc-400">Resolving assembly tree...</div>
-      ) : (
-        <Table
-          data={rows}
-          columnsData={columns}
-          setData={(newData) => handleTableEdit(newData as AssemblyBomRow[])}
-          newRowFunction={undefined}
-          initialSort={{ key: "catalogNumber", direction: "asc" }}
-        />
-      )}
-
-      <PublishBomModal
-        open={publishOpen}
-        initialName={rootBomDB?.name || rootOnshapeBom?.name || ""}
-        onCancel={() => (publishing ? undefined : setPublishOpen(false))}
-        onSubmit={handlePublish}
-        submitting={publishing}
-      />
-
-      {publishError && !publishOpen && (
-        <div className="mt-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
-          {publishError}
+        <div>
+          <span className="font-semibold text-zinc-400 block">Access Key:</span>
+          <span className="font-mono text-zinc-200 break-all">{debugAccessKey}</span>
         </div>
-      )}
+        <div>
+          <span className="font-semibold text-zinc-400 block">Secret Key (Decrypted):</span>
+          <span className="font-mono text-zinc-200 break-all">{debugSecretKey}</span>
+        </div>
+      </div>
     </div>
   );
 }

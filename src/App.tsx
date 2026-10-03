@@ -9,6 +9,8 @@ import AssemblyBomPage from './assembly-extension/AssemblyBomPage';
 import WorkOrdersPage from './Pages/WorkordersPage/WorkOrderPage';
 import SignIn from "./Pages/auth/SignIn";
 import Signup from "./Pages/auth/SignUp";
+import OnshapeSecretsTutorial from "./Pages/Tutorials/OnshapeSecretsTutorial";
+
 export default function App() {
   return (
     <HashRouter>
@@ -23,6 +25,7 @@ export default function App() {
           <Route path="/partSearch" element={<PartsSearchPage />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/onshape-secrets-tutorial" element={<OnshapeSecretsTutorial />} />
           <Route path="*" element={<HomeScreen />} />
         </Route>
       </Routes>
