@@ -2,7 +2,6 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Table from "../../../components/Table";
 import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
-import { useThemeSync } from "../../../util/misc/useThemeSync";
 import type { BomModel, PartModel } from "../../../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
@@ -11,7 +10,6 @@ import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
-    // 1. Check alternative database / Onshape metadata fields
     if (record?.title && typeof record.title === 'string' && !record.title.includes('_')) return record.title;
     if (record?.partName && typeof record.partName === 'string' && !record.partName.includes('_')) return record.partName;
     if (record?.fileName && typeof record.fileName === 'string' && !record.fileName.includes('_')) return record.fileName;
@@ -20,12 +18,10 @@ const getCleanPartName = (record: any, entityID: string) => {
 
     const rawName = record?.name;
     
-    // 2. If rawName is a clean human-readable name (does not contain underscores)
     if (rawName && typeof rawName === 'string' && !rawName.includes('_') && rawName.length < 50) {
         return rawName;
     }
 
-    // 3. Fall back to catalog number or description if they contain clean text
     if (record?.catalogNumber && typeof record.catalogNumber === 'string' && record.catalogNumber.trim() !== '' && !record.catalogNumber.includes('_')) {
         return record.catalogNumber;
     }
@@ -33,8 +29,6 @@ const getCleanPartName = (record: any, entityID: string) => {
         return record.description;
     }
 
-    // 4. Final fallback: If the database record genuinely only has the compound ID, 
-    // display a clean fallback or part identifier rather than a blank cell or raw ID string.
     if (entityID && entityID.includes('_')) {
         const segments = entityID.split('_');
         return `Part ${segments[segments.length - 1]}`;
@@ -47,8 +41,10 @@ export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
 
-  // 👉 Defined isLight from useThemeSync to prevent reference errors
-  const { isLight } = useThemeSync();
+  // 🛡️ Bulletproof theme definition (removes reliance on broken hook properties)
+  const isLight = typeof window !== "undefined" 
+    ? document.documentElement.classList.contains("light") || window.matchMedia("(prefers-color-scheme: light)").matches 
+    : true;
 
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -85,7 +81,6 @@ export default function BomDetailsPage() {
       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
       const collectedRows: BomTableRow[] = [];
 
-      // Process sub-assemblies as flat rows without expanding their children
       for (const sub of bom.subAssemblies || []) {
         const subBomRecord = await fetchFromApi<BomModel>(`/db/bom/id/${sub.bomID}`).catch(() => null);
         let subAvatarUrl = "";
@@ -140,7 +135,6 @@ export default function BomDetailsPage() {
         collectedRows.push(subAssemblyRow);
       }
 
-      // Process direct parts as flat rows
       for (const p of bom.parts || []) {
         const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
 
