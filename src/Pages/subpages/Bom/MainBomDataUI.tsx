@@ -15,12 +15,14 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
     : true;
 
   const navigate = useNavigate();
+  const resolvedBomId = bom.id || (bom as any)._id;
 
   const visitedBoms = new Set<string>();
 
   async function fetchBomPartsRecursively(
     targetBomId: string
   ): Promise<WorkOrderPartModel[]> {
+    if (!targetBomId || targetBomId === "undefined") return [];
     if (visitedBoms.has(targetBomId)) return [];
     visitedBoms.add(targetBomId);
 
@@ -50,12 +52,12 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
 
   const handleNewWO = async (data: WorkOrderFormData) => {
     const id = Date.now().toString();
-    const parts = await fetchBomPartsRecursively(bom.id);
+    const parts = await fetchBomPartsRecursively(resolvedBomId);
 
     const payload: WorkorderModel = {
       id: id,
       name: data.name.trim(),
-      bomID: bom.id,
+      bomID: resolvedBomId,
       workOrderOwner: data.workOrderOwner.trim(),
       description: data.description.trim(),
       parts: parts,
@@ -67,11 +69,12 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
 
     try {
       const secret: string = import.meta.env.VITE_CLIENT_SECRET;
-      const response = await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/workOrder/id/${id}`, {
+      const backendBase = import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com";
+      const response = await fetch(`${backendBase}/api/db/workOrder/id/${id}`, {
         method: "POST",
         headers: {
           "content-Type": "application/json",
-          "x-client-secret": secret,
+          "x-client-secret": secret || "",
         },
         body: JSON.stringify(payload),
       });

@@ -1,5 +1,8 @@
 import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
+import { fetchFromApi } from "../../../util/ApiService";
+import type { BomModel, PartModel, WorkorderModel, WorkorderPartModel } from "../../../util/Models";
 
 export interface WorkOrderFormData {
     name: string;
@@ -9,19 +12,23 @@ export interface WorkOrderFormData {
 }
 
 interface WorkOrderFormProps {
+    bomId: string;
+    avatarID?: string;
     onCancel?: () => void;
-    onSubmit?: (data: WorkOrderFormData) => void;
-    initialData?: Partial<WorkOrderFormData>;
 }
 
-export function WorkOrderForm({ onCancel, onSubmit, initialData }: WorkOrderFormProps) {
+export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps) {
     const { isLight } = useThemeSync();
+    const navigate = useNavigate();
+
     const [formData, setFormData] = useState<WorkOrderFormData>({
-        name: initialData?.name || "",
-        workOrderOwner: initialData?.workOrderOwner || "",
-        description: initialData?.description || "",
-        comments: initialData?.comments || "",
+        name: "",
+        workOrderOwner: "",
+        description: "",
+        comments: "",
     });
+    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
     const handleChange = (
         e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -30,10 +37,115 @@ export function WorkOrderForm({ onCancel, onSubmit, initialData }: WorkOrderForm
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleSubmit = (e: FormEvent) => {
+    const visitedBoms = new Set<string>();
+
+    async function fetchBomPartsRecursively(
+        targetBomId: string,
+        seenCatalogNumbers: Set<string>
+    ): Promise<WorkorderPartModel[]> {
+        if (!targetBomId || targetBomId === "undefined") {
+            throw new Error("Assembly ID is missing or undefined.");
+        }
+        if (visitedBoms.has(targetBomId)) return [];
+        visitedBoms.add(targetBomId);
+
+        const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
+        const collectedParts: WorkorderPartModel[] = [];
+
+        for (const sub of currentBom.subAssemblies || []) {
+            const subParts = await fetchBomPartsRecursively(sub.bomID, seenCatalogNumbers);
+            collectedParts.push(...subParts);
+        }
+
+        for (const p of currentBom.parts || []) {
+            const partRecord = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`).catch(() => null);
+            
+            const catalogNumber = partRecord?.catalogNumber || "";
+            const material = partRecord?.material?.trim() || "";
+            const engineer = partRecord?.engineer?.trim() || "";
+            
+            // Check if it's an externally purchased part (has a vendor specified)
+            const isPurchased = Boolean(partRecord?.vendor && partRecord.vendor.trim() !== "");
+
+            if (!isPurchased) {
+                // 1. Verify format AABB-CCDD (e.g., 2603-1001)
+                const catalogRegex = /^\d{4}-\d{4}$/;
+                if (!catalogRegex.test(catalogNumber)) {
+                    throw new Error(`Invalid catalog number format for part "${partRecord?.name || p.partID}": "${catalogNumber}". Must match format AABB-CCDD (e.g., 2603-1001).`);
+                }
+
+                // 2. Check for duplicate catalog numbers
+                if (seenCatalogNumbers.has(catalogNumber)) {
+                    throw new Error(`Duplicate catalog number detected: "${catalogNumber}" appears more than once.`);
+                }
+                seenCatalogNumbers.add(catalogNumber);
+
+                // 3. Ensure non-purchased parts have material and engineer defined
+                if (!material) {
+                    throw new Error(`Missing material for manufactured part "${partRecord?.name || p.partID}" (Catalog: ${catalogNumber}).`);
+                }
+                if (!engineer) {
+                    throw new Error(`Missing engineer for manufactured part "${partRecord?.name || p.partID}" (Catalog: ${catalogNumber}).`);
+                }
+            }
+
+            const workOrderPart: WorkorderPartModel = {
+                partID: p.partID,
+                quantityTotal: p.quantity,
+                quantityMade: 0,
+                statusCode: 0,
+                productionGCOwner: "",
+                productionMakingOwner: "",
+                updatedAt: new Date(),
+                createdAt: new Date(),
+            };
+            collectedParts.push(workOrderPart);
+        }
+        return collectedParts;
+    }
+
+    const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (onSubmit) {
-            onSubmit(formData);
+        setError(null);
+        setLoading(true);
+
+        try {
+            const id = Date.now().toString();
+            const seenCatalogNumbers = new Set<string>();
+            const parts = await fetchBomPartsRecursively(bomId, seenCatalogNumbers);
+
+            const payload: WorkorderModel = {
+                id: id,
+                name: formData.name.trim(),
+                bomID: bomId,
+                workOrderOwner: formData.workOrderOwner.trim(),
+                description: formData.description.trim(),
+                parts: parts,
+                avatarID: avatarID,
+                comments: formData.comments,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+
+            const secret: string = import.meta.env.VITE_CLIENT_SECRET;
+            const response = await fetch(`${import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com"}/api/db/workOrder/id/${id}`, {
+                method: "POST",
+                headers: {
+                    "content-Type": "application/json",
+                    "x-client-secret": secret,
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to create Work Order: ${response.statusText}`);
+            }
+
+            navigate(`/workOrder/${id}`);
+        } catch (err: any) {
+            setError(err.message || "An unexpected error occurred during work order creation.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -52,6 +164,12 @@ export function WorkOrderForm({ onCancel, onSubmit, initialData }: WorkOrderForm
             <h2 className={`text-xl font-bold tracking-tight mb-4 ${headingColor}`}>
                 Work Order Details
             </h2>
+
+            {error && (
+                <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-xs font-medium">
+                    {error}
+                </div>
+            )}
 
             {/* Name and Work Order Owner in a single row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -138,6 +256,7 @@ export function WorkOrderForm({ onCancel, onSubmit, initialData }: WorkOrderForm
                     <button
                         type="button"
                         onClick={onCancel}
+                        disabled={loading}
                         className={`w-full font-semibold py-2.5 px-4 rounded-lg text-xs tracking-wide transition-all shadow-md focus:outline-none focus:ring-2 ${cancelBtnClass}`}
                     >
                         Cancel
@@ -146,9 +265,10 @@ export function WorkOrderForm({ onCancel, onSubmit, initialData }: WorkOrderForm
                 <div className="pt-2">
                     <button
                         type="submit"
-                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 px-4 rounded-lg text-xs tracking-wide transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400"
+                        disabled={loading}
+                        className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-2.5 px-4 rounded-lg text-xs tracking-wide transition-all shadow-md focus:outline-none focus:ring-2 focus:ring-blue-400"
                     >
-                        Submit Work Order
+                        {loading ? "Validating Parts..." : "Submit Work Order"}
                     </button>
                 </div>
             </div>
