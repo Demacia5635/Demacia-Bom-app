@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState, useRef, type MouseEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Table from "../../../components/Table";
 import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
@@ -41,7 +41,7 @@ export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
 
-  // 🛡️ Bulletproof theme definition (removes reliance on broken hook properties)
+  // 🛡️️ Bulletproof theme definition
   const isLight = typeof window !== "undefined" 
     ? document.documentElement.classList.contains("light") || window.matchMedia("(prefers-color-scheme: light)").matches 
     : true;
@@ -59,6 +59,9 @@ export default function BomDetailsPage() {
     row: BomTableRow;
   } | null>(null);
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+
+  // Ref to hold debounced save timeouts per part ID
+  const saveTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   useEffect(() => {
     if (!bomId) return;
@@ -208,7 +211,11 @@ export default function BomDetailsPage() {
       .finally(() => setLoading(false));
   }, [bomId]);
 
-  const handleTableDataChange = async (newData: BomTableRow[]) => {
+  const handleTableDataChange = (newData: BomTableRow[]) => {
+    // 1. Instantly update local table state so typing has 0 lag
+    setRows(newData);
+
+    // 2. Queue debounced database updates
     for (let i = 0; i < newData.length; i++) {
       const newRow = newData[i];
       const oldRow = rows.find(r => r.id === newRow.id);
@@ -222,38 +229,47 @@ export default function BomDetailsPage() {
         oldRow.material !== newRow.material ||
         oldRow.mass !== newRow.mass ||
         oldRow.price !== newRow.price ||
-        oldRow.comments !== newRow.comments
+        oldRow.comments !== newRow.comments ||
+        oldRow.vendor !== newRow.vendor
       )) {
-        try {
-          const partId = newRow.entityID;
-          const payload = {
-            name: newRow.name,
-            catalogNumber: newRow.catalogNumber,
-            revision: newRow.revision,
-            description: newRow.description,
-            engineer: newRow.engineer,
-            material: newRow.material,
-            mass: newRow.mass,
-            price: newRow.price,
-            comments: newRow.comments,
-            vendor: newRow.vendor
-          };
+        const partId = newRow.entityID;
 
-          await fetch(`${import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com"}/api/db/part/id/${partId}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-client-secret": import.meta.env.VITE_CLIENT_SECRET,
-            },
-            body: JSON.stringify(payload),
-          });
-        } catch (err) {
-          console.error("Failed to sync grid updates to part database:", err);
+        // Clear previous pending timeout for this specific part while typing
+        if (saveTimeoutsRef.current[partId]) {
+          clearTimeout(saveTimeoutsRef.current[partId]);
         }
+
+        // Set a new timeout to send request 600ms after typing stops
+        saveTimeoutsRef.current[partId] = setTimeout(async () => {
+          try {
+            const payload = {
+              name: newRow.name,
+              catalogNumber: newRow.catalogNumber,
+              revision: newRow.revision,
+              description: newRow.description,
+              engineer: newRow.engineer,
+              material: newRow.material,
+              mass: newRow.mass,
+              price: newRow.price,
+              comments: newRow.comments,
+              vendor: newRow.vendor
+            };
+
+            const backendBase = import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com";
+            await fetch(`${backendBase}/api/db/part/id/${partId}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-client-secret": import.meta.env.VITE_CLIENT_SECRET || "",
+              },
+              body: JSON.stringify(payload),
+            });
+          } catch (err) {
+            console.error("Failed to sync grid updates to part database:", err);
+          }
+        }, 600);
       }
     }
-
-    setRows(newData);
   };
 
   const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
