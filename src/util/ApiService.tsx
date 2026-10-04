@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-// Determine host: Use local backend in dev mode, otherwise default to Render production URL
-const BACKEND_HOST = import.meta.env.DEV 
-  ? "http://localhost:5050" 
+// Robust host resolution: Checks hostname for local dev, falls back to explicit Render production URL
+const BACKEND_HOST = (typeof window !== "undefined" && window.location.hostname === "localhost")
+  ? "http://localhost:5050"
   : (import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com");
 
 export interface ApiError {
