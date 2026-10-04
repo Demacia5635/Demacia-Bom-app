@@ -8,40 +8,33 @@ import MainBomDataUI from "./MainBomDataUI";
 import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 
-// Comprehensive sanitizer to check all potential database fields for the real Onshape name
-const getCleanPartName = (record: any, entityID: string) => {
-    if (record?.title && typeof record.title === 'string' && !record.title.includes('_')) return record.title;
-    if (record?.partName && typeof record.partName === 'string' && !record.partName.includes('_')) return record.partName;
-    if (record?.fileName && typeof record.fileName === 'string' && !record.fileName.includes('_')) return record.fileName;
-    if (record?.properties?.name && typeof record.properties.name === 'string' && !record.properties.name.includes('_')) return record.properties.name;
-    if (record?.metadata?.name && typeof record.metadata.name === 'string' && !record.metadata.name.includes('_')) return record.metadata.name;
+// Helper to extract Onshape identifiers from compound IDs or objects
+const extractOnshapeIds = (record: any, fallbackId: string) => {
+    let docID = record?.onshapeID?.documentID;
+    let elemID = record?.onshapeID?.elementID;
+    let wvmType = record?.onshapeID?.wvmType || "w";
+    let wvmID = record?.onshapeID?.wvmID || "";
+    let partID = record?.onshapeID?.partID || "";
 
-    const rawName = record?.name;
-    
-    if (rawName && typeof rawName === 'string' && !rawName.includes('_') && rawName.length < 50) {
-        return rawName;
+    if ((!docID || !elemID) && fallbackId && fallbackId.includes("_")) {
+        const partsArr = fallbackId.split("_");
+        if (partsArr.length >= 4) {
+            docID = partsArr[0];
+            wvmType = partsArr[1] || "w";
+            wvmID = partsArr[2] || "";
+            elemID = partsArr[3];
+            if (partsArr.length >= 5) {
+                partID = partsArr[4];
+            }
+        }
     }
-
-    if (record?.catalogNumber && typeof record.catalogNumber === 'string' && record.catalogNumber.trim() !== '' && !record.catalogNumber.includes('_')) {
-        return record.catalogNumber;
-    }
-    if (record?.description && typeof record.description === 'string' && record.description.trim() !== '' && !record.description.includes('_') && record.description.length < 50) {
-        return record.description;
-    }
-
-    if (entityID && entityID.includes('_')) {
-        const segments = entityID.split('_');
-        return `Part ${segments[segments.length - 1]}`;
-    }
-
-    return rawName || entityID;
+    return { docID, elemID, wvmType, wvmID, partID };
 };
 
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
 
-  // 🛡️️ Bulletproof theme definition
   const isLight = typeof window !== "undefined" 
     ? document.documentElement.classList.contains("light") || window.matchMedia("(prefers-color-scheme: light)").matches 
     : true;
@@ -60,7 +53,6 @@ export default function BomDetailsPage() {
   } | null>(null);
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
-  // Ref to hold debounced save timeouts per part ID
   const saveTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   useEffect(() => {
@@ -84,9 +76,37 @@ export default function BomDetailsPage() {
       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
       const collectedRows: BomTableRow[] = [];
 
+      // 1. Optional: Fetch the main assembly metadata ONCE to get global context if needed
+      const mainOnshapeIds = extractOnshapeIds(bom, bomId || "");
+      let assemblyData: any = null;
+      if (mainOnshapeIds.docID && mainOnshapeIds.elemID) {
+        try {
+          assemblyData = await fetchFromApi(
+            `/onshape/assemblies/d/${mainOnshapeIds.docID}/wvmT/${mainOnshapeIds.wvmType}/wvmI/${mainOnshapeIds.wvmID}/e/${mainOnshapeIds.elemID}`
+          ).catch(() => null);
+        } catch (e) {
+          console.warn("Could not fetch root assembly details in bulk", e);
+        }
+      }
+
+      // Process sub-assemblies
       for (const sub of bom.subAssemblies || []) {
         const subBomRecord = await fetchFromApi<BomModel>(`/db/bom/id/${sub.bomID}`).catch(() => null);
         let subAvatarUrl = "";
+        let onshapeName = "";
+
+        const { docID, elemID, wvmType, wvmID } = extractOnshapeIds(subBomRecord, sub.bomID);
+
+        if (docID && elemID) {
+          try {
+            const subAssembly: any = await fetchFromApi(`/onshape/assemblies/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}`);
+            if (subAssembly?.name) {
+              onshapeName = subAssembly.name;
+            }
+          } catch (err) {
+            console.warn("Failed to fetch sub-assembly name from Onshape", err);
+          }
+        }
 
         if (subBomRecord?.driveFileId) {
           subAvatarUrl = `/api/drive/file/id/${subBomRecord.driveFileId}`;
@@ -94,27 +114,20 @@ export default function BomDetailsPage() {
           subAvatarUrl = subBomRecord.avatarID;
         } else if (subBomRecord?.imageUrl) {
           subAvatarUrl = subBomRecord.imageUrl;
-        } else if (subBomRecord?.onshapeID?.documentID && subBomRecord?.onshapeID?.elementID) {
-          const docID = subBomRecord.onshapeID.documentID;
-          const wType = subBomRecord.onshapeID.wvmType || "w";
-          const wID = subBomRecord.onshapeID.wvmID || "";
-          const elemID = subBomRecord.onshapeID.elementID;
-          subAvatarUrl = `/api/onshape/bom/d/${docID}/wvmT/${wType}/wvmI/${wID}/e/${elemID}/thumbnail`;
-        } else {
-          const partsArr = sub.bomID.split("_");
-          if (partsArr.length >= 4) {
-            subAvatarUrl = `/api/onshape/bom/d/${partsArr[0]}/wvmT/${partsArr[1] || "w"}/wvmI/${partsArr[2] || ""}/e/${partsArr[3]}/thumbnail`;
-          }
+        } else if (docID && elemID) {
+          subAvatarUrl = `/api/onshape/bom/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/thumbnail`;
         }
 
-        const subAssemblyRow: BomTableRow = {
+        const finalName = onshapeName || subBomRecord?.title || subBomRecord?.partName || subBomRecord?.name || `Part ${sub.bomID.split("_").pop()}`;
+
+        collectedRows.push({
           id: `sub-${sub.bomID}`,
           parentId: null,
           isExpanded: false,
           isSubAssembly: true,
           subBomId: sub.bomID,
           avatar: subAvatarUrl,
-          name: getCleanPartName(subBomRecord, sub.bomID),
+          name: finalName,
           catalogNumber: subBomRecord?.catalogNumber || "",
           revision: "-",
           description: subBomRecord?.description || "",
@@ -124,24 +137,40 @@ export default function BomDetailsPage() {
           price: 0,
           quantity: sub.quantity || 1,
           comments: subBomRecord?.comments || "",
-          documentID: subBomRecord?.onshapeID?.documentID || "",
-          wvmType: subBomRecord?.onshapeID?.wvmType || "w",
-          wvmID: subBomRecord?.onshapeID?.wvmID || "",
-          elementID: subBomRecord?.onshapeID?.elementID || "",
+          documentID: docID,
+          wvmType: wvmType,
+          wvmID: wvmID,
+          elementID: elemID,
           entityID: subBomRecord?.onshapeID?.bomID || subBomRecord?.id || sub.bomID,
           onshapeURL: subBomRecord?.onshapeURL || "",
           exportSTL: "",
           exportParasolid: "",
           vendor: subBomRecord?.vendor || "",
-        };
-
-        collectedRows.push(subAssemblyRow);
+        });
       }
 
+      // Process direct parts
       for (const p of bom.parts || []) {
-        const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
+        const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`).catch(() => null);
 
         let partAvatarUrl = "";
+        let onshapePartName = "";
+
+        const { docID, elemID, wvmType, wvmID, partID } = extractOnshapeIds(part, p.partID);
+
+        if (docID && elemID) {
+          try {
+            const partsResponse: any = await fetchFromApi(`/onshape/parts/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}`);
+            const matchedPart = Array.isArray(partsResponse) 
+              ? partsResponse.find((pt: any) => pt.partId === partID || pt.id === partID)
+              : null;
+            if (matchedPart?.name) {
+              onshapePartName = matchedPart.name;
+            }
+          } catch (err) {
+            console.warn("Failed to fetch part name from Onshape", err);
+          }
+        }
 
         if (part?.driveFileId) {
           partAvatarUrl = `/api/drive/file/id/${part.driveFileId}`;
@@ -149,56 +178,38 @@ export default function BomDetailsPage() {
           partAvatarUrl = part.avatarID;
         } else if (part?.imageUrl) {
           partAvatarUrl = part.imageUrl;
-        } else {
-          let docID = part?.onshapeID?.documentID;
-          let elemID = part?.onshapeID?.elementID;
-          let wvmType = part?.onshapeID?.wvmType || "w";
-          let wvmID = part?.onshapeID?.wvmID || "";
-          let targetPartID = part?.onshapeID?.partID || p.partID;
-
-          if (!docID && part?.id && part.id.includes("_")) {
-            const partsArr = part.id.split("_");
-            if (partsArr.length >= 5) {
-              docID = partsArr[0];
-              wvmType = partsArr[1];
-              wvmID = partsArr[2];
-              elemID = partsArr[3];
-              targetPartID = partsArr[4];
-            }
-          }
-
-          if (docID && elemID) {
-            partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${targetPartID}/thumbnail`;
-          }
+        } else if (docID && elemID) {
+          partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${partID || p.partID}/thumbnail`;
         }
 
-        const partRow: BomTableRow = {
-          id: `part-${part.id}`,
+        const finalPartName = onshapePartName || part?.title || part?.partName || part?.name || `Part ${p.partID.split("_").pop()}`;
+
+        collectedRows.push({
+          id: `part-${part?.id || p.partID}`,
           parentId: null,
           isExpanded: false,
           isSubAssembly: false,
           avatar: partAvatarUrl,
-          name: getCleanPartName(part, p.partID),
-          catalogNumber: part.catalogNumber || "",
-          revision: part.revision || "",
-          description: part.description || "",
-          engineer: part.engineer || "",
-          material: part.material || "",
-          mass: part.mass || 0,
-          price: part.price || 0,
+          name: finalPartName,
+          catalogNumber: part?.catalogNumber || "",
+          revision: part?.revision || "",
+          description: part?.description || "",
+          engineer: part?.engineer || "",
+          material: part?.material || "",
+          mass: part?.mass || 0,
+          price: part?.price || 0,
           quantity: p.quantity || 1,
-          comments: part.comments || "",
-          documentID: part.onshapeID?.documentID || "",
-          wvmType: part.onshapeID?.wvmType || "w",
-          wvmID: part.onshapeID?.wvmID || "",
-          elementID: part.onshapeID?.elementID || "",
+          comments: part?.comments || "",
+          documentID: docID,
+          wvmType: wvmType,
+          wvmID: wvmID,
+          elementID: elemID,
           entityID: p.partID,
-          onshapeURL: part.onshapeURL || "",
-          exportSTL: part.stlLink || "",
-          exportParasolid: part.parasolidLink || "",
-          vendor: part.vendor || ""
-        };
-        collectedRows.push(partRow);
+          onshapeURL: part?.onshapeURL || "",
+          exportSTL: part?.stlLink || "",
+          exportParasolid: part?.parasolidLink || "",
+          vendor: part?.vendor || ""
+        });
       }
 
       return collectedRows;
@@ -212,10 +223,8 @@ export default function BomDetailsPage() {
   }, [bomId]);
 
   const handleTableDataChange = (newData: BomTableRow[]) => {
-    // 1. Instantly update local table state so typing has 0 lag
     setRows(newData);
 
-    // 2. Queue debounced database updates
     for (let i = 0; i < newData.length; i++) {
       const newRow = newData[i];
       const oldRow = rows.find(r => r.id === newRow.id);
@@ -234,12 +243,10 @@ export default function BomDetailsPage() {
       )) {
         const partId = newRow.entityID;
 
-        // Clear previous pending timeout for this specific part while typing
         if (saveTimeoutsRef.current[partId]) {
           clearTimeout(saveTimeoutsRef.current[partId]);
         }
 
-        // Set a new timeout to send request 600ms after typing stops
         saveTimeoutsRef.current[partId] = setTimeout(async () => {
           try {
             const payload = {
@@ -347,29 +354,18 @@ export default function BomDetailsPage() {
 
   return (
     <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
-      <div className="flex justify-end mb-4">
-        
-      </div>
-
-      {mainBomData && (
-        <MainBomDataUI bom={mainBomData} />
-      )}
+      {mainBomData && <MainBomDataUI bom={mainBomData} />}
       {error && (
         <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
           <p className="font-semibold">Error Loading BOM Data</p>
           <p>{error.message}</p>
-          {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
         </div>
       )}
 
       {loading ? (
-        <div className={`p-8 text-center ${loadingText}`}>Fetching single-level BOM data...</div>
+        <div className={`p-8 text-center ${loadingText}`}>Fetching assembly structure from Onshape...</div>
       ) : (
-        <div 
-          onClick={handleTableClick}
-          onContextMenuCapture={handleTableContextMenuCapture} 
-          className="relative cursor-pointer"
-        >
+        <div onClick={handleTableClick} onContextMenuCapture={handleTableContextMenuCapture} className="relative cursor-pointer">
           <Table
             data={rows}
             columnsData={BomColumns}
@@ -379,25 +375,11 @@ export default function BomDetailsPage() {
           />
 
           {contextMenu && (
-            <div
-              className="context-menu"
-              style={{ top: contextMenu.y, left: contextMenu.x }}
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
               {contextMenu.row.isSubAssembly ? (
-                <button
-                  type="button"
-                  onClick={() => handleGoToSubBom(contextMenu.row)}
-                >
-                  Go to Subassembly BOM
-                </button>
+                <button type="button" onClick={() => handleGoToSubBom(contextMenu.row)}>Go to Subassembly BOM</button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => handleShowPartData(contextMenu.row)}
-                >
-                  Show Part Data
-                </button>
+                <button type="button" onClick={() => handleShowPartData(contextMenu.row)}>Show Part Data</button>
               )}
             </div>
           )}
@@ -407,42 +389,23 @@ export default function BomDetailsPage() {
       {isPartPortalOpen && selectedPart && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => setIsPartPortalOpen(false)}
-              className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
-            >
-              ✕ Close
-            </button>
+            <button type="button" onClick={() => setIsPartPortalOpen(false)} className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold">✕ Close</button>
             <PartPortal part={selectedPart} />
           </div>
         </div>
       )}
 
       {enlargedImageSrc && (
-        <div 
-          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-          onClick={() => setEnlargedImageSrc(null)}
-        >
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4" onClick={() => setEnlargedImageSrc(null)}>
           <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => setEnlargedImageSrc(null)}
-              className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md"
-            >
-              ✕ Close
-            </button>
+            <button type="button" onClick={() => setEnlargedImageSrc(null)} className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md">✕ Close</button>
             {enlargedImageSrc === "FAILED" || !enlargedImageSrc ? (
               <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
                 <span className="text-xl font-bold">Image Failed to Load</span>
                 <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>
               </div>
             ) : (
-              <AuthenticatedImage
-                src={enlargedImageSrc}
-                alt="Enlarged Preview"
-                className="max-w-full max-h-[85vh] object-contain rounded-xl border border-zinc-700 shadow-2xl"
-              />
+              <AuthenticatedImage src={enlargedImageSrc} alt="Enlarged Preview" className="max-w-full max-h-[85vh] object-contain rounded-xl border border-zinc-700 shadow-2xl" />
             )}
           </div>
         </div>
