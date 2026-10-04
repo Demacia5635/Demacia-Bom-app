@@ -2,9 +2,11 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 
+const BACKEND_URL = import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com";
+
 export default function SignIn() {
     const navigate = useNavigate();
-    const { isLight, toggleTheme } = useThemeSync();
+    const { isLight } = useThemeSync();
 
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -17,22 +19,23 @@ export default function SignIn() {
         setLoading(true);
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_CLIENT_URL || ""}/api/auth/signin`, {
+            const response = await fetch(`${BACKEND_URL}/api/auth/signin`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "x-client-secret": import.meta.env.VITE_CLIENT_SECRET || ""
+                },
                 body: JSON.stringify({ username, password }),
             });
 
             if (!response.ok) {
-                const data = await response.json();
+                const data = await response.json().catch(() => ({}));
                 throw new Error(data.message || "Invalid credentials.");
             }
 
             const data = await response.json();
             
-            // Save the logged-in user to localStorage so your app can use their stored keys
             localStorage.setItem("username", data.username);
-
             navigate("/");
         } catch (err: any) {
             setError(err.message || "An unexpected error occurred.");
@@ -47,9 +50,6 @@ export default function SignIn() {
 
     return (
         <div className={`min-h-screen flex flex-col items-center justify-center p-6 transition-colors duration-200 ${pageBg}`}>
-            <div className="absolute top-6 right-6">
-            </div>
-
             <div className={`w-full max-w-md border rounded-2xl p-8 shadow-2xl ${cardBg}`}>
                 <div className="mb-6 text-center">
                     <h1 className="text-2xl font-bold tracking-tight">Welcome Back</h1>
