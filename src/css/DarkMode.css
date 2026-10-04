@@ -112,6 +112,7 @@ body.dark-theme-active .table-page-container,
   overflow-y: hidden;
   background-color: var(--bg-surface);
   width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .custom-table {

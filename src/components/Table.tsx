@@ -131,8 +131,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         };
     }, []);
 
-    const activeContextMenuRow = data.find(r => r.id === rowContextMenu.rowId);
-
     useEffect(() => {
         const wrapper = wrapperRef.current;
         if (!wrapper) return;
@@ -473,7 +471,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                 </div>
             }
 
-            <div className="table-wrapper" ref={wrapperRef}>
+            <div className="table-wrapper" ref={wrapperRef} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                 <table className="custom-table">
                     <colgroup>
                         {columns.map((col, idx) => {
