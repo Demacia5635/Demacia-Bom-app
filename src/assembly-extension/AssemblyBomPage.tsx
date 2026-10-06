@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Table from "../components/Table";
-import { fetchFromApi, type ApiError } from "../util/ApiService";
+import { type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import { useOnshapeClient, useOnshapeContext } from "../util/OnshapeExtension";
 import "../css/AssemblyBomPage.css";
@@ -15,15 +15,14 @@ import {
   type OnshapeKey,
   updateOnshapeBomMetadata,
   syncPartFilesToDrive,
-  syncBomThumbnailToDrive
+  syncBomThumbnailToDrive,
+  postToApi
 } from "./BomApi";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import PublishBomModal, { type PublishBomFormValues } from "./PublishBomModel";
 
-/** Onshape sends "w" or "v" for the workspaceOrVersion flag; our db/onshape
- *  routes want the same single-letter wvmType. */
 function resolveWvm(context: ReturnType<typeof useOnshapeContext>): { wvmType: string; wvmID: string } | null {
   if (context.workspaceId) return { wvmType: "w", wvmID: context.workspaceId };
   if (context.versionId) return { wvmType: "v", wvmID: context.versionId };
@@ -35,15 +34,10 @@ function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string 
   return `${base}/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
 }
 
-/** One resolved node in the tree, ready to become a table row (and, for
- *  assemblies, to recurse into). */
 interface ResolvedNode {
   row: AssemblyBomRow;
-  /** Present only for assembly nodes that still need their children resolved. */
   key?: OnshapeKey;
   bomID?: string;
-  /** The already-parsed Onshape BOM for this node, fetched while resolving
-   *  it, kept around so we don't have to re-fetch it during publish. */
   onshapeBom?: OnshapeBomTable;
 }
 
@@ -55,6 +49,7 @@ export default function AssemblyBomPage() {
   const [rows, setRows] = useState<AssemblyBomRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<ApiError | null>(null);
+  const [isVerifyingApi, setIsVerifyingApi] = useState<boolean>(true);
   const [rootBomDB, setRootBomDB] = useState<BomModel | null>(null);
   const [rootIsPublished, setRootIsPublished] = useState<boolean>(false);
   const [rootOnshapeBom, setRootOnshapeBom] = useState<OnshapeBomTable | null>(null);
@@ -63,42 +58,6 @@ export default function AssemblyBomPage() {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  // Debug states for showing credentials on the side
-  const [debugUsername, setDebugUsername] = useState<string>("");
-  const [debugAccessKey, setDebugAccessKey] = useState<string>("Loading...");
-  const [debugSecretKey, setDebugSecretKey] = useState<string>("Loading...");
-
-  // Force authentication guard & load debug keys
-  useEffect(() => {
-    const username = localStorage.getItem("username");
-    if (!username) {
-      navigate("/signin", { replace: true });
-      return;
-    }
-    setDebugUsername(username);
-
-    // Fetch user credentials for debugging display
-    fetchFromApi(`/api/auth/debug-keys?username=${username}`)
-      .then((data: any) => {
-        setDebugAccessKey(data.onshapeAccessKey || "None configured");
-        setDebugSecretKey(data.onshapeSecretKey || "None configured");
-      })
-      .catch(() => {
-        setDebugAccessKey("Failed to fetch");
-        setDebugSecretKey("Failed to fetch");
-      });
-  }, [navigate]);
-
-  const wvm = resolveWvm(context);
-  const rootKey: OnshapeKey | null =
-    context.documentId && wvm && context.elementId
-      ? { documentID: context.documentId, wvmType: wvm.wvmType, wvmID: wvm.wvmID, elementID: context.elementId }
-      : null;
-
-  /**
-   * Helper to fetch data with the logged-in user's username header attached 
-   * so the backend automatically uses their stored Onshape API keys.
-   */
   const fetchWithUserKeys = useCallback(async (url: string, options: RequestInit = {}) => {
     const username = localStorage.getItem("username") || "";
     const headers = {
@@ -108,10 +67,44 @@ export default function AssemblyBomPage() {
     return fetchFromApi(url, { ...options, headers });
   }, []);
 
-  /**
-   * Resolves one BOM node (root or sub-assembly): fetches its live Onshape
-   * BOM using the user's keys, then checks whether that bomID already exists in the database.
-   */
+  // 1. Test sending an API request on mount. If out of requests or unauthenticated, redirect to signin.
+  useEffect(() => {
+    let isMounted = true;
+    const username = localStorage.getItem("username");
+    
+    if (!username) {
+      navigate("/signin", { replace: true });
+      return;
+    }
+
+    // Test a lightweight request using BomApi functionality
+    postToApi(`/auth/verify-requests`, { username })
+      .then(() => {
+        if (!isMounted) return;
+        setIsVerifyingApi(false);
+      })
+      .catch((err: any) => {
+        if (!isMounted) return;
+        // If out of requests, unauthorized, or endpoint doesn't exist/fails, redirect to signin
+        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429 || err?.statusCode === 404) {
+          navigate("/signin", { replace: true });
+        } else {
+          // If connection fails entirely, send to signin for safety
+          navigate("/signin", { replace: true });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate]);
+
+  const wvm = resolveWvm(context);
+  const rootKey: OnshapeKey | null =
+    context.documentId && wvm && context.elementId
+      ? { documentID: context.documentId, wvmType: wvm.wvmType, wvmID: wvm.wvmID, elementID: context.elementId }
+      : null;
+
   const resolveBomNode = useCallback(
     async (key: OnshapeKey, parentRowId: string | null, rootBom: BomModel | null | 'root'): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
       const onshapeBom = await getOnshapeBom(key);
@@ -275,17 +268,22 @@ export default function AssemblyBomPage() {
 
       await expand(rootNode, true);
       setRows(allRows);
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
+        navigate("/signin", { replace: true });
+        return;
+      }
       setError(err as ApiError);
     } finally {
       setLoading(false);
     }
-  }, [rootKey, resolveBomNode, resolvePartRow]);
+  }, [rootKey, resolveBomNode, resolvePartRow, navigate]);
 
   useEffect(() => {
-    loadTree();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context.documentId, context.workspaceId, context.versionId, context.elementId]);
+    if (!isVerifyingApi && rootKey) {
+      loadTree();
+    }
+  }, [isVerifyingApi, rootKey, loadTree]);
 
   const columns = useMemo(
     () =>
@@ -407,12 +405,16 @@ export default function AssemblyBomPage() {
 
         client.showMessageBubble(`"${row.name}" was published to the database.`);
         await loadTree();
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
+          navigate("/signin", { replace: true });
+          return;
+        }
         const apiErr = err as ApiError;
         client.showMessageBubble(`Publish failed: ${apiErr.message}`);
       }
     },
-    [rows, client, loadTree, rootBomDB, rootKey, rootOnshapeBom?.id, fetchWithUserKeys]
+    [rows, client, loadTree, rootBomDB, rootKey, rootOnshapeBom?.id, fetchWithUserKeys, navigate]
   );
 
   const handleTableEdit = useCallback(
@@ -457,7 +459,11 @@ export default function AssemblyBomPage() {
               });
             }
             client.showMessageBubble(`"${changed.name}" was updated in the database.`);
-          } catch (err) {
+          } catch (err: any) {
+            if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
+              navigate("/signin", { replace: true });
+              return;
+            }
             const apiErr = err as ApiError;
             client.showMessageBubble(`Failed to save "${changed.name}": ${apiErr.message}`);
             setError(apiErr);
@@ -514,7 +520,11 @@ export default function AssemblyBomPage() {
             }
           }
           client.showMessageBubble(`"${changed.name}" was updated in the database.`);
-        } catch (err) {
+        } catch (err: any) {
+          if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
+            navigate("/signin", { replace: true });
+            return;
+          }
           const apiErr = err as ApiError;
           client.showMessageBubble(`Failed to save "${changed.name}": ${apiErr.message}`);
           setError(apiErr);
@@ -523,7 +533,7 @@ export default function AssemblyBomPage() {
 
       persist();
     },
-    [rows, client, rootIsPublished]
+    [rows, client, rootIsPublished, navigate]
   );
 
   const handlePublish = useCallback(
@@ -639,7 +649,11 @@ export default function AssemblyBomPage() {
         client.showMessageBubble(`"${values.name}" and its contents were published to the database.`);
         setPublishOpen(false);
         await loadTree();
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
+          navigate("/signin", { replace: true });
+          return;
+        }
         const apiErr = err as ApiError;
         setPublishError(apiErr.message);
         client.showMessageBubble(`Publish failed: ${apiErr.message}`);
@@ -647,8 +661,16 @@ export default function AssemblyBomPage() {
         setPublishing(false);
       }
     },
-    [rootKey, rootOnshapeBom, rootBomDB, rows, client, loadTree]
+    [rootKey, rootOnshapeBom, rootBomDB, rows, client, loadTree, navigate]
   );
+
+  if (isVerifyingApi) {
+    return (
+      <div className="p-8 text-center text-zinc-400">
+        Verifying API access and request limits...
+      </div>
+    );
+  }
 
   if (!rootKey) {
     return (
