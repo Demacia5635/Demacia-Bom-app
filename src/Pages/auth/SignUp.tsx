@@ -3,6 +3,11 @@ import { useNavigate, Link } from "react-router-dom";
 import { Info } from "lucide-react";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 
+// Safely target the correct backend server depending on dev vs prod
+const BACKEND_HOST = (typeof window !== "undefined" && window.location.hostname === "localhost")
+  ? "http://localhost:5050"
+  : (import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com");
+
 export default function Signup() {
     const navigate = useNavigate();
     const { isLight } = useThemeSync();
@@ -14,13 +19,14 @@ export default function Signup() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-const handleSignup = async (e: FormEvent) => {
+    const handleSignup = async (e: FormEvent) => {
         e.preventDefault();
         setError(null);
         setLoading(true);
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_CLIENT_URL || ""}/api/auth/signup`, {
+            // FIX: Use BACKEND_HOST so it correctly hits port 5050 in local dev
+            const response = await fetch(`${BACKEND_HOST}/api/auth/signup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -31,22 +37,19 @@ const handleSignup = async (e: FormEvent) => {
                 }),
             });
 
-            // 1. Read response as raw text first
             const text = await response.text();
             let data: any = null;
 
-            // 2. Try to parse JSON safely
             if (text) {
                 try {
                     data = JSON.parse(text);
                 } catch (err) {
                     if (text.trim().startsWith("<")) {
-                        throw new Error(`Server returned an HTML error. The route /api/auth/signup might be missing or crashing on the backend.`);
+                        throw new Error(`Server returned HTML. The route might be missing on the backend.`);
                     }
                 }
             }
 
-            // 3. Handle non-200 responses
             if (!response.ok) {
                 throw new Error(data?.message || `Failed to create account: ${response.status} ${response.statusText}`);
             }
@@ -104,7 +107,7 @@ const handleSignup = async (e: FormEvent) => {
                         />
                     </div>
 
-                    {/* Onshape Keys Section with } Bracket and Info Link */}
+                    {/* Onshape Keys Section */}
                     <div className="border-t border-zinc-700/50 pt-4 mt-2">
                         <label className="block text-xs font-semibold uppercase tracking-wider mb-2 text-blue-400">
                             Onshape API Credentials
@@ -134,7 +137,6 @@ const handleSignup = async (e: FormEvent) => {
                                 </div>
                             </div>
 
-                            {/* } bracket shape and Info icon */}
                             <div className="flex items-center gap-1.5">
                                 <svg className="w-3 h-full min-h-[130px] text-blue-500/70" viewBox="0 0 12 100" fill="none" stroke="currentColor" strokeWidth="2.5" preserveAspectRatio="none">
                                     <path d="M 1 2 C 8 2, 8 45, 11 50 C 8 55, 8 98, 1 98" />
