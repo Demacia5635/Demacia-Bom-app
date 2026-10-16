@@ -14,7 +14,7 @@ export default function Signup() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    const handleSignup = async (e: FormEvent) => {
+const handleSignup = async (e: FormEvent) => {
         e.preventDefault();
         setError(null);
         setLoading(true);
@@ -31,9 +31,24 @@ export default function Signup() {
                 }),
             });
 
+            // 1. Read response as raw text first
+            const text = await response.text();
+            let data: any = null;
+
+            // 2. Try to parse JSON safely
+            if (text) {
+                try {
+                    data = JSON.parse(text);
+                } catch (err) {
+                    if (text.trim().startsWith("<")) {
+                        throw new Error(`Server returned an HTML error. The route /api/auth/signup might be missing or crashing on the backend.`);
+                    }
+                }
+            }
+
+            // 3. Handle non-200 responses
             if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.message || "Failed to create account.");
+                throw new Error(data?.message || `Failed to create account: ${response.status} ${response.statusText}`);
             }
 
             navigate("/signin");
