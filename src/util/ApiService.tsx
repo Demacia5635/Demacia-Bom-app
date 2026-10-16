@@ -10,7 +10,7 @@ export interface ApiError {
   statusCode?: number;
 }
 
-export async function fetchFromApi<T>(endpoint: string): Promise<T> {
+export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
 
   if (!secret) {
@@ -22,19 +22,45 @@ export async function fetchFromApi<T>(endpoint: string): Promise<T> {
 
   try {
     const response = await fetch(targetUrl, {
+      ...options,
       headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
         "x-client-secret": secret,
+        ...options.headers, // Merge custom headers (e.g., x-username)
       },
     });
 
+    // Safely read response as text first to prevent HTML parsing crashes
+    const text = await response.text();
+    let parsedData: any = null;
+
+    if (text) {
+      try {
+        parsedData = JSON.parse(text);
+      } catch (e) {
+        // If it fails to parse and looks like HTML, the API endpoint is missing
+        if (text.trim().startsWith("<")) {
+          throw {
+            message: `Server returned HTML instead of JSON. The endpoint '${endpoint}' might not exist on the backend.`,
+            statusCode: response.status || 404,
+          } as ApiError;
+        }
+        throw {
+          message: "Failed to parse API response as JSON.",
+          statusCode: response.status || 500,
+        } as ApiError;
+      }
+    }
+
     if (!response.ok) {
       throw {
-        message: `Failed request to ${endpoint}: ${response.statusText}`,
+        message: parsedData?.message || `Failed request to ${endpoint}: ${response.statusText}`,
         statusCode: response.status,
       } as ApiError;
     }
 
-    return await response.json();
+    return parsedData as T;
   } catch (err: any) {
     if (err.statusCode) throw err;
     throw { message: err.message || "Network error occurred." } as ApiError;

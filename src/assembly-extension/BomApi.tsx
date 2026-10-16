@@ -24,7 +24,7 @@ function getBomApiHeaders(contentType = "application/json"): Record<string, stri
     headers["x-client-secret"] = secret;
   }
   if (username) {
-    headers["x-username"] = username; // <--- This allows the backend to find the user's keys!
+    headers["x-username"] = username;
   }
   return headers;
 }
@@ -37,15 +37,31 @@ export async function postToApi<T>(endpoint: string, body: unknown): Promise<T> 
       body: JSON.stringify(body),
     });
 
+    const text = await response.text();
+    let parsedData: any = null;
+
+    if (text) {
+      try {
+        parsedData = JSON.parse(text);
+      } catch (e) {
+        if (text.trim().startsWith("<")) {
+          throw {
+            message: `Server returned HTML. Endpoint '${endpoint}' may be missing.`,
+            statusCode: response.status || 404,
+          } as ApiError;
+        }
+        throw { message: "Failed to parse API response as JSON.", statusCode: 500 } as ApiError;
+      }
+    }
+
     if (!response.ok) {
       throw {
-        message: `Failed request to ${endpoint}: ${response.statusText}`,
+        message: parsedData?.message || `Failed request to ${endpoint}: ${response.statusText}`,
         statusCode: response.status,
       } as ApiError;
     }
 
-    const text = await response.text();
-    return (text ? JSON.parse(text) : (undefined as unknown)) as T;
+    return parsedData as T;
   } catch (err: any) {
     if (err.statusCode) throw err;
     throw { message: err.message || "Network error occurred." } as ApiError;
@@ -62,15 +78,31 @@ async function fetchJsonFromApi<T>(endpoint: string): Promise<T> {
       headers: getBomApiHeaders("application/json"),
     });
 
+    const text = await response.text();
+    let parsedData: any = null;
+
+    if (text) {
+      try {
+        parsedData = JSON.parse(text);
+      } catch (e) {
+        if (text.trim().startsWith("<")) {
+          throw {
+            message: `Server returned HTML. Endpoint '${endpoint}' may be missing.`,
+            statusCode: response.status || 404,
+          } as ApiError;
+        }
+        throw { message: "Failed to parse API response as JSON.", statusCode: 500 } as ApiError;
+      }
+    }
+
     if (!response.ok) {
       throw {
-        message: `Failed request to ${endpoint}: ${response.statusText}`,
+        message: parsedData?.message || `Failed request to ${endpoint}: ${response.statusText}`,
         statusCode: response.status,
       } as ApiError;
     }
 
-    const text = await response.text();
-    return (text ? JSON.parse(text) : (undefined as unknown)) as T;
+    return parsedData as T;
   } catch (err: any) {
     if (err.statusCode) throw err;
     throw { message: err.message || "Network error occurred." } as ApiError;
@@ -196,7 +228,15 @@ export async function uploadFileToDrive(blob: Blob, fileName: string): Promise<D
     } as ApiError;
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) {
+    throw {
+      message: `Drive upload returned an empty response for "${fileName}"`,
+      statusCode: response.status,
+    } as ApiError;
+  }
+
+  return JSON.parse(text) as DriveUploadResult;
 }
 
 export async function syncPartFilesToDrive(
