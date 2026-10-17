@@ -53,6 +53,7 @@ export default function AssemblyBomPage() {
   const [rootBomDB, setRootBomDB] = useState<BomModel | null>(null);
   const [rootIsPublished, setRootIsPublished] = useState<boolean>(false);
   const [rootOnshapeBom, setRootOnshapeBom] = useState<OnshapeBomTable | null>(null);
+  const [currentUser, setCurrentUser] = useState<string>("");
 
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -77,6 +78,8 @@ export default function AssemblyBomPage() {
       return;
     }
 
+    setCurrentUser(username);
+
     // Test a lightweight request using BomApi functionality
     postToApi(`/auth/verify-requests`, { username })
       .then(() => {
@@ -98,6 +101,11 @@ export default function AssemblyBomPage() {
       isMounted = false;
     };
   }, [navigate]);
+
+  const handleSignOut = () => {
+    localStorage.removeItem("username");
+    navigate("/signin", { replace: true });
+  };
 
   const wvm = resolveWvm(context);
   const rootKey: OnshapeKey | null =
@@ -684,28 +692,42 @@ export default function AssemblyBomPage() {
 
   return (
     <div className="p-8 flex gap-6">
-      {/* Main Content */}
       <div className="flex-1">
-        <div className="assembly-bom-header">
+        <div className="assembly-bom-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
           <div>
-            <h1 className="assembly-bom-title">{displayName}</h1>
-            {rootBomDB?.description && <p className="assembly-bom-subtitle">{rootBomDB.description}</p>}
+            <h1 className="assembly-bom-title text-2xl font-bold">{displayName}</h1>
+            {rootBomDB?.description && <p className="assembly-bom-subtitle text-zinc-500 text-sm mt-1">{rootBomDB.description}</p>}
             {!rootIsPublished && (
-              <p className="assembly-bom-unpublished-hint">
+              <p className="assembly-bom-unpublished-hint text-xs text-blue-500 mt-1 italic">
                 This assembly isn't in the database yet - it's showing live Onshape data.
               </p>
             )}
           </div>
-          {!rootIsPublished && (
-            <button
-              type="button"
-              className="publish-btn-primary"
-              onClick={() => setPublishOpen(true)}
-              disabled={loading}
-            >
-              {rootIsPublished ? "Update published BOM" : "Publish to database"}
-            </button>
-          )}
+          
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-xs bg-zinc-100 dark:bg-zinc-800/50 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700/50">
+              <span className="text-zinc-600 dark:text-zinc-400">👤 {currentUser}</span>
+              <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-600 mx-1"></div>
+              <button 
+                onClick={handleSignOut} 
+                className="text-zinc-600 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 font-semibold transition-colors"
+                title="Sign out of Onshape Integration"
+              >
+                Sign Out
+              </button>
+            </div>
+
+            {!rootIsPublished && (
+              <button
+                type="button"
+                className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
+                onClick={() => setPublishOpen(true)}
+                disabled={loading}
+              >
+                {rootIsPublished ? "Update published BOM" : "Publish to database"}
+              </button>
+            )}
+          </div>
         </div>
 
         {error && (

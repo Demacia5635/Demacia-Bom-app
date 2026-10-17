@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, type FormEvent, useEffect } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Info } from "lucide-react";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 
@@ -10,6 +10,7 @@ const BACKEND_HOST = (typeof window !== "undefined" && window.location.hostname 
 
 export default function Signup() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { isLight } = useThemeSync();
 
     const [username, setUsername] = useState("");
@@ -19,13 +20,24 @@ export default function Signup() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
+    
+    useEffect(() => {
+        if (localStorage.getItem("username")) {
+            // Forward them to the BOM page and preserve the Onshape context query parameters
+            if (location.search.includes("documentId")) {
+                navigate(`/onshape${location.search}`, { replace: true });
+            } else {
+                navigate("/onshape", { replace: true });
+            }
+        }
+    }, [navigate, location]);
+
     const handleSignup = async (e: FormEvent) => {
         e.preventDefault();
         setError(null);
         setLoading(true);
 
         try {
-            // FIX: Use BACKEND_HOST so it correctly hits port 5050 in local dev
             const response = await fetch(`${BACKEND_HOST}/api/auth/signup`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -54,7 +66,8 @@ export default function Signup() {
                 throw new Error(data?.message || `Failed to create account: ${response.status} ${response.statusText}`);
             }
 
-            navigate("/signin");
+            // On success, either auto-login the user or send to sign in
+            navigate(`/signin${location.search}`); // Pass params to signin as well
         } catch (err: any) {
             setError(err.message || "An unexpected error occurred.");
         } finally {
@@ -163,7 +176,7 @@ export default function Signup() {
 
                 <p className={`text-center text-xs mt-6 ${isLight ? "text-zinc-500" : "text-zinc-400"}`}>
                     Already have an account?{" "}
-                    <Link to="/signin" className="text-blue-500 hover:underline font-medium">
+                    <Link to={`/signin${location.search}`} className="text-blue-500 hover:underline font-medium">
                         Sign In
                     </Link>
                 </p>
