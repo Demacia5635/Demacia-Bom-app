@@ -10,8 +10,14 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
 
     const username = localStorage.getItem("username");
     
-    // Robust check: We are in Onshape if the path is /onshape OR if the URL contains Onshape's documentId query parameter
-    const isOnshapeContext = location.pathname.toLowerCase().includes("/onshape") || location.search.includes("documentId");
+    // BULLETPROOF ONSHAPE CHECK:
+    // 1. Is the app embedded in an iframe? (Onshape embeds the app this way)
+    // 2. Does the raw window URL contain "documentId"? (Catches HashRouter quirks)
+    // 3. Is the current path /onshape?
+    const isEmbeddedInIframe = typeof window !== "undefined" && window.self !== window.top;
+    const isOnshapeContext = location.pathname.toLowerCase().includes("/onshape") || 
+                             (typeof window !== "undefined" && window.location.href.includes("documentId")) || 
+                             isEmbeddedInIframe;
 
     const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
@@ -20,7 +26,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     ];
 
     const handleNavigation = (path: string) => {
-        // Ensure we preserve the Onshape query parameters across ALL page navigations inside the iframe
+        // Preserve Onshape URL context if it exists in the React Router search string
         const searchString = location.search.includes("documentId") ? location.search : "";
         const finalPath = path.includes("?") ? path : `${path}${searchString}`;
         
