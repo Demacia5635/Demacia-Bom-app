@@ -1,5 +1,5 @@
 import { HomeIcon, SearchIcon, ClipboardList, X, LogInIcon, LogOutIcon, Box, type LucideProps } from "lucide-react";
-import type { ForwardRefExoticComponent, RefAttributes } from "react";
+import { useEffect, useState, type ForwardRefExoticComponent, RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
 
@@ -10,14 +10,19 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
 
     const username = localStorage.getItem("username");
     
-    // BULLETPROOF ONSHAPE CHECK:
-    // 1. Is the app embedded in an iframe? (Onshape embeds the app this way)
-    // 2. Does the raw window URL contain "documentId"? (Catches HashRouter quirks)
-    // 3. Is the current path /onshape?
-    const isEmbeddedInIframe = typeof window !== "undefined" && window.self !== window.top;
-    const isOnshapeContext = location.pathname.toLowerCase().includes("/onshape") || 
-                             (typeof window !== "undefined" && window.location.href.includes("documentId")) || 
-                             isEmbeddedInIframe;
+    // Read the saved Onshape query from sessionStorage
+    const [onshapeQuery, setOnshapeQuery] = useState(sessionStorage.getItem("onshapeQuery") || "");
+
+    // 1. Intercept and save the Onshape query parameters permanently for this session
+    useEffect(() => {
+        if (location.search.includes("documentId")) {
+            sessionStorage.setItem("onshapeQuery", location.search);
+            setOnshapeQuery(location.search);
+        }
+    }, [location.search]);
+
+    // 2. We are in Onshape if the path is /onshape OR if we have a saved query string
+    const isOnshapeContext = location.pathname.toLowerCase().includes("/onshape") || Boolean(onshapeQuery);
 
     const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
@@ -26,9 +31,12 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     ];
 
     const handleNavigation = (path: string) => {
-        // Preserve Onshape URL context if it exists in the React Router search string
-        const searchString = location.search.includes("documentId") ? location.search : "";
-        const finalPath = path.includes("?") ? path : `${path}${searchString}`;
+        let finalPath = path;
+        
+        // 3. If navigating back to Onshape, ALWAYS attach the saved query string so it doesn't get stuck loading!
+        if (path.includes("/onshape") && onshapeQuery) {
+            finalPath = `/onshape${onshapeQuery}`;
+        }
         
         navigate(finalPath);
         onClose();
@@ -36,8 +44,8 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
 
     const handleLogout = () => {
         localStorage.removeItem("username");
-        const searchString = location.search.includes("documentId") ? location.search : "";
-        navigate(`/signin${searchString}`);
+        // Ensure signin page also gets the params so it can auto-redirect correctly
+        navigate(onshapeQuery ? `/signin${onshapeQuery}` : "/signin");
         onClose();
     };
 
