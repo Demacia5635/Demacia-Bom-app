@@ -1,4 +1,4 @@
-import { HomeIcon, SearchIcon, ClipboardList, X, LogInIcon, LogOutIcon, ComponentIcon, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, X, LogInIcon, LogOutIcon, Box, type LucideProps } from "lucide-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -9,7 +9,9 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     const { isLight } = useThemeSync();
 
     const username = localStorage.getItem("username");
-    const isOnshape = location.pathname.startsWith("/onshape");
+    
+    // Robust check: We are in Onshape if the path is /onshape OR if the URL contains Onshape's documentId query parameter
+    const isOnshapeContext = location.pathname.toLowerCase().includes("/onshape") || location.search.includes("documentId");
 
     const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
@@ -18,13 +20,18 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     ];
 
     const handleNavigation = (path: string) => {
-        navigate(path);
+        // Ensure we preserve the Onshape query parameters across ALL page navigations inside the iframe
+        const searchString = location.search.includes("documentId") ? location.search : "";
+        const finalPath = path.includes("?") ? path : `${path}${searchString}`;
+        
+        navigate(finalPath);
         onClose();
     };
 
     const handleLogout = () => {
         localStorage.removeItem("username");
-        navigate("/signin");
+        const searchString = location.search.includes("documentId") ? location.search : "";
+        navigate(`/signin${searchString}`);
         onClose();
     };
 
@@ -90,13 +97,13 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                         );
                     })}
 
-                    {/* Conditionally Rendered Onshape Link */}
-                    {isOnshape && (
+                    {/* Conditionally Rendered Onshape Link (Only if in Onshape Frame) */}
+                    {isOnshapeContext && (
                         <button
-                            onClick={() => handleNavigation(`/onshape${location.search}`)}
-                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors ${navActive}`}
+                            onClick={() => handleNavigation(`/onshape`)}
+                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors mt-4 border-t ${isLight ? "border-zinc-200 pt-4" : "border-gray-800 pt-4"} ${location.pathname.includes('/onshape') ? navActive : navInactive}`}
                         >
-                            <ComponentIcon className={`w-4 h-4 ${iconColor}`} />
+                            <Box className={`w-4 h-4 ${iconColor}`} />
                             <span>Assembly BOM</span>
                         </button>
                     )}
