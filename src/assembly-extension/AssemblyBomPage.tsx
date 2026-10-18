@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Table from "../components/Table";
 import { type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
@@ -43,6 +43,7 @@ interface ResolvedNode {
 
 export default function AssemblyBomPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const context = useOnshapeContext();
   const client = useOnshapeClient({ context });
 
@@ -74,13 +75,13 @@ export default function AssemblyBomPage() {
     const username = localStorage.getItem("username");
     
     if (!username) {
-      navigate("/signin", { replace: true });
+      // Pass the Onshape URL search context to the sign-in page
+      navigate(`/signin${location.search}`, { replace: true });
       return;
     }
 
     setCurrentUser(username);
 
-    // Test a lightweight request using BomApi functionality
     postToApi(`/auth/verify-requests`, { username })
       .then(() => {
         if (!isMounted) return;
@@ -88,23 +89,21 @@ export default function AssemblyBomPage() {
       })
       .catch((err: any) => {
         if (!isMounted) return;
-        // If out of requests, unauthorized, or endpoint doesn't exist/fails, redirect to signin
         if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429 || err?.statusCode === 404) {
-          navigate("/signin", { replace: true });
+          navigate(`/signin${location.search}`, { replace: true });
         } else {
-          // If connection fails entirely, send to signin for safety
-          navigate("/signin", { replace: true });
+          navigate(`/signin${location.search}`, { replace: true });
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, [navigate]);
+  }, [navigate, location.search]);
 
   const handleSignOut = () => {
     localStorage.removeItem("username");
-    navigate("/signin", { replace: true });
+    navigate(`/signin${location.search}`, { replace: true });
   };
 
   const wvm = resolveWvm(context);
@@ -278,14 +277,14 @@ export default function AssemblyBomPage() {
       setRows(allRows);
     } catch (err: any) {
       if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-        navigate("/signin", { replace: true });
+        navigate(`/signin${location.search}`, { replace: true });
         return;
       }
       setError(err as ApiError);
     } finally {
       setLoading(false);
     }
-  }, [rootKey, resolveBomNode, resolvePartRow, navigate]);
+  }, [rootKey, resolveBomNode, resolvePartRow, navigate, location.search]);
 
   useEffect(() => {
     if (!isVerifyingApi && rootKey) {
@@ -415,14 +414,14 @@ export default function AssemblyBomPage() {
         await loadTree();
       } catch (err: any) {
         if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-          navigate("/signin", { replace: true });
+          navigate(`/signin${location.search}`, { replace: true });
           return;
         }
         const apiErr = err as ApiError;
         client.showMessageBubble(`Publish failed: ${apiErr.message}`);
       }
     },
-    [rows, client, loadTree, rootBomDB, rootKey, rootOnshapeBom?.id, fetchWithUserKeys, navigate]
+    [rows, client, loadTree, rootBomDB, rootKey, rootOnshapeBom?.id, fetchWithUserKeys, navigate, location.search]
   );
 
   const handleTableEdit = useCallback(
@@ -469,7 +468,7 @@ export default function AssemblyBomPage() {
             client.showMessageBubble(`"${changed.name}" was updated in the database.`);
           } catch (err: any) {
             if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-              navigate("/signin", { replace: true });
+              navigate(`/signin${location.search}`, { replace: true });
               return;
             }
             const apiErr = err as ApiError;
@@ -530,7 +529,7 @@ export default function AssemblyBomPage() {
           client.showMessageBubble(`"${changed.name}" was updated in the database.`);
         } catch (err: any) {
           if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-            navigate("/signin", { replace: true });
+            navigate(`/signin${location.search}`, { replace: true });
             return;
           }
           const apiErr = err as ApiError;
@@ -541,7 +540,7 @@ export default function AssemblyBomPage() {
 
       persist();
     },
-    [rows, client, rootIsPublished, navigate]
+    [rows, client, rootIsPublished, navigate, location.search]
   );
 
   const handlePublish = useCallback(
@@ -659,7 +658,7 @@ export default function AssemblyBomPage() {
         await loadTree();
       } catch (err: any) {
         if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-          navigate("/signin", { replace: true });
+          navigate(`/signin${location.search}`, { replace: true });
           return;
         }
         const apiErr = err as ApiError;
@@ -669,7 +668,7 @@ export default function AssemblyBomPage() {
         setPublishing(false);
       }
     },
-    [rootKey, rootOnshapeBom, rootBomDB, rows, client, loadTree, navigate]
+    [rootKey, rootOnshapeBom, rootBomDB, rows, client, loadTree, navigate, location.search]
   );
 
   if (isVerifyingApi) {
