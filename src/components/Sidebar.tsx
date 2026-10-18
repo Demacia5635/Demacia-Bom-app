@@ -1,4 +1,4 @@
-import { HomeIcon, SearchIcon, ClipboardList, X, LogInIcon, LogOutIcon, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, X, LogInIcon, LogOutIcon, ComponentIcon, type LucideProps } from "lucide-react";
 import type { ForwardRefExoticComponent, RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -9,6 +9,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     const { isLight } = useThemeSync();
 
     const username = localStorage.getItem("username");
+    const isOnshape = location.pathname.startsWith("/onshape");
 
     const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
@@ -88,6 +89,17 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                             </button>
                         );
                     })}
+
+                    {/* Conditionally Rendered Onshape Link */}
+                    {isOnshape && (
+                        <button
+                            onClick={() => handleNavigation(`/onshape${location.search}`)}
+                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors ${navActive}`}
+                        >
+                            <ComponentIcon className={`w-4 h-4 ${iconColor}`} />
+                            <span>Assembly BOM</span>
+                        </button>
+                    )}
                 </nav>
 
                 {/* Footer Auth Action */}
