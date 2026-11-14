@@ -4,6 +4,7 @@ import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { fetchFromApi } from "../../../util/ApiService";
 import { fetchPartsByIds } from "../../../util/records";
 import { isPurchasedPart, type BomModel, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
+import { checkCatalogTree, type CatalogNode } from "../../../util/catalogNumbers";
 
 export interface WorkOrderFormData {
     name: string;
@@ -40,6 +41,50 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
 
     const visitedBoms = new Set<string>();
 
+    /**
+     * Checks every catalog number in the assembly against the numbering rules
+     * (util/catalogNumbers.ts, the same the BOM extension shows) and throws
+     * listing the problems, if any.
+     */
+    async function checkCatalogNumbers(topBomId: string) {
+        const names = new Map<string, string>();
+        const seen = new Set<string>();
+        async function load(bomId: string): Promise<CatalogNode> {
+            const bom = await fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomId)}`);
+            const partRecords = await fetchPartsByIds((bom.parts || []).map((p) => p.partID));
+            const children: CatalogNode[] = [];
+            for (const sub of bom.subAssemblies || []) {
+                if (seen.has(sub.bomID)) continue; // a shared sub-assembly is checked once
+                seen.add(sub.bomID);
+                children.push(await load(sub.bomID));
+            }
+            for (const p of bom.parts || []) {
+                const part = partRecords.get(p.partID) ?? null;
+                const name = part?.name || p.partID;
+                names.set(p.partID, name);
+                children.push({ id: p.partID, name, number: part?.catalogNumber || "", isAssembly: false, exempt: isPurchasedPart(part), children: [] });
+            }
+            const name = bom.name || bom.id;
+            names.set(bom.id, name);
+            return {
+                id: bom.id,
+                name,
+                number: bom.catalogNumber || "",
+                isAssembly: true,
+                exempt: bomId !== topBomId && (!!bom.markedStandard || !!bom.vendor?.trim()),
+                children,
+            };
+        }
+
+        const problems = checkCatalogTree(await load(topBomId));
+        if (problems.length === 0) return;
+        const shown = problems.slice(0, 5).map((p) => `• "${names.get(p.id) ?? p.id}": ${p.message}`);
+        const more = problems.length > 5 ? `\n…and ${problems.length - 5} more.` : "";
+        throw new Error(
+            `Catalog numbers need fixing before a work order can be made (the BOM extension marks them in red):\n${shown.join("\n")}${more}`
+        );
+    }
+
     async function fetchBomPartsRecursively(
         targetBomId: string,
         seenCatalogNumbers: Set<string>
@@ -73,19 +118,8 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             const isPurchased = isPurchasedPart(partRecord);
 
             if (!isPurchased) {
-                // 1. Verify format AABB-CCDD (e.g., 2603-1001)
-                const catalogRegex = /^\d{4}-\d{4}$/;
-                if (!catalogRegex.test(catalogNumber)) {
-                    throw new Error(`Invalid catalog number format for part "${partRecord?.name || p.partID}": "${catalogNumber}". Must match format AABB-CCDD (e.g., 2603-1001).`);
-                }
-
-                // 2. Check for duplicate catalog numbers
-                if (seenCatalogNumbers.has(catalogNumber)) {
-                    throw new Error(`Duplicate catalog number detected: "${catalogNumber}" appears more than once.`);
-                }
-                seenCatalogNumbers.add(catalogNumber);
-
-                // 3. Ensure non-purchased parts have material and engineer defined
+                // Catalog numbers were checked for the whole tree first (checkCatalogNumbers).
+                // Non-purchased parts need a material and an engineer.
                 if (!material) {
                     throw new Error(`Missing material for manufactured part "${partRecord?.name || p.partID}" (Catalog: ${catalogNumber}).`);
                 }
@@ -118,6 +152,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
 
         try {
             const id = Date.now().toString();
+            await checkCatalogNumbers(bomId);
             const seenCatalogNumbers = new Set<string>();
             const parts = await fetchBomPartsRecursively(bomId, seenCatalogNumbers);
 
@@ -173,7 +208,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             </h2>
 
             {error && (
-                <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-xs font-medium">
+                <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-xs font-medium whitespace-pre-line max-h-60 overflow-y-auto">
                     {error}
                 </div>
             )}
