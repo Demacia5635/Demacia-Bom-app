@@ -137,6 +137,23 @@ interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageEleme
   src: string;
 }
 
+/**
+ * Full URL of a saved image (GET /api/drive/file/id/:id, which the server
+ * serves without the client secret), or null for anything else.
+ */
+function publicDriveImageUrl(src: string): string | null {
+  if (!src) return null;
+  // Absolute (e.g. the Render URL) or relative to our backend.
+  if (/^https?:\/\//.test(src)) {
+    try {
+      return new URL(src).pathname.startsWith("/api/drive/file/id/") ? src : null;
+    } catch {
+      return null;
+    }
+  }
+  return src.startsWith("/api/drive/file/id/") ? `${BACKEND_HOST}${src}` : null;
+}
+
 /** Bytes of a base64 string (atob is native, so this is fast even for large images). */
 function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
   const binary = window.atob(base64);
@@ -155,8 +172,14 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [error, setError] = useState<boolean>(false);
 
+  // Saved images (Google Drive, via our server) are public to read: a plain
+  // <img> lets the browser cache them (the server sends Cache-Control) and
+  // load only the ones scrolled into view.
+  const publicUrl = publicDriveImageUrl(src);
+
   useEffect(() => {
-    if (!src) return;
+    setError(false);
+    if (!src || publicUrl) return;
     // Inline images need no fetching.
     if (src.startsWith("data:")) {
       setImageSrc(src);
@@ -228,11 +251,27 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
       isMounted = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [src]);
+  }, [src, publicUrl]);
 
   // No saved image for this record (rather than "Loading..." forever).
   if (!src) {
     return <span className="text-zinc-600 text-sm">No image</span>;
+  }
+
+  if (publicUrl) {
+    return error ? (
+      <span className="text-zinc-600 text-sm">Image Load Failed</span>
+    ) : (
+      <img
+        src={publicUrl}
+        alt={alt}
+        className={className}
+        loading="lazy"
+        decoding="async"
+        onError={() => setError(true)}
+        {...props}
+      />
+    );
   }
 
   if (error) {
