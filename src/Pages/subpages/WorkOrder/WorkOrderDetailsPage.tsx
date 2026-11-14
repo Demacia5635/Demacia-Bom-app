@@ -45,6 +45,29 @@ const getCleanPartName = (record: any, entityID: string) => {
     return rawName || entityID;
 };
 
+const ISRAEL_TIME = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jerusalem",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+});
+
+/**
+ * Israel time as yy/MM/dd-HH:mm:ss (e.g. 26/11/14-19:05:00), which also sorts
+ * correctly as text. "" for no or invalid dates.
+ */
+function formatIsraelTime(value: Date | string | undefined | null): string {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const p = Object.fromEntries(ISRAEL_TIME.formatToParts(date).map((part) => [part.type, part.value]));
+    return `${p.year}/${p.month}/${p.day}-${p.hour}:${p.minute}:${p.second}`;
+}
+
 /** Columns saved to the work order's part entry (the rest come from the part / BOM). */
 const SAVED_PART_FIELDS = [
     "statusCode",
@@ -198,7 +221,8 @@ export default function WorkOrderDetailsPage() {
                     parentId: null,
                     isExpanded: false,
                     avatar: avatarUrl,
-                    lastUpadte: existingWoPart?.updatedAt || new Date(),
+                    // Empty until the part is first changed in this work order.
+                    lastUpadte: formatIsraelTime(existingWoPart?.updatedAt),
                     productionMakingOwner: (existingWoPart as any)?.productionMakingOwner || "",
                     catalogNumber: part?.catalogNumber || "",
                     name: getCleanPartName(part, partID),
@@ -248,7 +272,7 @@ export default function WorkOrderDetailsPage() {
                     { method: "POST", body: JSON.stringify({ partID, changes: pending.changes }) }
                 );
                 if (saved?.updatedAt) {
-                    setRows((current) => current.map((r) => (r.id === rowId ? { ...r, lastUpadte: saved.updatedAt! } : r)));
+                    setRows((current) => current.map((r) => (r.id === rowId ? { ...r, lastUpadte: formatIsraelTime(saved.updatedAt) } : r)));
                 }
             } catch (err: any) {
                 console.error("Failed to save work order changes:", err);
