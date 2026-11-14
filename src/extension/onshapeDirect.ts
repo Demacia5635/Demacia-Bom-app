@@ -13,6 +13,7 @@
  * This is the only place the app talks to Onshape; the server never does.
  */
 import type { ApiError } from "../util/ApiService";
+import { recordOnshapeCall } from "./telemetry";
 import type { OnshapeBomTable } from "../assembly-extension/OnshapeBom";
 
 /** Same shape as BomApi's OnshapeKey (not imported to avoid a circular import). */
@@ -104,6 +105,7 @@ export async function onshapeFetch(
       body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
     });
   } catch (err) {
+    recordOnshapeCall(method, path, false);
     throw {
       source: "onshape",
       onshapeStatus: 0,
@@ -111,6 +113,8 @@ export async function onshapeFetch(
     } satisfies OnshapeApiError;
   }
 
+  // Counted for the Onshape footprint page (/tele).
+  recordOnshapeCall(method, path, res.ok);
   if (!res.ok) {
     throw onshapeError(res.status, await readErrorDetail(res));
   }

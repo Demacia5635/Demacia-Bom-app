@@ -123,6 +123,16 @@ export async function downloadFile(
   window.URL.revokeObjectURL(objectUrl);
 }
 
+/**
+ * Called for every Onshape image request AuthenticatedImage makes (the Chrome
+ * extension uses it to count its Onshape footprint; the website never loads
+ * Onshape images, so it's unset there).
+ */
+let onshapeImageListener: ((url: string, ok: boolean) => void) | null = null;
+export function setOnshapeImageListener(listener: ((url: string, ok: boolean) => void) | null): void {
+  onshapeImageListener = listener;
+}
+
 interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
 }
@@ -166,7 +176,8 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
             ? { credentials: "include" }
             : { headers: secret ? { "x-client-secret": secret } : {} }
         );
-        
+        if (isOnshapeApiUrl) onshapeImageListener?.(targetUrl, res.ok);
+
         if (!res.ok) throw new Error(`Failed to load image: ${res.statusText}`);
 
         const arrayBuffer = await res.arrayBuffer();

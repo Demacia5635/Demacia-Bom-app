@@ -23,6 +23,7 @@ import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import PublishBomModal, { type PublishBomFormValues, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache } from "./treeCache";
+import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
   if (context.workspaceId) return { wvmType: "w", wvmID: context.workspaceId };
@@ -332,12 +333,15 @@ export default function AssemblyBomPage() {
           cached.rootBom ? ({ ...cached.rootBom, headers: [], items: [] } as OnshapeBomTable) : null
         );
         setCachedAt(cached.savedAt);
+        setTelemetryAssembly(cached.rootBom?.name?.slice(6) || cached.rootBomDB?.name || "", rootKey.documentID, rootKey.elementID);
         treeSavedAtRef.current = cached.savedAt;
         setLoading(false);
         return null;
       }
     }
 
+    // A load from Onshape is one "Refresh BOM" operation on the footprint page (/tele).
+    return withOperation("Refresh BOM", async () => {
     // Each parent assembly's DB record is fetched once per load, not once per child row.
     const parentBomRequests = new Map<string, Promise<BomModel | null>>();
     const getParentBom: ParentBomLoader = (bomRowId) => {
@@ -359,6 +363,7 @@ export default function AssemblyBomPage() {
       setRootBomDB(dbBom);
       setRootIsPublished(Boolean(dbBom));
       setRootOnshapeBom(rootNode.onshapeBom ?? null);
+      setTelemetryAssembly(rootNode.onshapeBom?.name?.slice(6) || dbBom?.name || "", rootKey.documentID, rootKey.elementID);
       visitedBomIds.add(rootNode.bomID!);
 
       // The root BOM is multi-level, so its item count covers the whole tree
@@ -411,6 +416,7 @@ export default function AssemblyBomPage() {
     } finally {
       setLoading(false);
     }
+    });
   }, [rootKey, resolveBomNode, resolvePartRow]);
 
   // Opening an assembly: show its saved copy if there is one; otherwise load it.
@@ -476,7 +482,7 @@ export default function AssemblyBomPage() {
    * the source. It does not reload from Onshape: the table is updated in place.
    */
   const handlePublish = useCallback(
-    async (values: PublishBomFormValues) => {
+    async (values: PublishBomFormValues) => withOperation("Publish BOM", async () => {
       const { rows, rootBomDB, rootOnshapeBom } = currentTreeRef.current;
       if (!rootKey || !rootOnshapeBom) return;
       setPublishing(true);
@@ -721,15 +727,17 @@ export default function AssemblyBomPage() {
           );
         }
         setPublishOpen(false);
+        return true;
       } catch (err: any) {
         const apiErr = err as ApiError;
         setPublishError(apiErr.message);
         client.showMessageBubble(`Publish failed: ${apiErr.message}`);
+        return null; // marks the operation failed on /tele
       } finally {
         setPublishing(false);
         setPublishProgress(null);
       }
-    },
+    }),
     [rootKey, client]
   );
 

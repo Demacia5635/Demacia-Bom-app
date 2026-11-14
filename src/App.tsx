@@ -6,6 +6,7 @@ import BomDetailsPage from './Pages/subpages/Bom/BomDetailsPage';
 import WorkOrderDetailsPage from './Pages/subpages/WorkOrder/WorkOrderDetailsPage';
 import PartsSearchPage from './Pages/searchPartsPage/SearchPartsPage';
 import WorkOrdersPage from './Pages/WorkordersPage/WorkOrderPage';
+import TelemetryPage from './Pages/Telemetry/TelemetryPage';
 
 // The assembly BOM itself lives in the Chrome extension (src/extension);
 // the website shows what has been published to the database.
@@ -20,6 +21,8 @@ export default function App() {
           <Route path="/workorders" element={<WorkOrdersPage />} />
           <Route path="/workOrder/:workOrderID" element={<WorkOrderDetailsPage />} />
           <Route path="/partSearch" element={<PartsSearchPage />} />
+          {/* Onshape footprint - unlisted on purpose (not in the sidebar). */}
+          <Route path="/tele" element={<TelemetryPage />} />
           <Route path="*" element={<HomeScreen />} />
         </Route>
       </Routes>

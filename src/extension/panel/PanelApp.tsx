@@ -11,6 +11,11 @@ import { setOnshapeServer } from "../onshapeDirect";
 import { useOwnOnshapeTab, type OnshapeLocation } from "../onshapeTab";
 import OnshapeSignInCheck from "./OnshapeSignInCheck";
 import { Toasts } from "./toast";
+import { setOnshapeImageListener } from "../../util/ApiService";
+import { recordOnshapeCall } from "../telemetry";
+
+// Table images load straight from Onshape; count them for the footprint page (/tele).
+setOnshapeImageListener((url, ok) => recordOnshapeCall("GET", url, ok));
 
 function Message({ children }: { children: ReactNode }) {
   return (

@@ -6,6 +6,7 @@
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { onshapeJson } from "../onshapeDirect";
+import { setTelemetryUser } from "../telemetry";
 
 interface SessionInfo {
   id?: string;
@@ -25,6 +26,8 @@ export default function OnshapeSignInCheck({ children }: { children: ReactNode }
       .then((info) => {
         if (cancelled) return;
         if (!info?.id && !info?.name && !info?.email) throw new Error("Onshape didn't return a signed-in user.");
+        // Who's using the extension, for the Onshape footprint page (/tele).
+        setTelemetryUser(info.name || info.email || info.id || "");
         setState("ok");
       })
       .catch((err) => {
