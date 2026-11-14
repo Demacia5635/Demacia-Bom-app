@@ -93,6 +93,8 @@ export interface ColumnConfig {
     isDisabled?: (row: RowData & any) => boolean;
     /** Highlights the cell (class "cell-modified"), e.g. for an edit not saved yet. */
     isModified?: (row: RowData & any) => boolean;
+    /** A problem with the cell's value: marks the cell (class "cell-problem") with the text as its tooltip. */
+    problem?: (row: RowData & any) => string | undefined;
     apiPath?: string | ((value: any) => string);
 }
 
@@ -665,9 +667,10 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                     {columns.map((col, colIndex) => {
                                         let isCellDisabled = col.isDisabled ? col.isDisabled(row) : false;
                                         let displayValue: string | number = row[col.key] as string | number;
+                                        const cellProblem = col.problem?.(row);
 
                                         return (
-                                            <td key={col.key} style={frozenStyle(colIndex)} className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''}`}>
+                                            <td key={col.key} style={frozenStyle(colIndex)} title={cellProblem} className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''} ${cellProblem ? 'cell-problem' : ''}`}>
                                                 <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
                                                     {colIndex === 0 && isRowParent && (
                                                         <button

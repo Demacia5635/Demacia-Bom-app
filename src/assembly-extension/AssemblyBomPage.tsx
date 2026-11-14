@@ -105,6 +105,52 @@ function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): s
   return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
 }
 
+/** Catalog number format work orders accept: AABB-CCDD, e.g. 2603-1001. */
+const CATALOG_NUMBER_FORMAT = /^\d{4}-\d{4}$/;
+
+/**
+ * What would stop a work order from being created for this tree, by row ID
+ * then column key - the checks CreatingWO runs on the website: every made part
+ * (not Standard Content or vendor parts) needs a catalog number in the AABB-CCDD
+ * format that no other part uses, a material and an engineer.
+ */
+function findWorkOrderProblems(rows: AssemblyBomRow[]): Map<string, Map<string, string>> {
+  const problems = new Map<string, Map<string, string>>();
+  const add = (row: AssemblyBomRow, key: string, text: string) => {
+    const byField = problems.get(row.id) ?? new Map<string, string>();
+    if (!byField.has(key)) byField.set(key, text);
+    problems.set(row.id, byField);
+  };
+
+  // A part used in several places is one part.
+  const parts = new Map<string, AssemblyBomRow>();
+  for (const r of rows) if (!r.isAssembly && !isLockedRow(r) && !parts.has(r.id)) parts.set(r.id, r);
+
+  const byCatalog = new Map<string, AssemblyBomRow[]>();
+  for (const part of parts.values()) {
+    const catalog = String(part.catalogNumber ?? "").trim();
+    if (!CATALOG_NUMBER_FORMAT.test(catalog)) {
+      add(part, "catalogNumber", catalog
+        ? `Work orders need a catalog number like 2603-1001 (AABB-CCDD); "${catalog}" isn't.`
+        : "Work orders need a catalog number like 2603-1001 (AABB-CCDD).");
+    } else {
+      byCatalog.set(catalog, [...(byCatalog.get(catalog) ?? []), part]);
+    }
+    if (!String(part.material ?? "").trim()) add(part, "material", "Work orders need a material for made parts.");
+    if (!String(part.engineer ?? "").trim()) {
+      add(part, "engineer", "Work orders need an engineer for made parts (or fill Default engineer when publishing).");
+    }
+  }
+  for (const [catalog, same] of byCatalog) {
+    if (same.length < 2) continue;
+    for (const part of same) {
+      const others = same.filter((p) => p !== part).map((p) => `"${p.name}"`).join(", ");
+      add(part, "catalogNumber", `Catalog number ${catalog} is also used by ${others}; work orders need each part's to be different.`);
+    }
+  }
+  return problems;
+}
+
 /** Sets baseline/loaded/modified on a freshly loaded row. `saved` = its database values, if saved. */
 function withChangeTracking(row: AssemblyBomRow, saved: FieldValues | null): AssemblyBomRow {
   const loaded = editableValues(row);
@@ -666,8 +712,23 @@ export default function AssemblyBomPage() {
     }
   }, [rootKey, loadTree]);
 
-  // The extension's column set never changes (edits are local until Publish BOM).
-  const columns = useMemo(() => buildAssemblyBomColumns(), []);
+  /**
+   * Work-order readiness: what would stop "Create work order" on the website
+   * for each part (same rules as CreatingWO), by row ID then column.
+   */
+  const workOrderProblems = useMemo(() => findWorkOrderProblems(rows), [rows]);
+  const problemsRef = useRef(workOrderProblems);
+  problemsRef.current = workOrderProblems;
+  const problemCount = useMemo(
+    () => Array.from(workOrderProblems.values()).reduce((n, byField) => n + byField.size, 0),
+    [workOrderProblems]
+  );
+
+  // The Table keeps the column set it first gets, so problems are read through a ref.
+  const columns = useMemo(
+    () => buildAssemblyBomColumns((row, key) => problemsRef.current.get(row.id)?.get(key)),
+    []
+  );
 
   /**
    * Table edits stay in this browser until Publish BOM: cells that differ
@@ -716,12 +777,16 @@ export default function AssemblyBomPage() {
 
   /** Search box: rows whose name, catalog number or description contain the text. */
   const [search, setSearch] = useState("");
+  /** "N problems" button: show only parts that would stop a work order. */
+  const [problemsOnly, setProblemsOnly] = useState(false);
   const searchFilter = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return undefined;
+    const showProblems = problemsOnly && problemCount > 0;
+    if (!q && !showProblems) return undefined;
     return (row: AssemblyBomRow) =>
-      [row.name, row.catalogNumber, row.description].some((v) => String(v ?? "").toLowerCase().includes(q));
-  }, [search]);
+      (!showProblems || workOrderProblems.has(row.id)) &&
+      (!q || [row.name, row.catalogNumber, row.description].some((v) => String(v ?? "").toLowerCase().includes(q)));
+  }, [search, problemsOnly, problemCount, workOrderProblems]);
   const searchMatchCount = useMemo(() => (searchFilter ? rows.filter(searchFilter).length : 0), [rows, searchFilter]);
 
   /**
@@ -1271,6 +1336,28 @@ export default function AssemblyBomPage() {
                 aria-label="Search the BOM"
               />
             </div>
+            {problemCount > 0 ? (
+              <button
+                type="button"
+                className={`bom-toolbar-btn bom-problems-btn ${problemsOnly ? "bom-problems-btn-active" : ""}`}
+                onClick={() => setProblemsOnly((v) => !v)}
+                aria-pressed={problemsOnly}
+                title={
+                  problemsOnly
+                    ? "Showing only parts that would stop a work order. Click to show everything."
+                    : "Parts with values that would stop a work order (catalog number AABB-CCDD and unique, material, engineer). " +
+                      "Marked in red; hover a cell for details. Click to show only those parts."
+                }
+              >
+                ⚠ {problemCount} problem{problemCount === 1 ? "" : "s"}
+              </button>
+            ) : (
+              rows.length > 0 && (
+                <span className="bom-toolbar-note" title="Every made part has a valid, unique catalog number, a material and an engineer">
+                  ✓ Ready for a work order
+                </span>
+              )
+            )}
             {searchFilter && (
               <span className="bom-toolbar-note">
                 {searchMatchCount} match{searchMatchCount === 1 ? "" : "es"}

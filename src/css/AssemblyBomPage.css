@@ -58,6 +58,26 @@
   cursor: not-allowed;
 }
 
+.bom-problems-btn {
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #fca5a5;
+}
+
+.bom-problems-btn-active,
+.bom-problems-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+body.light-theme-active .bom-problems-btn {
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+
+body.light-theme-active .bom-problems-btn-active,
+body.light-theme-active .bom-problems-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
 .bom-toolbar-note {
   font-size: 0.75rem;
   color: #a1a1aa;
