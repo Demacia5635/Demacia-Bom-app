@@ -26,6 +26,7 @@ import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import PublishBomModal, { type PublishBomFormValues, type PublishPreview, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
+import { CATALOG_NUMBER_FORMAT, checkCatalogTree, type CatalogNode } from "../util/catalogNumbers";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
   if (context.workspaceId) return { wvmType: "w", wvmID: context.workspaceId };
@@ -122,51 +123,73 @@ function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): s
   return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
 }
 
-/** Catalog number format work orders accept: AABB-CCDD, e.g. 2603-1001. */
-const CATALOG_NUMBER_FORMAT = /^\d{4}-\d{4}$/;
+/** Row ID used for the top assembly (which has no row) in the problem list. */
+const TOP_ASSEMBLY_ID = "__top__";
 
 /**
  * What would stop a work order from being created for this tree, by row ID
- * then column key - the checks CreatingWO runs on the website: every made part
- * (not Standard Content or vendor parts) needs a catalog number in the AABB-CCDD
- * format that no other part uses, a material and an engineer.
+ * then column key - the checks CreatingWO runs on the website: catalog numbers
+ * that follow the numbering rules (util/catalogNumbers.ts) for every made item,
+ * and a material and engineer for every made part. Bought items (Standard
+ * Content, vendor parts, items marked standard) are skipped. Problems with
+ * the top assembly's own number are under TOP_ASSEMBLY_ID.
  */
-function findWorkOrderProblems(rows: AssemblyBomRow[]): Map<string, Map<string, string>> {
+function findWorkOrderProblems(
+  rows: AssemblyBomRow[],
+  top: { name: string; number: string }
+): Map<string, Map<string, string>> {
   const problems = new Map<string, Map<string, string>>();
-  const add = (row: AssemblyBomRow, key: string, text: string) => {
-    const byField = problems.get(row.id) ?? new Map<string, string>();
+  const add = (id: string, key: string, text: string) => {
+    const byField = problems.get(id) ?? new Map<string, string>();
     if (!byField.has(key)) byField.set(key, text);
-    problems.set(row.id, byField);
+    problems.set(id, byField);
   };
 
-  // A part used in several places is one part.
-  const parts = new Map<string, AssemblyBomRow>();
-  for (const r of rows) if (!r.isAssembly && !isLockedRow(r) && !parts.has(r.id)) parts.set(r.id, r);
+  // The tree as the rules see it (a part used in several places is checked in each).
+  const root: CatalogNode = { id: TOP_ASSEMBLY_ID, name: top.name, number: top.number, isAssembly: true, exempt: false, children: [] };
+  const nodes = new Map<AssemblyBomRow, CatalogNode>();
+  for (const r of rows) {
+    nodes.set(r, { id: r.id, name: r.name, number: String(r.catalogNumber ?? ""), isAssembly: r.isAssembly, exempt: isLockedRow(r), children: [] });
+  }
+  const assemblyNode = new Map<string, CatalogNode>();
+  for (const [r, node] of nodes) if (r.isAssembly) assemblyNode.set(r.id, node);
+  for (const [r, node] of nodes) {
+    const parent = r.parentId === null ? root : assemblyNode.get(r.parentId);
+    parent?.children.push(node);
+  }
+  for (const p of checkCatalogTree(root)) add(p.id, "catalogNumber", p.message);
 
-  const byCatalog = new Map<string, AssemblyBomRow[]>();
-  for (const part of parts.values()) {
-    const catalog = String(part.catalogNumber ?? "").trim();
-    if (!CATALOG_NUMBER_FORMAT.test(catalog)) {
-      add(part, "catalogNumber", catalog
-        ? `Work orders need a catalog number like 2603-1001 (AABB-CCDD); "${catalog}" isn't.`
-        : "Work orders need a catalog number like 2603-1001 (AABB-CCDD).");
-    } else {
-      byCatalog.set(catalog, [...(byCatalog.get(catalog) ?? []), part]);
-    }
-    if (!String(part.material ?? "").trim()) add(part, "material", "Work orders need a material for made parts.");
+  // Made parts also need a material and an engineer.
+  const seen = new Set<string>();
+  for (const part of rows) {
+    if (part.isAssembly || isLockedRow(part) || seen.has(part.id)) continue;
+    seen.add(part.id);
+    if (!String(part.material ?? "").trim()) add(part.id, "material", "Work orders need a material for made parts.");
     const engineer = String(part.engineer ?? "").trim();
     if (!engineer || engineer === STANDARD_PART_ENGINEER) {
-      add(part, "engineer", "Work orders need an engineer for made parts (or fill Default engineer when publishing).");
-    }
-  }
-  for (const [catalog, same] of byCatalog) {
-    if (same.length < 2) continue;
-    for (const part of same) {
-      const others = same.filter((p) => p !== part).map((p) => `"${p.name}"`).join(", ");
-      add(part, "catalogNumber", `Catalog number ${catalog} is also used by ${others}; work orders need each part's to be different.`);
+      add(part.id, "engineer", "Work orders need an engineer for made parts (or fill Default engineer when publishing).");
     }
   }
   return problems;
+}
+
+/** A name that is itself a catalog number (e.g. a part named 2714-1103). */
+function catalogNumberInName(name: string): string | null {
+  const trimmed = name.trim();
+  return CATALOG_NUMBER_FORMAT.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * On load: an item without a catalog number whose name is one gets the name as
+ * its catalog number. It's an edit (marked, and written to Onshape's Part
+ * number on Publish BOM). Locked items are left alone.
+ */
+function fillCatalogNumberFromName(row: AssemblyBomRow): AssemblyBomRow {
+  if (isLockedRow(row) || String(row.catalogNumber ?? "").trim()) return row;
+  const fromName = catalogNumberInName(String(row.name ?? ""));
+  if (!fromName) return row;
+  const filled = { ...row, catalogNumber: fromName };
+  return { ...filled, modified: changedFields(filled, filled.baseline ?? filled.loaded) };
 }
 
 /** Sets baseline/loaded/modified on a freshly loaded row. `saved` = its database values, if saved. */
@@ -528,7 +551,10 @@ export default function AssemblyBomPage() {
             } as unknown as FieldValues)
           : null
       );
-      return { node: { row: tracked, key, bomID, onshapeBom }, dbBom };
+      // A sub-assembly named like a catalog number gets it as its number (the top
+      // assembly has no row: the Publish form fills it the same way).
+      const filled = rootBom === "root" ? tracked : fillCatalogNumberFromName(tracked);
+      return { node: { row: filled, key, bomID, onshapeBom }, dbBom };
     },
     [context.server]
   );
@@ -605,7 +631,7 @@ export default function AssemblyBomPage() {
           } as unknown as FieldValues)
         : null;
 
-      return withChangeTracking({
+      return fillCatalogNumberFromName(withChangeTracking({
         id: rowId,
         parentId: parentRowId,
         isExpanded: false,
@@ -644,7 +670,7 @@ export default function AssemblyBomPage() {
         configuration: parsedItem.itemSource.configuration || "",
         isStandardContent: !!parsedItem.itemSource.isStandardContent,
         markedStandard,
-      }, savedValues);
+      }, savedValues));
     },
     [context.server]
   );
@@ -812,7 +838,14 @@ export default function AssemblyBomPage() {
    * Work-order readiness: what would stop "Create work order" on the website
    * for each part (same rules as CreatingWO), by row ID then column.
    */
-  const workOrderProblems = useMemo(() => findWorkOrderProblems(rows), [rows]);
+  /** The top assembly's name and catalog number (Onshape first; a name that is a number fills an empty one). */
+  const topAssembly = useMemo(() => {
+    const name = rootOnshapeBom?.name.slice(6) || rootBomDB?.name || "Assembly";
+    const number = rootOnshapeBom?.partNumber || rootBomDB?.catalogNumber || catalogNumberInName(name) || "";
+    return { name, number };
+  }, [rootOnshapeBom, rootBomDB]);
+  const workOrderProblems = useMemo(() => findWorkOrderProblems(rows, topAssembly), [rows, topAssembly]);
+  const topProblem = workOrderProblems.get(TOP_ASSEMBLY_ID)?.get("catalogNumber");
   const problemsRef = useRef(workOrderProblems);
   problemsRef.current = workOrderProblems;
   const problemCount = useMemo(
@@ -1452,6 +1485,11 @@ export default function AssemblyBomPage() {
                 This assembly isn't in the database yet - it's showing live Onshape data.
               </p>
             )}
+            {topProblem && (
+              <p className="assembly-bom-top-problem text-xs mt-1" title="Set the top assembly's catalog number in Onshape (Part number) or in the Publish BOM form">
+                ⚠ {topAssembly.number ? `Catalog number ${topAssembly.number}: ` : ""}{topProblem}
+              </p>
+            )}
           </div>
           
           <div className="flex items-center gap-4">
@@ -1581,7 +1619,7 @@ export default function AssemblyBomPage() {
                 title={
                   problemsOnly
                     ? "Showing only parts that would stop a work order. Click to show everything."
-                    : "Parts with values that would stop a work order (catalog number AABB-CCDD and unique, material, engineer). " +
+                    : "Items with values that would stop a work order (catalog number that fits its assembly and is unique, material, engineer). " +
                       "Marked in red; hover a cell for details. Click to show only those parts."
                 }
               >
@@ -1589,7 +1627,7 @@ export default function AssemblyBomPage() {
               </button>
             ) : (
               rows.length > 0 && (
-                <span className="bom-toolbar-note" title="Every made part has a valid, unique catalog number, a material and an engineer">
+                <span className="bom-toolbar-note" title="Every made item has a valid, unique catalog number that fits its assembly, and every made part a material and an engineer">
                   ✓ Ready for a work order
                 </span>
               )
@@ -1659,7 +1697,7 @@ export default function AssemblyBomPage() {
             initialValues={{
               // Onshape first; the database for what Onshape doesn't have.
               name: displayName,
-              catalogNumber: rootOnshapeBom?.partNumber || rootBomDB?.catalogNumber || "",
+              catalogNumber: topAssembly.number,
               description: rootOnshapeBom?.description || rootBomDB?.description || "",
               comments: rootBomDB?.comments || "",
             }}

@@ -36,6 +36,15 @@
   font-size: 0.85rem;
 }
 
+.assembly-bom-top-problem {
+  color: #fca5a5;
+  max-width: 70ch;
+}
+
+body.light-theme-active .assembly-bom-top-problem {
+  color: #b91c1c;
+}
+
 /* ---- Toolbar above the table (expand/collapse, search, problems) -------- */
 
 .bom-toolbar-btn {
