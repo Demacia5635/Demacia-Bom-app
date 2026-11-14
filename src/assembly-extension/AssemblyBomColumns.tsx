@@ -1,5 +1,6 @@
 import type { ColumnConfig } from "../components/Table";
 import { downloadFile } from "../util/ApiService";
+import { isChromeExtension } from "../extension/onshapeDirect";
 import type AssemblyBomRow from "./AssemblyBomRow";
 
 interface BuildColumnsOptions {
@@ -26,7 +27,15 @@ function buildIsReadOnlyRow(rootIsPublished: boolean) {
   return (row: AssemblyBomRow) => (rootIsPublished && row.source === "onshape-only") || row.vendor !== "";
 }
 
-export default function buildAssemblyBomColumns({ onAddToDb, rootIsPublished }: BuildColumnsOptions): ColumnConfig[] {
+/** Raw Onshape identifiers: useful for debugging, too wide for the Chrome side panel. */
+const ID_COLUMN_KEYS = new Set(["documentID", "wvmType", "wvmID", "elementID", "entityID"]);
+
+export default function buildAssemblyBomColumns(options: BuildColumnsOptions): ColumnConfig[] {
+  const columns = buildAllColumns(options);
+  return isChromeExtension() ? columns.filter((c) => !ID_COLUMN_KEYS.has(c.key)) : columns;
+}
+
+function buildAllColumns({ onAddToDb, rootIsPublished }: BuildColumnsOptions): ColumnConfig[] {
   const isReadOnlyRow = buildIsReadOnlyRow(rootIsPublished);
   return [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: (row) => row.vendor !== ""},

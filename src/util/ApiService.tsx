@@ -157,9 +157,15 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
           targetUrl = `${BACKEND_HOST}${src.startsWith("/") ? src : `/${src}`}`;
         }
 
-        const res = await fetch(targetUrl, {
-          headers: secret ? { "x-client-secret": secret } : {},
-        });
+        // Onshape API images (Chrome extension only) use the browser's Onshape
+        // session; never send our client secret to Onshape.
+        const isOnshapeApiUrl = /^https:\/\/[^/]+\.onshape\.com\/api\//.test(targetUrl);
+        const res = await fetch(
+          targetUrl,
+          isOnshapeApiUrl
+            ? { credentials: "include" }
+            : { headers: secret ? { "x-client-secret": secret } : {} }
+        );
         
         if (!res.ok) throw new Error(`Failed to load image: ${res.statusText}`);
 
@@ -176,6 +182,9 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
           if (json.type === "Buffer" && Array.isArray(json.data)) {
             const bytes = new Uint8Array(json.data);
             base64String = bytesToBase64(bytes);
+          } else if (Array.isArray(json.images) && typeof json.images[0] === "string") {
+            // Onshape shaded-view render: { images: [base64Png] }
+            base64String = json.images[0];
           } else {
             throw new Error(json.message || "Invalid image format");
           }

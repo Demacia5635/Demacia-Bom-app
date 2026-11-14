@@ -6,6 +6,8 @@
 import { fetchFileBytes, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import type { OnshapeBomTable } from "./OnshapeBom";
+import * as onshapeDirect from "../extension/onshapeDirect";
+import { isChromeExtension } from "../extension/onshapeDirect";
 
 const BASE_URL = `${import.meta.env.VITE_CLIENT_URL}/api`;
 
@@ -157,9 +159,15 @@ export function upsertPartById(id: string, data: Partial<PartModel>): Promise<Pa
 
 /* ---------------------------------------------------------------------- */
 /* Live Onshape data (fallback source when not yet in the DB)              */
+/*                                                                         */
+/* Inside the Chrome extension these call Onshape directly with the user's */
+/* browser session (src/extension/onshapeDirect.ts). In the web app they   */
+/* still go through the server's /api/onshape/* proxy; that branch goes    */
+/* away when the Onshape iframe extension is retired.                      */
 /* ---------------------------------------------------------------------- */
 
 export async function getOnshapeBom(key: OnshapeKey): Promise<OnshapeBomTable> {
+  if (isChromeExtension()) return onshapeDirect.getBom(key);
   const response = await fetchJsonFromApi<OnshapeBomTable>(`/onshape/bom${onshapeKeySegment(key)}`);
   return response;
 }
@@ -169,6 +177,7 @@ export function updateOnshapePartMetadata(
   partID: string,
   data: Record<string, unknown>
 ): Promise<unknown> {
+  if (isChromeExtension()) return onshapeDirect.updatePartMetadata(key, partID, data);
   return postToApi(`/onshape/part${onshapeKeySegment(key)}/p/${partID}`, data);
 }
 
@@ -176,6 +185,7 @@ export function updateOnshapeBomMetadata(
   key: OnshapeKey,
   data: Record<string, unknown>
 ): Promise<unknown> {
+  if (isChromeExtension()) return onshapeDirect.updateElementMetadata(key, data);
   return postToApi(`/onshape/bom${onshapeKeySegment(key)}`, data);
 }
 
@@ -184,21 +194,43 @@ export function updateOnshapeBomMetadata(
 /* ---------------------------------------------------------------------- */
 
 export function getOnshapePartThumbnail(key: OnshapeKey, partID: string): Promise<Blob> {
+  if (isChromeExtension()) return onshapeDirect.getPartThumbnail(key, partID);
   const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/thumbnail`;
   return fetchFileBytes(url, "image/png");
 }
 
 export function getOnshapePartStl(key: OnshapeKey, partID: string): Promise<Blob> {
+  if (isChromeExtension()) return onshapeDirect.exportPartStl(key, partID);
   const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/stl`;
   return fetchFileBytes(url, "model/stl");
 }
 
 export function getOnshapePartParasolid(key: OnshapeKey, partID: string): Promise<Blob> {
+  if (isChromeExtension()) return onshapeDirect.exportPartParasolid(key, partID);
   const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/parasolid`;
   return fetchFileBytes(url, "application/x-parasolid");
 }
 
+/**
+ * Image src for a row that isn't saved in the database yet: Onshape's own
+ * thumbnail in the Chrome extension, nothing in the web app (no session there).
+ * Standard Content parts have no stored thumbnail, so they get a rendered view
+ * of their configuration instead.
+ */
+export function getOnshapeThumbnailSrc(
+  key: OnshapeKey,
+  partID?: string,
+  source?: { isStandardContent?: boolean; configuration?: string }
+): string {
+  if (!isChromeExtension()) return "";
+  if (partID && source?.isStandardContent) {
+    return onshapeDirect.shadedViewUrl(key, partID, source.configuration);
+  }
+  return onshapeDirect.thumbnailUrl(key, partID);
+}
+
 export function getOnshapeBomThumbnail(key: OnshapeKey): Promise<Blob> {
+  if (isChromeExtension()) return onshapeDirect.getElementThumbnail(key);
   const url = `${BASE_URL}/onshape/bom${onshapeKeySegment(key)}/thumbnail`;
   return fetchFileBytes(url, "image/png");
 }

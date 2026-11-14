@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Table from "../components/Table";
-import { type ApiError } from "../util/ApiService";
+import { fetchFromApi, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import { useOnshapeClient, useOnshapeContext } from "../util/OnshapeExtension";
 import "../css/AssemblyBomPage.css";
@@ -16,14 +16,15 @@ import {
   updateOnshapeBomMetadata,
   syncPartFilesToDrive,
   syncBomThumbnailToDrive,
-  postToApi
+  postToApi,
+  getOnshapeThumbnailSrc
 } from "./BomApi";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import PublishBomModal, { type PublishBomFormValues } from "./PublishBomModel";
 
-function resolveWvm(context: ReturnType<typeof useOnshapeContext>): { wvmType: string; wvmID: string } | null {
+function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
   if (context.workspaceId) return { wvmType: "w", wvmID: context.workspaceId };
   if (context.versionId) return { wvmType: "v", wvmID: context.versionId };
   return null;
@@ -89,7 +90,13 @@ export default function AssemblyBomPage() {
       })
       .catch((err: any) => {
         if (!isMounted) return;
-        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429 || err?.statusCode === 404) {
+        // The server has no /auth/verify-requests route yet; a 404 means the
+        // check isn't available, not that the user is signed out.
+        if (err?.statusCode === 404) {
+          setIsVerifyingApi(false);
+          return;
+        }
+        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
           navigate(`/signin${location.search}`, { replace: true });
         } else {
           navigate(`/signin${location.search}`, { replace: true });
@@ -106,11 +113,15 @@ export default function AssemblyBomPage() {
     navigate(`/signin${location.search}`, { replace: true });
   };
 
-  const wvm = resolveWvm(context);
-  const rootKey: OnshapeKey | null =
-    context.documentId && wvm && context.elementId
-      ? { documentID: context.documentId, wvmType: wvm.wvmType, wvmID: wvm.wvmID, elementID: context.elementId }
+  // Memoized on the ID strings: a new object every render made loadTree (and
+  // its effect) change every render, reloading the tree endlessly.
+  const { documentId, workspaceId, versionId, elementId } = context;
+  const rootKey: OnshapeKey | null = useMemo(() => {
+    const wvm = resolveWvm({ workspaceId, versionId });
+    return documentId && wvm && elementId
+      ? { documentID: documentId, wvmType: wvm.wvmType, wvmID: wvm.wvmID, elementID: elementId }
       : null;
+  }, [documentId, workspaceId, versionId, elementId]);
 
   const resolveBomNode = useCallback(
     async (key: OnshapeKey, parentRowId: string | null, rootBom: BomModel | null | 'root'): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
@@ -142,7 +153,7 @@ export default function AssemblyBomPage() {
         isExpanded: true,
         source: isPublished ? "db" : "onshape-only",
         isAssembly: true,
-        avatar: dbBom?.avatarID ? `/drive/file/id/${dbBom.avatarID}` : "",
+        avatar: dbBom?.avatarID ? `/drive/file/id/${dbBom.avatarID}` : getOnshapeThumbnailSrc(key),
         name: dbBom?.name || onshapeBom.name.slice(6) || key.elementID,
         catalogNumber: dbBom?.catalogNumber || "",
         revision: "-",
@@ -205,7 +216,7 @@ export default function AssemblyBomPage() {
         isExpanded: false,
         source: isPublished ? "db" : "onshape-only",
         isAssembly: false,
-        avatar: dbPart?.avatarID ? `/drive/file/id/${dbPart.avatarID}` : "",
+        avatar: dbPart?.avatarID ? `/drive/file/id/${dbPart.avatarID}` : getOnshapeThumbnailSrc(key, partID, parsedItem.itemSource),
         name: dbPart?.name || parsedItem.name || partID,
         catalogNumber: dbPart?.catalogNumber || parsedItem.partNumber || "",
         revision: dbPart?.revision || parsedItem.revision || "",
@@ -690,7 +701,7 @@ export default function AssemblyBomPage() {
   const displayName = rootBomDB?.name || rootOnshapeBom?.name.slice(6) || "Assembly";
 
   return (
-    <div className="p-8 flex gap-6">
+    <div className="assembly-bom-page p-8 flex gap-6">
       <div className="flex-1">
         <div className="assembly-bom-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
           <div>

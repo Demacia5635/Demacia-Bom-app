@@ -8,6 +8,8 @@
     "deploy": "gh-pages -d dist",
     "dev": "vite",
     "build": "vite build",
+    "build:extension": "vite build --config vite.extension.config.ts",
+    "watch:extension": "vite build --config vite.extension.config.ts --watch --mode development",
     "lint": "oxlint",
     "preview": "vite preview"
   },
@@ -28,6 +30,7 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@types/chrome": "^0.3.7",
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

@@ -40,6 +40,8 @@ export interface OnshapeBomItemSource {
   partId?: string;
   configuration?: string;
   fullConfiguration?: string;
+  /** True for parts from Onshape's Standard Content library (bolts, nuts...). */
+  isStandardContent?: boolean;
   indentLevel?: number;
   rowId?: string;
   viewHref?: string;
