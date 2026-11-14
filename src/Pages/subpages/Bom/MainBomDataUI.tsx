@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { AuthenticatedImage, fetchFromApi, type ApiError } from "../../../util/ApiService";
-import { type BomModel, type WorkorderModel, type WorkorderPartModel as WorkOrderPartModel } from "../../../util/Models";
+import { AuthenticatedImage } from "../../../util/ApiService";
+import { type BomModel } from "../../../util/Models";
 import { createPortal } from "react-dom";
-import { WorkOrderForm, type WorkOrderFormData } from "./CreatingWO";
-import { useNavigate } from "react-router-dom";
+import { WorkOrderForm } from "./CreatingWO";
 import { recordImageSrc } from "../../../util/recordImage";
 
 const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
@@ -15,87 +14,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
     ? document.documentElement.classList.contains("light") || window.matchMedia("(prefers-color-scheme: light)").matches 
     : true;
 
-  const navigate = useNavigate();
   const resolvedBomId = bom.id || (bom as any)._id;
-
-  const visitedBoms = new Set<string>();
-
-  async function fetchBomPartsRecursively(
-    targetBomId: string
-  ): Promise<WorkOrderPartModel[]> {
-    if (!targetBomId || targetBomId === "undefined") return [];
-    if (visitedBoms.has(targetBomId)) return [];
-    visitedBoms.add(targetBomId);
-
-    const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
-    const collectedParts: WorkOrderPartModel[] = [];
-
-    for (const sub of currentBom.subAssemblies || []) {
-      const subParts = await fetchBomPartsRecursively(sub.bomID);
-      collectedParts.push(...subParts);
-    }
-
-    for (const p of currentBom.parts || []) {
-      const workOrderPart: WorkOrderPartModel = {
-        partID: p.partID,
-        quantityTotal: p.quantity,
-        quantityMade: 0,
-        statusCode: 0,
-        productionGCOwner: "",
-        productionMakingOwner: "",
-        updatedAt: new Date(),
-        createdAt: new Date(),
-      };
-      collectedParts.push(workOrderPart);
-    }
-    return collectedParts;
-  }
-
-  const handleNewWO = async (data: WorkOrderFormData) => {
-    const id = Date.now().toString();
-    const parts = await fetchBomPartsRecursively(resolvedBomId);
-
-    const payload: WorkorderModel = {
-      id: id,
-      name: data.name.trim(),
-      bomID: resolvedBomId,
-      workOrderOwner: data.workOrderOwner.trim(),
-      description: data.description.trim(),
-      parts: parts,
-      avatarID: bom.avatarID,
-      comments: data.comments,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    try {
-      const secret: string = import.meta.env.VITE_CLIENT_SECRET;
-      const backendBase = import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com";
-      const response = await fetch(`${backendBase}/api/db/workOrder/id/${id}`, {
-        method: "POST",
-        headers: {
-          "content-Type": "application/json",
-          "x-client-secret": secret || "",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw {
-          message: `Failed to create Work Order: ${response.statusText}`,
-          statusCode: response.status
-        } as ApiError;
-      }
-
-      navigate(`/workOrder/${id}`);
-    } catch (err: any) {
-      if (err.statusCode) {
-        console.error(err);
-      } else {
-        console.error("An unexpected error occurred");
-      }
-    }
-  };
 
   const imageSrc = recordImageSrc(bom as any);
 
@@ -189,7 +108,8 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
         >
           <div onClick={(e) => e.stopPropagation()}>
             <WorkOrderForm
-              onSubmit={(data) => handleNewWO(data)}
+              bomId={resolvedBomId}
+              avatarID={bom.avatarID}
               onCancel={() => setCreatingWO(false)}
             />
           </div>
