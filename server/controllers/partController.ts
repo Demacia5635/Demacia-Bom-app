@@ -304,6 +304,23 @@ export async function deletePartByID(req: Request<{ id: string }>, res: Response
   }
 }
 
+/**
+ * Read-only MongoDB lookup of a part by its Onshape identity. 404 when the part
+ * isn't saved. Unlike getPartByID it never creates a record or triggers Drive
+ * uploads, and it never calls the Onshape API (which counts against the yearly
+ * API limit). Used by the Chrome extension to tell saved parts from unsaved ones.
+ */
+export async function findPartByOnshapeKey(req: Request<OnshapeID>, res: Response, next: NextFunction) {
+  try {
+    const id = formID(req.params);
+    const part = await Part.findOne({ id });
+    if (!part) return res.status(404).json({ message: `Part ${id} not found` });
+    return res.status(200).json(part);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 export async function getPartByOnshapeKey(req: Request<OnshapeID>, res: Response, next: NextFunction) {
   const id = formID(req.params);
   const delegateReq = req as unknown as Request<{ id: string }>;

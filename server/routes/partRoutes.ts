@@ -13,7 +13,8 @@ router.delete('/id/:id', partController.deletePartByID);
 // Onshape-integrated routes (wired to onshapeController for Google Drive sync)
 const onshapeKeyPath = '/d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/p/:partID';
 
-router.get(onshapeKeyPath, onshapeController.getPart);
+// DB-only lookup: no Onshape API calls (they count against the yearly API limit).
+router.get(onshapeKeyPath, partController.findPartByOnshapeKey);
 router.post(onshapeKeyPath, onshapeController.updatePart);
 router.delete(onshapeKeyPath, partController.deletePartByOnshapeKey);
 
