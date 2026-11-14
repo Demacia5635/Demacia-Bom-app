@@ -42,29 +42,74 @@ const BUTTON_ID = "demacia-bom-open";
     return type;
   }
 
-  const btn = document.createElement("button");
+  // A button in Onshape's right-hand sidebar (BOM Table, Configuration panel...),
+  // in a group of its own like an Onshape extension. It uses Onshape's own
+  // button classes so it looks like the others.
+  const btn = document.createElement("div");
   btn.id = BUTTON_ID;
-  btn.type = "button";
+  btn.className = "btn btn-secondary split-toggle-button split-toggle-button-top-gap";
+  btn.setAttribute("role", "button");
+  btn.tabIndex = 0;
   btn.hidden = true;
-  btn.title = "Open the Demacia BOM side panel";
-  // Demacia logo (logo.svg, from public/favicon.svg) drawn in the text color,
-  // followed by "BOM".
+  btn.title = "Demacia BOM";
+  btn.setAttribute("aria-label", "Open the Demacia BOM side panel");
+  // Demacia logo (logo.svg, from public/favicon.svg) drawn in the icon color.
   const logo = document.createElement("span");
   logo.className = "demacia-bom-logo";
   logo.setAttribute("aria-hidden", "true");
   const logoUrl = `url("${chrome.runtime.getURL("logo.svg")}")`;
   logo.style.setProperty("-webkit-mask-image", logoUrl);
   logo.style.setProperty("mask-image", logoUrl);
-  btn.append(logo, document.createTextNode("BOM"));
-  btn.addEventListener("click", () => {
+  btn.append(logo);
+
+  const openPanel = () => {
     try {
       chrome.runtime.sendMessage({ type: OPEN_PANEL_MESSAGE });
     } catch {
       // Extension was reloaded/updated; this orphaned script can't reach it.
       alert("The Demacia BOM extension was updated - please reload this Onshape tab.");
     }
+  };
+  btn.addEventListener("click", openPanel);
+  btn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openPanel();
+    }
   });
-  document.body.appendChild(btn);
+
+  /** The sidebar of the tab being shown (each Onshape tab has its own). */
+  function findSidebar(): HTMLElement | null {
+    const all = Array.from(document.querySelectorAll<HTMLElement>(".right-split-toggle-container"));
+    return all.find((el) => el.getClientRects().length > 0) ?? null;
+  }
+
+  /**
+   * Keeps the button at the bottom of the visible sidebar. Onshape redraws the
+   * sidebar when switching tabs, so this runs again whenever the page changes.
+   * Without a sidebar (e.g. while it loads) the button floats bottom-right.
+   */
+  function place() {
+    const sidebar = findSidebar();
+    if (sidebar) {
+      btn.classList.remove("demacia-bom-floating");
+      if (btn.parentElement !== sidebar || sidebar.lastElementChild !== btn) sidebar.appendChild(btn);
+    } else {
+      btn.classList.add("demacia-bom-floating");
+      if (btn.parentElement !== document.body) document.body.appendChild(btn);
+    }
+  }
+  place();
+
+  let placeQueued = false;
+  new MutationObserver(() => {
+    if (placeQueued) return;
+    placeQueued = true;
+    requestAnimationFrame(() => {
+      placeQueued = false;
+      place();
+    });
+  }).observe(document.body, { childList: true, subtree: true });
 
   // Onshape is a single-page app: tab switches change the URL without a page
   // load. Re-check whenever the URL changes.
