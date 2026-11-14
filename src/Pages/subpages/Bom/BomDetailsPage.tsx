@@ -139,7 +139,7 @@ export default function BomDetailsPage() {
       }
 
       for (const p of bom.parts || []) {
-        const part = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`);
+        const part = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(p.partID)}`);
 
         let partAvatarUrl = "";
 
@@ -256,7 +256,7 @@ export default function BomDetailsPage() {
             };
 
             const backendBase = import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com";
-            await fetch(`${backendBase}/api/db/part/id/${partId}`, {
+            await fetch(`${backendBase}/api/db/part/id/${encodeURIComponent(partId)}`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -326,7 +326,7 @@ export default function BomDetailsPage() {
     if (!partId) return;
 
     try {
-      const partData = await fetchFromApi<PartModel>(`/db/part/id/${partId}`);
+      const partData = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(partId)}`);
       setSelectedPart(partData);
       setIsPartPortalOpen(true);
     } catch (err) {

@@ -165,7 +165,7 @@ export default function WorkOrderDetailsPage() {
                 let part: PartModel | null = null;
                 
                 try {
-                    part = await fetchFromApi<PartModel>(`/db/part/id/${partID}`);
+                    part = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(partID)}`);
                 } catch {
                     part = {
                         id: partID,
@@ -341,7 +341,7 @@ export default function WorkOrderDetailsPage() {
         if (!partId) return;
 
         try {
-            const partData = await fetchFromApi<PartModel>(`/db/part/id/${partId}`);
+            const partData = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(partId)}`);
             setSelectedPart(partData);
             setIsPartPortalOpen(true);
         } catch (err) {

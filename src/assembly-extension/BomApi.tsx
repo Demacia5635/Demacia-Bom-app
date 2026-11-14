@@ -125,12 +125,14 @@ const onshapeKeySegment = (k: OnshapeKey) =>
 /* Database, keyed by Onshape identity                                     */
 /* ---------------------------------------------------------------------- */
 
+// IDs are URL-encoded: Onshape part IDs can contain "/" (e.g. "J/D"), which
+// would otherwise split the path. Express decodes them back in req.params.
 export function dbBomByOnshapeKeyEndpoint(key: OnshapeKey, bomID: string): string {
-  return `/db/bom${onshapeKeySegment(key)}/b/${bomID}`;
+  return `/db/bom${onshapeKeySegment(key)}/b/${encodeURIComponent(bomID)}`;
 }
 
 export function dbPartByOnshapeKeyEndpoint(key: OnshapeKey, partID: string): string {
-  return `/db/part${onshapeKeySegment(key)}/p/${partID}`;
+  return `/db/part${onshapeKeySegment(key)}/p/${encodeURIComponent(partID)}`;
 }
 
 export function getBomByOnshapeKey(key: OnshapeKey, bomID: string): Promise<BomModel> {
@@ -150,11 +152,11 @@ export function upsertPartByOnshapeKey(key: OnshapeKey, partID: string, data: Pa
 }
 
 export function upsertBomById(id: string, data: Partial<BomModel>): Promise<BomModel> {
-  return postToApi<BomModel>(`/db/bom/id/${id}`, data);
+  return postToApi<BomModel>(`/db/bom/id/${encodeURIComponent(id)}`, data);
 }
 
 export function upsertPartById(id: string, data: Partial<PartModel>): Promise<PartModel> {
-  return postToApi<PartModel>(`/db/part/id/${id}`, data);
+  return postToApi<PartModel>(`/db/part/id/${encodeURIComponent(id)}`, data);
 }
 
 /* ---------------------------------------------------------------------- */

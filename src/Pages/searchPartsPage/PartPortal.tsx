@@ -39,7 +39,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
         setSaveError(null);
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${part.id}`, {
+            const response = await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${encodeURIComponent(part.id)}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

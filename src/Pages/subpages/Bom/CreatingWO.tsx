@@ -58,7 +58,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
         }
 
         for (const p of currentBom.parts || []) {
-            const partRecord = await fetchFromApi<PartModel>(`/db/part/id/${p.partID}`).catch(() => null);
+            const partRecord = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(p.partID)}`).catch(() => null);
             
             const catalogNumber = partRecord?.catalogNumber || "";
             const material = partRecord?.material?.trim() || "";
