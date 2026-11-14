@@ -89,6 +89,101 @@ interface LoadedTree {
   rootOnshapeBom: OnshapeBomTable | null;
 }
 
+/** Runs a network request, possibly waiting for a free slot first. */
+type Limiter = <T>(request: () => Promise<T>) => Promise<T>;
+
+/** Where the tree's Onshape and database data comes from. */
+interface TreeSources {
+  onshapeBom(key: OnshapeKey): Promise<OnshapeBomTable>;
+  dbBom(key: OnshapeKey, bomID: string): Promise<BomModel>;
+  dbPart(key: OnshapeKey, partID: string): Promise<PartModel>;
+}
+
+const directSources: TreeSources = {
+  onshapeBom: getOnshapeBom,
+  dbBom: getBomByOnshapeKey,
+  dbPart: getPartByOnshapeKey,
+};
+
+const keyString = (k: OnshapeKey) => `${k.documentID}/${k.wvmType}/${k.wvmID}/${k.elementID}`;
+
+/**
+ * Per-load cache in front of the network: each BOM / record is requested once
+ * (at most `limit` requests at a time), and asking again returns the same
+ * promise. Lets a parallel prefetch run ahead of the in-order tree walk.
+ */
+function createCachedSources(limit: Limiter): TreeSources {
+  const cache = new Map<string, Promise<unknown>>();
+  const once = <T,>(cacheKey: string, request: () => Promise<T>): Promise<T> => {
+    let p = cache.get(cacheKey) as Promise<T> | undefined;
+    if (!p) {
+      p = limit(request);
+      cache.set(cacheKey, p);
+      p.catch(() => {}); // failures are handled by whoever awaits it
+    }
+    return p;
+  };
+  return {
+    onshapeBom: (key) => once(`bom:${keyString(key)}`, () => getOnshapeBom(key)),
+    dbBom: (key, bomID) => once(`dbBom:${keyString(key)}/${bomID}`, () => getBomByOnshapeKey(key, bomID)),
+    dbPart: (key, partID) => once(`dbPart:${keyString(key)}/${partID}`, () => getPartByOnshapeKey(key, partID)),
+  };
+}
+
+const itemKey = (item: ParsedOnshapeBomRow): OnshapeKey => ({
+  documentID: item.itemSource.documentId,
+  wvmType: item.itemSource.wvmType,
+  wvmID: item.itemSource.wvmId,
+  elementID: item.itemSource.elementId,
+});
+
+/**
+ * Starts every request the tree walk will need, in parallel: each
+ * sub-assembly's Onshape BOM and database record, and each part's record.
+ * Failures are left in the cache for the walk to report as before.
+ */
+async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new Set<string>()): Promise<void> {
+  await Promise.all(
+    parseOnshapeBomTable(bom).map(async (item) => {
+      const key = itemKey(item);
+      if (!item.isSubassembly) {
+        await src.dbPart(key, item.itemSource.partId || "").catch(() => {});
+        return;
+      }
+      if (seen.has(keyString(key))) return;
+      seen.add(keyString(key));
+      const sub = await src.onshapeBom(key).catch(() => null);
+      if (!sub) return;
+      await Promise.all([src.dbBom(key, sub.id || key.elementID).catch(() => {}), prefetchTree(sub, src, seen)]);
+    })
+  );
+}
+
+/**
+ * At most `max` requests at once; the rest wait their turn. Applied to single
+ * network calls (never to work that itself waits on other requests), so it
+ * can't deadlock.
+ */
+function createLimiter(max: number): Limiter {
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return async (request) => {
+    // Take a free slot, or wait until a finishing request hands its slot over.
+    if (active >= max) await new Promise<void>((resolve) => waiting.push(resolve));
+    else active += 1;
+    try {
+      return await request();
+    } finally {
+      const next = waiting.shift();
+      if (next) next(); // the slot passes straight to the next request
+      else active -= 1;
+    }
+  };
+}
+
+/** Requests in flight at once during Refresh BOM (Onshape + our server). */
+const REFRESH_CONCURRENCY = 6;
+
 /** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
 type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
 
@@ -143,14 +238,16 @@ export default function AssemblyBomPage() {
       rootBom: BomModel | null | 'root',
       getParentBom: ParentBomLoader,
       /** The parent BOM's line for this sub-assembly (its part number etc.); absent for the root. */
-      parentItem?: ParsedOnshapeBomRow
+      parentItem?: ParsedOnshapeBomRow,
+      /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
+      src: TreeSources = directSources
     ): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
-      const onshapeBom = await getOnshapeBom(key);
+      const onshapeBom = await src.onshapeBom(key);
       const bomID = onshapeBom.id || key.elementID;
 
       let dbBom: BomModel | null = null;
       try {
-        dbBom = await getBomByOnshapeKey(key, bomID);
+        dbBom = await src.dbBom(key, bomID);
       } catch {
         dbBom = null;
       }
@@ -221,7 +318,9 @@ export default function AssemblyBomPage() {
       parsedItem: ParsedOnshapeBomRow,
       parentRowId: string | null,
       rootBom: BomModel | null,
-      getParentBom: ParentBomLoader
+      getParentBom: ParentBomLoader,
+      /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
+      src: TreeSources = directSources
     ): Promise<AssemblyBomRow> => {
       const key: OnshapeKey = {
         documentID: parsedItem.itemSource.documentId,
@@ -233,7 +332,7 @@ export default function AssemblyBomPage() {
 
       let dbPart: PartModel | null = null;
       try {
-        dbPart = await getPartByOnshapeKey(key, partID);
+        dbPart = await src.dbPart(key, partID);
       } catch {
         dbPart = null;
       }
@@ -342,12 +441,18 @@ export default function AssemblyBomPage() {
 
     // A load from Onshape is one "Refresh BOM" operation on the footprint page (/tele).
     return withOperation("Refresh BOM", async () => {
+    // Requests run in parallel (at most REFRESH_CONCURRENCY at once) through a
+    // per-load cache: a prefetch downloads everything ahead while the walk
+    // below builds the rows in the same order as before.
+    const limit = createLimiter(REFRESH_CONCURRENCY);
+    const src = createCachedSources(limit);
+
     // Each parent assembly's DB record is fetched once per load, not once per child row.
     const parentBomRequests = new Map<string, Promise<BomModel | null>>();
     const getParentBom: ParentBomLoader = (bomRowId) => {
       let request = parentBomRequests.get(bomRowId);
       if (!request) {
-        request = fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomRowId)}`).catch(
+        request = limit(() => fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomRowId)}`)).catch(
           () => null
         );
         parentBomRequests.set(bomRowId, request);
@@ -359,7 +464,8 @@ export default function AssemblyBomPage() {
     const allRows: AssemblyBomRow[] = [];
 
     try {
-      const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', getParentBom);
+      const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', getParentBom, undefined, src);
+      if (rootNode.onshapeBom) void prefetchTree(rootNode.onshapeBom, src);
       setRootBomDB(dbBom);
       setRootIsPublished(Boolean(dbBom));
       setRootOnshapeBom(rootNode.onshapeBom ?? null);
@@ -388,11 +494,11 @@ export default function AssemblyBomPage() {
             if (visitedBomIds.has(subKeyId)) continue;
             visitedBomIds.add(subKeyId);
 
-            const { node: subNode } = await resolveBomNode(subKey, childParentId, dbBom, getParentBom, item);
+            const { node: subNode } = await resolveBomNode(subKey, childParentId, dbBom, getParentBom, item, src);
             allRows.push(subNode.row);
             await expand(subNode, false);
           } else {
-            const partRow = await resolvePartRow(item, childParentId, dbBom, getParentBom);
+            const partRow = await resolvePartRow(item, childParentId, dbBom, getParentBom, src);
             allRows.push(partRow);
           }
         }
