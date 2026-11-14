@@ -55,10 +55,14 @@ const EDITABLE_FIELDS = [
   "comments",
   "wantStl",
   "wantParasolid",
+  "markedStandard",
 ];
 
 /** Edited cells that are also written back to Onshape (the rest live only in the database). */
-const DATABASE_ONLY_FIELDS = new Set(["material", "wantStl", "wantParasolid"]);
+const DATABASE_ONLY_FIELDS = new Set(["material", "wantStl", "wantParasolid", "markedStandard"]);
+
+/** Checkbox cells: compared as true/false. */
+const BOOLEAN_FIELDS = new Set(["wantStl", "wantParasolid", "markedStandard"]);
 
 /**
  * Which files a part not chosen yet should get, from its material:
@@ -86,21 +90,34 @@ function editableValues(row: AssemblyBomRow): FieldValues {
 /** Equal for display purposes: trimmed text; for price, 0 and empty are the same. */
 function sameValue(field: string, a: unknown, b: unknown): boolean {
   if (field === "price") return (Number(a) || 0) === (Number(b) || 0);
-  if (field === "wantStl" || field === "wantParasolid") return Boolean(a) === Boolean(b);
+  if (BOOLEAN_FIELDS.has(field)) return Boolean(a) === Boolean(b);
   return String(a ?? "").trim() === String(b ?? "").trim();
 }
 
-/** Engineer written for Onshape Standard Content (screws, nuts, washers...). */
+/** Engineer written for Onshape Standard Content (screws, nuts, washers...) and parts marked standard. */
 const STANDARD_PART_ENGINEER = "Standard Part";
 
-/** Standard Content and vendor parts come from outside Onshape documents you own: not editable. */
-function isLockedRow(row: AssemblyBomRow): boolean {
+/** Standard Content and vendor parts come from outside Onshape documents you own: never editable. */
+function isExternalRow(row: AssemblyBomRow): boolean {
   return row.vendor !== "" || !!row.isStandardContent;
+}
+
+/** Bought, not made: Onshape Standard Content, or marked as a standard part here. */
+function isStandardRow(row: AssemblyBomRow): boolean {
+  return !!row.isStandardContent || !!row.markedStandard;
+}
+
+/**
+ * Cells locked: everything for Standard Content and vendor parts; for parts
+ * marked standard, everything except the mark itself (so it can be undone).
+ */
+function isLockedRow(row: AssemblyBomRow): boolean {
+  return isExternalRow(row) || !!row.markedStandard;
 }
 
 /** Editable cells of `row` that differ from `against` (none for Standard Content, which isn't editable). */
 function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): string[] {
-  if (!against || isLockedRow(row)) return [];
+  if (!against || isExternalRow(row)) return [];
   const r = row as unknown as Record<string, unknown>;
   return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
 }
@@ -137,7 +154,8 @@ function findWorkOrderProblems(rows: AssemblyBomRow[]): Map<string, Map<string, 
       byCatalog.set(catalog, [...(byCatalog.get(catalog) ?? []), part]);
     }
     if (!String(part.material ?? "").trim()) add(part, "material", "Work orders need a material for made parts.");
-    if (!String(part.engineer ?? "").trim()) {
+    const engineer = String(part.engineer ?? "").trim();
+    if (!engineer || engineer === STANDARD_PART_ENGINEER) {
       add(part, "engineer", "Work orders need an engineer for made parts (or fill Default engineer when publishing).");
     }
   }
@@ -341,6 +359,33 @@ async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter): Pro
 /** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
 type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
 
+/** Each parent assembly's DB record is fetched once per load, not once per child row. */
+function createParentBomLoader(limit: Limiter): ParentBomLoader {
+  const requests = new Map<string, Promise<BomModel | null>>();
+  return (bomRowId) => {
+    let request = requests.get(bomRowId);
+    if (!request) {
+      request = limit(() => fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomRowId)}`)).catch(() => null);
+      requests.set(bomRowId, request);
+    }
+    return request;
+  };
+}
+
+/** What a walk of the assembly tree (expandTree) works with. */
+interface ExpandContext {
+  src: TreeSources;
+  getParentBom: ParentBomLoader;
+  /** The top assembly's database record (null when it isn't saved). */
+  rootBomDB: BomModel | null;
+  /** Sub-assemblies already in the tree (listed once). */
+  visited: Set<string>;
+  /** Rows found, in Onshape's order. */
+  out: AssemblyBomRow[];
+  /** Called for each item as the walk reaches it (progress). */
+  onItem?: (name: string) => void;
+}
+
 interface ResolvedNode {
   row: AssemblyBomRow;
   key?: OnshapeKey;
@@ -418,6 +463,8 @@ export default function AssemblyBomPage() {
       const fromOnshape = parentItem?.onshapeFields ?? {};
       const pick = (field: OptionalBomField, dbValue: string | undefined, fallback = "") =>
         field in fromOnshape ? String(fromOnshape[field] ?? "") : dbValue || fallback;
+      // Marked as a standard (bought) part: one item, its insides aren't loaded.
+      const markedStandard = !!dbBom?.markedStandard && rootBom !== "root";
 
       const row: AssemblyBomRow = {
         id: rowId,
@@ -431,7 +478,7 @@ export default function AssemblyBomPage() {
         catalogNumber: pick("partNumber", dbBom?.catalogNumber, onshapeBom.partNumber || ""),
         revision: "-",
         description: onshapeBom.description || pick("description", dbBom?.description),
-        engineer: pick("engineer", dbBom?.engineer),
+        engineer: markedStandard ? STANDARD_PART_ENGINEER : pick("engineer", dbBom?.engineer),
         material: "-",
         mass: 0,
         price: 0,
@@ -448,18 +495,20 @@ export default function AssemblyBomPage() {
         exportParasolid: "",
         dbAction: isExist ? "" : "add",
         vendor: dbBom?.vendor || onshapeBom.bomSource?.element?.vendor || "",
+        markedStandard,
       };
 
       const tracked = withChangeTracking(
         row,
         dbBom
-          ? {
+          ? ({
               name: dbBom.name ?? "",
               description: dbBom.description ?? "",
               catalogNumber: dbBom.catalogNumber ?? "",
               engineer: dbBom.engineer ?? "",
               comments: dbBom.comments ?? "",
-            }
+              markedStandard,
+            } as unknown as FieldValues)
           : null
       );
       return { node: { row: tracked, key, bomID, onshapeBom }, dbBom };
@@ -506,8 +555,10 @@ export default function AssemblyBomPage() {
       const pickNumber = (field: OptionalBomField, dbValue: number | undefined) =>
         field in fromOnshape ? Number(fromOnshape[field]) || 0 : dbValue || 0;
 
-      // Standard Content (screws, nuts...): bought, so no engineer, files or Onshape link.
-      const standard = !!parsedItem.itemSource.isStandardContent;
+      // Standard Content (screws, nuts...) and parts marked standard here: bought,
+      // so no engineer, files or Onshape link.
+      const markedStandard = !parsedItem.itemSource.isStandardContent && !!dbPart?.markedStandard;
+      const standard = !!parsedItem.itemSource.isStandardContent || markedStandard;
 
       // Which files Publish BOM keeps: the saved choice; for parts saved before
       // choices existed, the files they already have; otherwise from the material.
@@ -533,6 +584,7 @@ export default function AssemblyBomPage() {
             comments: dbPart.comments ?? "",
             wantStl: files.wantStl,
             wantParasolid: files.wantParasolid,
+            markedStandard,
           } as unknown as FieldValues)
         : null;
 
@@ -574,9 +626,67 @@ export default function AssemblyBomPage() {
         vendor: dbPart?.vendor || parsedItem.vendor || "",
         configuration: parsedItem.itemSource.configuration || "",
         isStandardContent: !!parsedItem.itemSource.isStandardContent,
+        markedStandard,
       }, savedValues);
     },
     [context.server]
+  );
+
+  /**
+   * Adds the rows under `node` (its parts and sub-assemblies, all the way down)
+   * to `ctx.out`, in Onshape's order. A sub-assembly already in the tree is
+   * listed once; one marked as a standard part is one bought item, so its
+   * insides aren't loaded.
+   */
+  const expandTree = useCallback(
+    async (node: ResolvedNode, isRoot: boolean, ctx: ExpandContext): Promise<void> => {
+      const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
+      const childParentId = isRoot ? null : node.row.id;
+
+      for (const item of parsedItems) {
+        ctx.onItem?.(item.name);
+        if (item.isSubassembly) {
+          const subKey = itemKey(item);
+          const subKeyId = `${subKey.documentID}_${subKey.wvmType}_${subKey.wvmID}_${subKey.elementID}`;
+          if (ctx.visited.has(subKeyId)) continue;
+          ctx.visited.add(subKeyId);
+
+          const { node: subNode } = await resolveBomNode(subKey, childParentId, ctx.rootBomDB, ctx.getParentBom, item, ctx.src);
+          ctx.out.push(subNode.row);
+          if (!subNode.row.markedStandard) await expandTree(subNode, false, ctx);
+        } else {
+          ctx.out.push(await resolvePartRow(item, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src));
+        }
+      }
+    },
+    [resolveBomNode, resolvePartRow]
+  );
+
+  /**
+   * Loads the insides of one sub-assembly row (after its standard-part mark is
+   * removed: they weren't loaded while it was marked). Rows already in the tree
+   * aren't added again.
+   */
+  const loadSubtree = useCallback(
+    async (row: AssemblyBomRow, existing: AssemblyBomRow[]): Promise<AssemblyBomRow[]> => {
+      const limit = createLimiter(REFRESH_CONCURRENCY);
+      const src = createCachedSources(limit);
+      const key: OnshapeKey = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
+      const onshapeBom = await src.onshapeBom(key);
+      const visited = new Set(
+        existing.filter((r) => r.isAssembly).map((r) => `${r.documentID}_${r.wvmType}_${r.wvmID}_${r.elementID}`)
+      );
+      const out: AssemblyBomRow[] = [];
+      await expandTree({ row, key, bomID: row.entityID, onshapeBom }, false, {
+        src,
+        getParentBom: createParentBomLoader(limit),
+        rootBomDB: currentTreeRef.current.rootBomDB,
+        visited,
+        out,
+      });
+      return out;
+    },
+    [expandTree]
   );
 
   /**
@@ -624,18 +734,7 @@ export default function AssemblyBomPage() {
     const limit = createLimiter(REFRESH_CONCURRENCY);
     const src = createCachedSources(limit);
 
-    // Each parent assembly's DB record is fetched once per load, not once per child row.
-    const parentBomRequests = new Map<string, Promise<BomModel | null>>();
-    const getParentBom: ParentBomLoader = (bomRowId) => {
-      let request = parentBomRequests.get(bomRowId);
-      if (!request) {
-        request = limit(() => fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomRowId)}`)).catch(
-          () => null
-        );
-        parentBomRequests.set(bomRowId, request);
-      }
-      return request;
-    };
+    const getParentBom = createParentBomLoader(limit);
 
     const visitedBomIds = new Set<string>();
     const allRows: AssemblyBomRow[] = [];
@@ -654,34 +753,14 @@ export default function AssemblyBomPage() {
       const total = rootNode.onshapeBom?.items?.length ?? 0;
       setLoadProgress({ done: 0, total, current: "" });
 
-      async function expand(node: ResolvedNode, isRoot: boolean) {
-        const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
-        const childParentId = isRoot ? null : node.row.id;
-
-        for (const item of parsedItems) {
-          setLoadProgress({ done: allRows.length, total, current: item.name });
-          if (item.isSubassembly) {
-            const subKey: OnshapeKey = {
-              documentID: item.itemSource.documentId,
-              wvmType: item.itemSource.wvmType,
-              wvmID: item.itemSource.wvmId,
-              elementID: item.itemSource.elementId,
-            };
-            const subKeyId = `${subKey.documentID}_${subKey.wvmType}_${subKey.wvmID}_${subKey.elementID}`;
-            if (visitedBomIds.has(subKeyId)) continue;
-            visitedBomIds.add(subKeyId);
-
-            const { node: subNode } = await resolveBomNode(subKey, childParentId, dbBom, getParentBom, item, src);
-            allRows.push(subNode.row);
-            await expand(subNode, false);
-          } else {
-            const partRow = await resolvePartRow(item, childParentId, dbBom, getParentBom, src);
-            allRows.push(partRow);
-          }
-        }
-      }
-
-      await expand(rootNode, true);
+      await expandTree(rootNode, true, {
+        src,
+        getParentBom,
+        rootBomDB: dbBom,
+        visited: visitedBomIds,
+        out: allRows,
+        onItem: (name) => setLoadProgress({ done: allRows.length, total, current: name }),
+      });
       // A refresh discards unpublished edits (handleRefresh asks first).
       const freshRows = allRows;
       // Which row images changed since they were stored (one request per document).
@@ -703,7 +782,7 @@ export default function AssemblyBomPage() {
       setLoading(false);
     }
     });
-  }, [rootKey, resolveBomNode, resolvePartRow]);
+  }, [rootKey, resolveBomNode, expandTree]);
 
   // Opening an assembly: show its saved copy if there is one; otherwise load it.
   useEffect(() => {
@@ -730,6 +809,26 @@ export default function AssemblyBomPage() {
     []
   );
 
+  /** Sub-assemblies whose insides are being loaded after their standard mark was removed. */
+  const [subtreeLoads, setSubtreeLoads] = useState(0);
+
+  /** Shows `nextRows` and keeps the saved copy in step, so edits survive closing the panel. */
+  const saveRows = useCallback(
+    (nextRows: AssemblyBomRow[]) => {
+      setRows(nextRows);
+      currentTreeRef.current = { ...currentTreeRef.current, rows: nextRows };
+      if (rootKey) {
+        const { rootBomDB: savedRoot, rootOnshapeBom: onshapeRoot } = currentTreeRef.current;
+        writeTreeCache(
+          treeCacheKey(rootKey),
+          { rows: nextRows, rootBomDB: savedRoot, rootBom: rootBomSummary(onshapeRoot) },
+          treeSavedAtRef.current
+        );
+      }
+    },
+    [rootKey]
+  );
+
   /**
    * Table edits stay in this browser until Publish BOM: cells that differ
    * from the database (or, for items not saved yet, from what was loaded) are
@@ -742,37 +841,76 @@ export default function AssemblyBomPage() {
       const previousById = new Map(rows.map((r) => [r.id, r]));
       let blocked = false;
 
-      const nextRows = newData.map((row) => {
+      // Sub-assemblies whose standard-part mark changed in this edit.
+      const markedNow: AssemblyBomRow[] = [];
+      const unmarkedNow: AssemblyBomRow[] = [];
+
+      let nextRows = newData.map((row) => {
         const prev = previousById.get(row.id);
         if (!prev) return row;
         const editedKeys = EDITABLE_FIELDS.filter(
           (k) => (row as unknown as Record<string, unknown>)[k] !== (prev as unknown as Record<string, unknown>)[k]
         );
         if (editedKeys.length === 0) return row; // e.g. expanding/collapsing a row
-        if (isLockedRow(prev) || loading || publishing) {
-          blocked = true; // Standard Content isn't editable; mid-refresh edits would be lost
-          return { ...row, ...Object.fromEntries(editedKeys.map((k) => [k, (prev as unknown as Record<string, unknown>)[k]])) } as AssemblyBomRow;
+        // Standard Content / vendor parts: nothing editable. Marked standard: only
+        // the mark (to undo it). Mid-refresh or mid-publish edits would be lost.
+        const refused = editedKeys.filter(
+          (k) =>
+            loading || publishing || subtreeLoads > 0 || isExternalRow(prev) || (prev.markedStandard && k !== "markedStandard")
+        );
+        if (refused.length > 0) {
+          blocked = true;
+          row = { ...row, ...Object.fromEntries(refused.map((k) => [k, (prev as unknown as Record<string, unknown>)[k]])) } as AssemblyBomRow;
+        }
+        if (row.isAssembly && !!row.markedStandard !== !!prev.markedStandard) {
+          (row.markedStandard ? markedNow : unmarkedNow).push(row);
         }
         // Marked only while it differs from the saved (or loaded) value: typing
         // something and then removing it leaves the cell unmarked.
         return { ...row, modified: changedFields(row, row.baseline ?? row.loaded) };
       });
 
-      if (blocked && (loading || publishing)) {
-        client.showMessageBubble("Wait until the refresh or publish has finished, then edit again.");
+      if (blocked && (loading || publishing || subtreeLoads > 0)) {
+        client.showMessageBubble("Wait until the refresh, publish or loading has finished, then edit again.");
       }
 
-      setRows(nextRows);
-      // Keep the saved copy in step, so edits survive closing the panel.
-      if (rootKey) {
-        writeTreeCache(
-          treeCacheKey(rootKey),
-          { rows: nextRows, rootBomDB, rootBom: rootBomSummary(rootOnshapeBom) },
-          treeSavedAtRef.current
-        );
+      // A sub-assembly marked standard is one bought item: its insides go.
+      if (markedNow.length > 0) {
+        const childrenOf = new Map<string, string[]>();
+        for (const r of nextRows) if (r.parentId) childrenOf.set(r.parentId, [...(childrenOf.get(r.parentId) ?? []), r.id]);
+        const drop = new Set<string>();
+        const collect = (id: string) => {
+          for (const child of childrenOf.get(id) ?? []) {
+            if (!drop.has(child)) {
+              drop.add(child);
+              collect(child);
+            }
+          }
+        };
+        markedNow.forEach((r) => collect(r.id));
+        nextRows = nextRows.filter((r) => !drop.has(r.id));
+      }
+
+      saveRows(nextRows);
+
+      // Unmarked: its insides weren't loaded while it was marked - load them now.
+      for (const row of unmarkedNow) {
+        if (nextRows.some((r) => r.parentId === row.id)) continue;
+        setSubtreeLoads((n) => n + 1);
+        void loadSubtree(row, nextRows)
+          .then((children) => {
+            const current = currentTreeRef.current.rows;
+            // Still unmarked (and still there)? Then add its insides.
+            if (!current.some((r) => r.id === row.id && !r.markedStandard)) return;
+            saveRows([...current, ...children]);
+          })
+          .catch((err: any) => {
+            client.showMessageBubble(`Couldn't load the parts of "${row.name}": ${err?.message || err}. Press Refresh BOM.`);
+          })
+          .finally(() => setSubtreeLoads((n) => n - 1));
       }
     },
-    [rows, client, loading, publishing, rootKey, rootBomDB, rootOnshapeBom]
+    [rows, client, loading, publishing, subtreeLoads, saveRows, loadSubtree]
   );
 
   /** Search box: rows whose name, catalog number or description contain the text. */
@@ -809,8 +947,8 @@ export default function AssemblyBomPage() {
     };
     for (const r of items) {
       if (r.isAssembly) continue;
-      const wantStl = !r.isStandardContent && !!r.wantStl;
-      const wantParasolid = !r.isStandardContent && !!r.wantParasolid;
+      const wantStl = !isStandardRow(r) && !!r.wantStl;
+      const wantParasolid = !isStandardRow(r) && !!r.wantParasolid;
       if (wantStl) preview.stl++;
       if (wantParasolid) preview.parasolid++;
       if (wantStl && !r.saved?.stlLink) preview.newFiles++;
@@ -854,13 +992,16 @@ export default function AssemblyBomPage() {
         childrenByParentRowId.set(parentKey, list);
       }
 
+      // A sub-assembly marked standard is listed as a part: one bought item
+      // (saved as a part record with the same id).
+      const isLinkedAsPart = (c: AssemblyBomRow) => !c.isAssembly || !!c.markedStandard;
       const buildLinkArrays = (parentRowId: string) => {
         const children = childrenByParentRowId.get(parentRowId) ?? [];
         const parts = children
-          .filter((c) => !c.isAssembly)
+          .filter(isLinkedAsPart)
           .map((c) => ({ partID: c.id, quantity: c.quantity || 1 }));
         const subAssemblies = children
-          .filter((c) => c.isAssembly)
+          .filter((c) => !isLinkedAsPart(c))
           .map((c) => ({ bomID: c.id, quantity: c.quantity || 1 }));
         return { parts, subAssemblies };
       };
@@ -985,13 +1126,67 @@ export default function AssemblyBomPage() {
           }
 
           // 2. The full record, with fresh files.
-          const engineer = row.isStandardContent
+          // ("Standard Part" left over from a standard mark that was removed counts as none.)
+          const ownEngineer = row.engineer === STANDARD_PART_ENGINEER ? "" : row.engineer;
+          const engineer = isStandardRow(row)
             ? STANDARD_PART_ENGINEER
             : row.vendor !== ""
               ? row.vendor
-              : row.engineer || values.defaultEngineer;
+              : ownEngineer || values.defaultEngineer;
           const toDelete: string[] = [];
-          if (row.isAssembly) {
+          if (row.isAssembly && row.markedStandard) {
+            // A sub-assembly marked standard (a motor...): one bought item. Its
+            // assembly record keeps the mark (so Refresh BOM doesn't load its
+            // insides); a part record with the same id lists it in its parents'
+            // parts, so the website and work orders show it as one purchased part.
+            const unchanged = !!versions.tree && row.saved?.filesModelVersion === versions.tree && !!row.saved?.avatarID;
+            let avatar: string | null = null;
+            if (!unchanged) {
+              progress.step("Saving thumbnail");
+              avatar = await syncBomThumbnailToDrive(key, row.name);
+              if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
+            }
+            const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
+            const filesModelVersion = !unchanged && !avatar ? "" : versions.tree ?? "";
+            await upsertBomById(row.id, {
+              id: row.id,
+              name: row.name,
+              description: row.description,
+              catalogNumber: row.catalogNumber,
+              comments: row.comments,
+              engineer,
+              onshapeURL: onshapeUrlOf(key),
+              avatarID,
+              filesModelVersion,
+              onshapeID: { ...key, bomID: row.entityID },
+              vendor: row.vendor,
+              markedStandard: true,
+            });
+            progress.step("Saving as a standard part");
+            await upsertPartById(row.id, {
+              id: row.id,
+              name: row.name,
+              description: row.description,
+              catalogNumber: row.catalogNumber,
+              comments: row.comments,
+              engineer,
+              avatarID,
+              stlLink: "",
+              parasolidLink: "",
+              onshapeURL: "",
+              onshapeID: { ...key, partID: row.entityID },
+              vendor: row.vendor,
+              isStandardContent: true,
+              markedStandard: true,
+              wantStl: false,
+              wantParasolid: false,
+              filesModelVersion,
+            });
+            rowUpdates.set(row.id, {
+              engineer,
+              saved: { avatarID, filesModelVersion: filesModelVersion || undefined },
+            });
+          } else if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
             // The picture shows parts from across the tree: re-rendered when anything in it changed.
             const unchanged = !!versions.tree && row.saved?.filesModelVersion === versions.tree && !!row.saved?.avatarID;
@@ -1019,15 +1214,25 @@ export default function AssemblyBomPage() {
                 ...key,
                 bomID: row.entityID,
               },
-              vendor: row.vendor
+              vendor: row.vendor,
+              markedStandard: false,
             });
+            // Its standard mark was just removed: the part record it was listed
+            // as isn't used any more (it shares its thumbnail, which stays).
+            if (row.baseline?.markedStandard) {
+              progress.step("Removing its standard-part record");
+              await fetchFromApi(`/db/part/id/${encodeURIComponent(row.id)}`, { method: "DELETE" }).catch((err: any) => {
+                if (err?.statusCode !== 404) problems.push(`Removing the standard-part record of "${row.name}": ${err?.message || err}`);
+              });
+            }
             rowUpdates.set(row.id, {
               saved: { avatarID, filesModelVersion: !unchanged && !avatar ? undefined : versions.tree ?? undefined },
             });
           } else {
-            // Standard Content (screws, nuts...) is bought, not made: no STL / Parasolid /
-            // Onshape link. Other parts keep the files ticked in the STL / Parasolid columns.
-            const standard = !!row.isStandardContent;
+            // Standard Content (screws, nuts...) and parts marked standard are bought,
+            // not made: no STL / Parasolid / Onshape link. Other parts keep the files
+            // ticked in the STL / Parasolid columns.
+            const standard = isStandardRow(row);
             const wantStl = !standard && !!row.wantStl;
             const wantParasolid = !standard && !!row.wantParasolid;
 
@@ -1085,7 +1290,8 @@ export default function AssemblyBomPage() {
               },
               vendor: row.vendor,
               // Work orders treat these as purchased (no catalog number needed).
-              isStandardContent: !!row.isStandardContent,
+              isStandardContent: standard,
+              markedStandard: !!row.markedStandard,
               wantStl,
               wantParasolid,
               filesModelVersion: saved.filesModelVersion ?? "",
@@ -1233,7 +1439,7 @@ export default function AssemblyBomPage() {
               type="button"
               className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
               onClick={() => setPublishOpen(true)}
-              disabled={loading || publishing || rows.length === 0}
+              disabled={loading || publishing || subtreeLoads > 0 || rows.length === 0}
               title="Save everything shown to the database, replacing the saved data and files, and write edited cells to Onshape"
             >
               {publishing ? "Publishing..." : pendingEditCount > 0 ? `Publish BOM (${pendingEditCount} changes)` : "Publish BOM"}
@@ -1357,6 +1563,9 @@ export default function AssemblyBomPage() {
                   ✓ Ready for a work order
                 </span>
               )
+            )}
+            {subtreeLoads > 0 && (
+              <span className="bom-toolbar-note">Loading the parts of the assembly you unmarked…</span>
             )}
             {searchFilter && (
               <span className="bom-toolbar-note">

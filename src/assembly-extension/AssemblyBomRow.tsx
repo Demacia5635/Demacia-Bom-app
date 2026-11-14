@@ -30,6 +30,12 @@ export default interface AssemblyBomRow extends BomTableRow {
   /** Onshape Standard Content (screws, nuts, washers...): bought, not made, and not editable. */
   isStandardContent?: boolean;
   /**
+   * Marked as a standard (bought) part in this extension: a bearing, motor...
+   * Locked like Standard Content. A marked sub-assembly is one bought item:
+   * its insides aren't loaded or published. Saved on Publish BOM.
+   */
+  markedStandard?: boolean;
+  /**
    * Keys of editable cells whose value differs from `baseline`: what Publish
    * BOM would change. Edits stay local (and in the saved copy of the tree)
    * until Publish BOM, which writes them to Onshape and the database.

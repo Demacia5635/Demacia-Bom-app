@@ -20,6 +20,8 @@ export interface BomModel {
   vendor?: string;
   /** Model version the saved thumbnail was rendered from. */
   filesModelVersion?: string;
+  /** Marked as a standard (bought) part in the extension: its insides aren't used. */
+  markedStandard?: boolean;
   updatedAt?: Date;
   createdAt?: Date;
 }
@@ -43,6 +45,12 @@ export interface PartModel {
   vendor?: string;
   /** Onshape Standard Content (screws, nuts, washers...): bought, not made. */
   isStandardContent?: boolean;
+  /**
+   * Marked as a standard (bought) part in the extension (a bearing, a motor...);
+   * saved with isStandardContent true as well. Also set on the part record a
+   * marked sub-assembly is saved as.
+   */
+  markedStandard?: boolean;
   /** Whether Publish BOM keeps an STL / Parasolid for this part (absent on older records). */
   wantStl?: boolean;
   wantParasolid?: boolean;

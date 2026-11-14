@@ -1,8 +1,11 @@
 import type { ColumnConfig } from "../components/Table";
 import type AssemblyBomRow from "./AssemblyBomRow";
 
-/** Standard Content (bolts, nuts...) and vendor parts come from outside and aren't editable. */
-const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent;
+/**
+ * Not editable: Standard Content (bolts, nuts...) and vendor parts, which come
+ * from outside, and parts marked standard here (bought, locked like screws).
+ */
+const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent || !!row.markedStandard;
 
 /** Why a cell's value would stop a work order, if it would. */
 export type CellProblem = (row: AssemblyBomRow, key: string) => string | undefined;
@@ -62,6 +65,16 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem): Colu
       type: "boolean",
       isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantParasolid"),
+    },
+    // Bought rather than made (a bearing, a motor...): locked like Standard
+    // Content, no files; a sub-assembly becomes one item (its insides drop out).
+    // Saved on Publish BOM. Onshape Standard Content and vendor parts already are.
+    {
+      key: "markedStandard",
+      label: "Standard part",
+      type: "boolean",
+      isDisabled: (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent,
+      isModified: (row: AssemblyBomRow) => !!row.modified?.includes("markedStandard"),
     },
   ];
 }

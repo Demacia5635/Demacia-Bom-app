@@ -55,6 +55,10 @@ const bomSchema = new mongoose.Schema(
     comments: { type: String },
     onshapeID: { type: onshapeIDSchema, required: false },
     vendor: { type: String },
+    // Marked as a standard (bought) part in the BOM extension, e.g. a motor:
+    // its insides aren't loaded or published, and parent assemblies list it
+    // under `parts` (a part record with the same id) instead of `subAssemblies`.
+    markedStandard: { type: Boolean, default: false },
   },
   { _id: false, timestamps: true },
 );

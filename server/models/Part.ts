@@ -38,6 +38,11 @@ const partSchema = new mongoose.Schema(
     vendor: { type: String },
     // Onshape Standard Content (screws, nuts, washers...): bought, not made.
     isStandardContent: { type: Boolean, default: false },
+    // Marked as a standard (bought) part in the BOM extension, e.g. a bearing
+    // or motor modelled in a team document. Such parts are saved with
+    // isStandardContent true too. A marked sub-assembly is also saved as a
+    // part (same id as its assembly record) so it lists as one bought item.
+    markedStandard: { type: Boolean, default: false },
 
     // Which files Publish BOM keeps for this part (set in the BOM extension).
     // Absent on parts saved before these choices existed.
