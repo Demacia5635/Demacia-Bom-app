@@ -7,8 +7,8 @@ import mongoose from "mongoose";
  */
 const telemetryEventSchema = new mongoose.Schema(
   {
-    /** When the operation started. */
-    at: { type: Date, required: true, index: true },
+    /** When the operation started. Indexed below (and expires after TELEMETRY_TTL_SECONDS). */
+    at: { type: Date, required: true },
     /** Onshape account name (or email) of the person using the extension. */
     user: { type: String, default: "", index: true },
     /** e.g. "Refresh BOM", "Publish BOM", "Image loads", "Sign-in check". */
@@ -32,6 +32,39 @@ const telemetryEventSchema = new mongoose.Schema(
   { timestamps: false },
 );
 
+/** Entries are deleted by MongoDB about 6 months after they happened. */
+export const TELEMETRY_TTL_SECONDS = 180 * 24 * 60 * 60;
+
+telemetryEventSchema.index({ at: 1 }, { expireAfterSeconds: TELEMETRY_TTL_SECONDS });
+
 const TelemetryEvent = mongoose.model("TelemetryEvent", telemetryEventSchema);
+
+/**
+ * Databases created before the TTL existed already have a plain `at` index, so
+ * Mongoose's automatic index build fails with IndexOptionsConflict. Turn that
+ * existing index into the TTL index instead (or rebuild it if that's refused).
+ */
+TelemetryEvent.on("index", async (err?: { code?: number; codeName?: string }) => {
+  if (!err || (err.code !== 85 && err.codeName !== "IndexOptionsConflict")) {
+    if (err) console.error("Telemetry index build failed:", err);
+    return;
+  }
+  const collection = TelemetryEvent.collection;
+  try {
+    await collection.db.command({
+      collMod: collection.collectionName,
+      index: { keyPattern: { at: 1 }, expireAfterSeconds: TELEMETRY_TTL_SECONDS },
+    });
+    console.log("Telemetry: entries now expire after 180 days");
+  } catch (collModError) {
+    try {
+      await collection.dropIndex("at_1");
+      await collection.createIndex({ at: 1 }, { expireAfterSeconds: TELEMETRY_TTL_SECONDS });
+      console.log("Telemetry: rebuilt the at index to expire entries after 180 days");
+    } catch (rebuildError) {
+      console.error("Telemetry: could not add the 180-day expiry:", collModError, rebuildError);
+    }
+  }
+});
 
 export default TelemetryEvent;
