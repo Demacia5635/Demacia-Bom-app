@@ -11,7 +11,7 @@ export type WorkorderSummary = Omit<
 >;
 
 export function WorkOrdersPage() {
-    const { isLight, toggleTheme } = useThemeSync();
+    const { isLight } = useThemeSync();
     const [searchQuery, setSearchQuery] = useState("");
     const [workOrders, setWorkOrders] = useState<WorkorderSummary[]>([]);
     const [loading, setLoading] = useState<boolean>(true);

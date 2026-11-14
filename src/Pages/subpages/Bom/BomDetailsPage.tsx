@@ -63,7 +63,7 @@ export default function BomDetailsPage() {
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
   // Ref to hold debounced save timeouts per part ID
-  const saveTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const saveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   useEffect(() => {
     if (!bomId) return;

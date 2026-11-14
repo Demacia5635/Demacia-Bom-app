@@ -7,7 +7,7 @@ import PartPortal from "./PartPortal";
 import { recordImageSrc } from "../../util/recordImage";
 
 export function PartsSearchPage() {
-    const { isLight, toggleTheme } = useThemeSync();
+    const { isLight } = useThemeSync();
     const [searchQuery, setSearchQuery] = useState("");
     const [parts, setParts] = useState<PartModel[]>([]);
     const [isOpen, setOpen] = useState<PartModel | null>(null);

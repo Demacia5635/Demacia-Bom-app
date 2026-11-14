@@ -47,7 +47,7 @@ const getCleanPartName = (record: any, entityID: string) => {
 
 export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
-    const { isLight, toggleTheme } = useThemeSync();
+    const { isLight } = useThemeSync();
 
     const [rows, setRows] = useState<WorkOrderTableRow[]>([]);
     const [error, setError] = useState<ApiError | null>(null);
@@ -65,7 +65,7 @@ export default function WorkOrderDetailsPage() {
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
     const rowPartMapRef = useRef<Map<string, string>>(new Map());
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'In Planning') return 'In Planning';

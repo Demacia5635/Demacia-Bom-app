@@ -11,6 +11,7 @@
     "build:extension": "vite build --config vite.extension.config.ts",
     "watch:extension": "vite build --config vite.extension.config.ts --watch --mode development",
     "lint": "oxlint",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -37,6 +38,7 @@
     "@vitejs/plugin-react": "^6.1.0",
     "gh-pages": "^6.3.0",
     "oxlint": "^1.79.0",
+    "typescript": "^5.9.3",
     "vite": "^8.2.2"
   }
 }

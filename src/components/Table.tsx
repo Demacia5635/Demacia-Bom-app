@@ -118,7 +118,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const [isHandleDragging, setIsHandleDragging] = useState<boolean>(false);
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
-    const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, rowId: null });
+    const [, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, rowId: null });
 
     const wrapperRef = useRef<HTMLDivElement>(null);
     const bottomScrollRef = useRef<HTMLDivElement>(null);

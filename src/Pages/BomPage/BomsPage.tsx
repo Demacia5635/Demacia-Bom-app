@@ -7,7 +7,7 @@ import type { BomModel } from "../../util/Models";
 export type BomSummary = Omit<BomModel, 'description' | 'comments' | 'onshapeURL' | 'onshapeID' | 'parts' | 'subAssemblies' | 'createdAt'>;
 
 export default function HomeScreen() {
-  const { isLight, toggleTheme } = useThemeSync();
+  const { isLight } = useThemeSync();
 
   const [boms, setBoms] = useState<BomSummary[]>([]);
   const [loading, setLoading] = useState<boolean>(true);

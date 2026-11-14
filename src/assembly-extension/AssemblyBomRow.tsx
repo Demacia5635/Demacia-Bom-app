@@ -1,4 +1,4 @@
-import type BomTableRow from "../Tables/Bom/BomTableRow";
+import type BomTableRow from "../Pages/subpages/Bom/BomTableRow";
 
 /**
  * Where a row's data actually came from:
