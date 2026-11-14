@@ -893,6 +893,9 @@ export default function AssemblyBomPage() {
             setData={(newData) => handleTableEdit(newData as AssemblyBomRow[])}
             newRowFunction={undefined}
             initialSort={{ key: "catalogNumber", direction: "asc" }}
+            // Like Excel's freeze panes: header row + avatar and name stay visible.
+            stickyHeader
+            frozenColumns={2}
           />
           </>
         )}

@@ -296,6 +296,46 @@ body.dark-theme-active .table-page-container,
   background-color: var(--bg-surface-disabled);
 }
 
+/* ---- Frozen header row and left columns (Table stickyHeader / frozenColumns) ----
+ * position must beat the "relative !important" on .table-th/.table-td, and
+ * sticky cells need an opaque background so scrolled cells don't show through. */
+.table-wrapper.table-wrapper-sticky {
+  overflow: auto;
+}
+
+.table-th.th-sticky {
+  position: sticky !important;
+  top: 0;
+  z-index: 20;
+  background-color: var(--bg-surface, #1e293b);
+}
+
+.table-th.cell-frozen,
+.table-td.cell-frozen {
+  position: sticky !important;
+  z-index: 12;
+  background-color: var(--bg-surface, #1e293b);
+}
+
+/* The corner (frozen header cells) stays above both. */
+.table-th.th-sticky.cell-frozen {
+  z-index: 30;
+}
+
+/* Divider between the frozen columns and the rest. */
+.table-th.cell-frozen-last,
+.table-td.cell-frozen-last {
+  box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.45);
+}
+
+.table-td.cell-frozen.cell-disabled {
+  background-color: var(--bg-surface-disabled, #1a2235);
+}
+
+.table-td.cell-frozen:hover {
+  background-color: var(--bg-surface-hover, #334155) !important;
+}
+
 /* Edited, not published yet (BOM extension). */
 .cell-modified {
   background-color: rgba(245, 158, 11, 0.14);
@@ -304,6 +344,16 @@ body.dark-theme-active .table-page-container,
 
 .cell-modified .cell-input {
   color: #fcd34d;
+}
+
+/* A frozen edited cell: amber tint over an opaque background. */
+.table-td.cell-frozen.cell-modified {
+  background: linear-gradient(rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.14)), var(--bg-surface, #1e293b);
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.table-td.cell-frozen.cell-modified.cell-frozen-last {
+  box-shadow: inset 3px 0 0 #f59e0b, 4px 0 6px -2px rgba(0, 0, 0, 0.45);
 }
 
 .cell-input:disabled {

@@ -105,9 +105,13 @@ interface TableParam {
     defaultColWidth?: number;
     removeTopRow?: boolean;
     initialSort?: SortConfig;
+    /** Keeps the header row visible while scrolling (the table scrolls inside its own box, sized to the window). */
+    stickyHeader?: boolean;
+    /** Number of leftmost columns kept visible while scrolling sideways (like Excel's freeze panes). */
+    frozenColumns?: number;
 }
 
-export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort }) => {
+export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0 }) => {
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
     const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
     const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -123,6 +127,28 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
     const [columns, setColumns] = useState<ColumnConfig[]>(columnsData);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(initialSort ?? null);
+
+    // Sticky header: the table must scroll inside its own box for the header to
+    // stay pinned, so the box is sized to reach the bottom of the window.
+    const [fitHeight, setFitHeight] = useState<number | null>(null);
+    useEffect(() => {
+        if (!stickyHeader) return;
+        const fit = () => {
+            const wrapper = wrapperRef.current;
+            if (!wrapper) return;
+            const top = wrapper.getBoundingClientRect().top + window.scrollY;
+            // Leave room for the synced horizontal scrollbar under the table.
+            setFitHeight(Math.max(200, window.innerHeight - top - 24));
+        };
+        fit();
+        window.addEventListener('resize', fit);
+        const ro = new ResizeObserver(fit);
+        if (wrapperRef.current?.parentElement) ro.observe(wrapperRef.current.parentElement);
+        return () => {
+            window.removeEventListener('resize', fit);
+            ro.disconnect();
+        };
+    }, [stickyHeader]);
 
     const closeContextMenu = () => { setContextMenu(prev => ({ ...prev, visible: false })); setRowContextMenu(prev => ({ ...prev, visible: false })); };
 
@@ -408,6 +434,24 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     };
 
     const resetDragState = () => { setDraggedIdx(null); setDropTargetIdx(null); setIsHandleDragging(false); };
+
+    /** Width of the column at `idx` (the last one stretches to fill the table). */
+    const colWidth = (col: ColumnConfig, idx: number): number => {
+        const isLast = idx === columns.length - 1;
+        return columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
+    };
+
+    // Frozen columns stick to the left; each one's offset is the width of those before it.
+    const frozenCount = Math.min(frozenColumns, Math.max(columns.length - 1, 0));
+    const frozenLeft: number[] = [];
+    for (let i = 0, left = 0; i < frozenCount; i++) {
+        frozenLeft.push(left);
+        left += colWidth(columns[i], i);
+    }
+    const frozenClass = (idx: number) =>
+        idx < frozenCount ? `cell-frozen${idx === frozenCount - 1 ? ' cell-frozen-last' : ''}` : '';
+    const frozenStyle = (idx: number): React.CSSProperties | undefined =>
+        idx < frozenCount ? { left: frozenLeft[idx] } : undefined;
     const getDropIndicatorClass = (index: number) => (draggedIdx !== null && dropTargetIdx !== null && index === dropTargetIdx && draggedIdx !== dropTargetIdx) ? 'drop-indicator-both' : '';
 
     const handleCellChange = (rowId: string, col: ColumnConfig, rawValue: any) => {
@@ -528,16 +572,20 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                 </div>
             }
 
-            <div className="table-wrapper" ref={wrapperRef} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div
+                className={`table-wrapper ${stickyHeader ? 'table-wrapper-sticky' : ''}`}
+                ref={wrapperRef}
+                style={{
+                    scrollbarWidth: 'none',
+                    msOverflowStyle: 'none',
+                    ...(stickyHeader && fitHeight !== null ? { maxHeight: `${fitHeight}px` } : {}),
+                }}
+            >
                 <table className="custom-table">
                     <colgroup>
-                        {columns.map((col, idx) => {
-                            const isLast = idx === columns.length - 1;
-                            const width =
-                                columnWidths[col.key] ??
-                                (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
-                            return <col key={col.key} style={{ width }} />;
-                        })}
+                        {columns.map((col, idx) => (
+                            <col key={col.key} style={{ width: colWidth(col, idx) }} />
+                        ))}
                     </colgroup>
                     <thead>
                         <tr>
@@ -550,7 +598,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                     onDrop={() => handleDrop(index)}
                                     onDragEnd={resetDragState}
                                     onContextMenu={(e) => handleContextMenu(e, col.key)}
-                                    className={`table-th ${draggedIdx === index ? 'dragging-active' : ''} ${getDropIndicatorClass(index)}`}
+                                    className={`table-th ${stickyHeader ? 'th-sticky' : ''} ${frozenClass(index)} ${draggedIdx === index ? 'dragging-active' : ''} ${getDropIndicatorClass(index)}`}
+                                    style={frozenStyle(index)}
                                 >
                                     <div className="th-content-wrapper">
                                         <button
@@ -586,7 +635,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                         let displayValue: string | number = row[col.key] as string | number;
 
                                         return (
-                                            <td key={col.key} className={`table-td ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''}`}>
+                                            <td key={col.key} style={frozenStyle(colIndex)} className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''}`}>
                                                 <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
                                                     {colIndex === 0 && isRowParent && (
                                                         <button className="expand-toggle" onClick={(e) => toggleExpand(row.id, e)}>{row.isExpanded ? '▼' : '▶'}</button>
