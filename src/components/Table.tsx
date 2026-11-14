@@ -93,6 +93,8 @@ export interface ColumnConfig {
     isDisabled?: (row: RowData & any) => boolean;
     /** Highlights the cell (class "cell-modified"), e.g. for an edit not saved yet. */
     isModified?: (row: RowData & any) => boolean;
+    /** Extra class for a select cell from its value (e.g. a status colour). */
+    valueClass?: (value: any) => string | undefined;
     /** A problem with the cell's value: marks the cell (class "cell-problem") with the text as its tooltip. */
     problem?: (row: RowData & any) => string | undefined;
     apiPath?: string | ((value: any) => string);
@@ -692,7 +694,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                             onChange={(e) => handleCellChange(row.id, col, e.target.value)}
                                                             onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
                                                             onClick={(e) => e.stopPropagation()}
-                                                            className={`cell-input cell-select`}
+                                                            className={`cell-input cell-select ${col.valueClass?.(displayValue) ?? ''}`}
                                                             disabled={isCellDisabled}
                                                         >
                                                             <option value="" disabled selected>Select...</option>

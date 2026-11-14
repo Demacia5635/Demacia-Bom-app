@@ -120,39 +120,8 @@ export default function WorkOrderDetailsPage() {
         return () => window.removeEventListener("click", handleClickOutside);
     }, []);
 
-    // Select color sync effect for dropdowns
-    useEffect(() => {
-        const syncSelectElements = () => {
-            const selects = document.querySelectorAll(".cell-select");
-            selects.forEach((el) => {
-                const select = el as HTMLSelectElement;
-                const val = select.value;
-                
-                select.setAttribute("value", val);
-                select.classList.remove("status-bg-orange", "status-bg-blue", "status-bg-green", "status-bg-red");
+    // Dropdown colours come from WorkOrderColumns (valueClass), set on every render.
 
-                if (["In Planning", "In manufacturing", "Medium", "Manual"].includes(val)) {
-                    select.classList.add("status-bg-orange");
-                } else if (["Manufacturing approved", "Milled", "Lathed", "CNC", "Printed", "Externally produced", "Untracked"].includes(val)) {
-                    select.classList.add("status-bg-blue");
-                } else if (["Finished Manufacturing", "Low", "Finished"].includes(val)) {
-                    select.classList.add("status-bg-green");
-                } else if (["CATNUM Written", "High"].includes(val)) {
-                    select.classList.add("status-bg-red");
-                }
-            });
-        };
-
-        const timer = setTimeout(syncSelectElements, 30);
-        const handleChange = () => setTimeout(syncSelectElements, 10);
-        
-        document.addEventListener("change", handleChange);
-        return () => {
-            clearTimeout(timer);
-            document.removeEventListener("change", handleChange);
-        };
-    }, [rows, isLight]);
-    
     useEffect(() => {
         if (!workOrderID) return;
 
