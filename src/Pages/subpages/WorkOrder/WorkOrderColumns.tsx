@@ -11,7 +11,8 @@ export const PRIORITIES = ['High', 'Medium', 'Low', 'Untracked', 'Finished'];
 // Avatar and name come first: the table freezes the first two columns.
 const WorkOrderColumns: ColumnConfig[] = [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: isBoughtPart },
-    { key: "name", label: "Name", type: "string", isDisabled: isBoughtPart },
+    // Name, catalogue number and quantity come from the BOM: not changed here.
+    { key: "name", label: "Name", type: "string", isDisabled: () => true },
     { key: "lastUpadte", label: "Last Updated", type: "string", isDisabled: () => true },
     { key: "productionMakingOwner", label: "Production Making Owner", type: "string" },
     { key: "catalogNumber", label: "Catalogue Number", type: "string", isDisabled: () => true }, // Read-only
