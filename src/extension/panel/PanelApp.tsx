@@ -1,13 +1,14 @@
 /**
  * Side panel root: checks the browser is signed in to Onshape, then shows the
- * BOM of the assembly in the active tab. There are no Demacia accounts; every
+ * BOM of the assembly in the tab this panel was opened for (one panel per tab;
+ * see background.ts). There are no Demacia accounts; every
  * Onshape call uses the browser's Onshape session.
  */
 import { type ReactNode } from "react";
 import AssemblyBomPage from "../../assembly-extension/AssemblyBomPage";
 import { OnshapeLocationProvider } from "../onshapeHostShim";
 import { setOnshapeServer } from "../onshapeDirect";
-import { useActiveOnshapeTab, type OnshapeLocation } from "../onshapeTab";
+import { useOwnOnshapeTab, type OnshapeLocation } from "../onshapeTab";
 import OnshapeSignInCheck from "./OnshapeSignInCheck";
 import { Toasts } from "./toast";
 
@@ -20,18 +21,18 @@ function Message({ children }: { children: ReactNode }) {
   );
 }
 
-/** The BOM page for the active tab, or a hint when the tab isn't an Onshape element. */
+/** The BOM page for this panel's tab, or a hint when the tab isn't an Onshape element. */
 function BomForActiveTab({ loading, location }: { loading: boolean; location: OnshapeLocation | null }) {
-  if (loading) return <Message>Reading the active tab...</Message>;
-  if (!location) return <Message>Open an Onshape assembly tab to see its bill of materials.</Message>;
+  if (loading) return <Message>Reading this tab...</Message>;
+  if (!location) return <Message>Open an Onshape assembly in this tab to see its bill of materials.</Message>;
   // Remount per element so each assembly starts from a clean state.
   return <AssemblyBomPage key={`${location.documentId}/${location.wvmType}/${location.wvmId}/${location.elementId}`} />;
 }
 
 export default function PanelApp() {
-  const { loading, location } = useActiveOnshapeTab();
+  const { loading, location } = useOwnOnshapeTab();
 
-  // Direct Onshape calls go to whichever Onshape server the active tab is on.
+  // Direct Onshape calls go to whichever Onshape server this tab is on.
   // Set during render (idempotent) rather than in an effect: child effects,
   // like the sign-in check, run before the parent's.
   if (location) setOnshapeServer(location.server);
