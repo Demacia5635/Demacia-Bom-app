@@ -53,18 +53,11 @@ const WorkOrderColumns: ColumnConfig[] = [
         label: "Export STL",
         type: "button",
         buttonText: "Download",
-        isDisabled: (row: WorkOrderTableRow) => !row.exportSTL && !(row as any).onshapeID?.documentID,
+        // Files are saved in Google Drive on publish; no Onshape fallback.
+        isDisabled: (row: WorkOrderTableRow) => !row.exportSTL,
         onButtonClick: (row: WorkOrderTableRow) => {
-            let downloadUrl = "";
-            if (row.exportSTL) {
-                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${row.exportSTL}`;
-            } else if ((row as any).onshapeID) {
-                const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
-                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${partID}/stl`;
-            }
-            if (downloadUrl) {
-                downloadFile(downloadUrl, `${row.name || "part"}.stl`);
-            }
+            if (!row.exportSTL) return;
+            downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`, `${row.name || "part"}.stl`);
         },
     },
     {
@@ -72,18 +65,10 @@ const WorkOrderColumns: ColumnConfig[] = [
         label: "Export Parasolid",
         type: "button",
         buttonText: "Download",
-        isDisabled: (row: WorkOrderTableRow) => !row.exportParasolid && !(row as any).onshapeID?.documentID,
+        isDisabled: (row: WorkOrderTableRow) => !row.exportParasolid,
         onButtonClick: (row: WorkOrderTableRow) => {
-            let downloadUrl = "";
-            if (row.exportParasolid) {
-                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${row.exportParasolid}`;
-            } else if ((row as any).onshapeID) {
-                const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
-                downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${partID}/parasolid`;
-            }
-            if (downloadUrl) {
-                downloadFile(downloadUrl, `${row.name || "part"}.parasolid`);
-            }
+            if (!row.exportParasolid) return;
+            downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`, `${row.name || "part"}.x_t`);
         },
     },
 ];

@@ -7,6 +7,7 @@ import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
 import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
+import { recordImageSrc } from "../../../util/recordImage";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
@@ -86,26 +87,7 @@ export default function BomDetailsPage() {
 
       for (const sub of bom.subAssemblies || []) {
         const subBomRecord = await fetchFromApi<BomModel>(`/db/bom/id/${sub.bomID}`).catch(() => null);
-        let subAvatarUrl = "";
-
-        if (subBomRecord?.driveFileId) {
-          subAvatarUrl = `/api/drive/file/id/${subBomRecord.driveFileId}`;
-        } else if (subBomRecord?.avatarID && typeof subBomRecord.avatarID === "string" && subBomRecord.avatarID.startsWith("data:image")) {
-          subAvatarUrl = subBomRecord.avatarID;
-        } else if (subBomRecord?.imageUrl) {
-          subAvatarUrl = subBomRecord.imageUrl;
-        } else if (subBomRecord?.onshapeID?.documentID && subBomRecord?.onshapeID?.elementID) {
-          const docID = subBomRecord.onshapeID.documentID;
-          const wType = subBomRecord.onshapeID.wvmType || "w";
-          const wID = subBomRecord.onshapeID.wvmID || "";
-          const elemID = subBomRecord.onshapeID.elementID;
-          subAvatarUrl = `/api/onshape/bom/d/${docID}/wvmT/${wType}/wvmI/${wID}/e/${elemID}/thumbnail`;
-        } else {
-          const partsArr = sub.bomID.split("_");
-          if (partsArr.length >= 4) {
-            subAvatarUrl = `/api/onshape/bom/d/${partsArr[0]}/wvmT/${partsArr[1] || "w"}/wvmI/${partsArr[2] || ""}/e/${partsArr[3]}/thumbnail`;
-          }
-        }
+        let subAvatarUrl = recordImageSrc(subBomRecord as any);
 
         const subAssemblyRow: BomTableRow = {
           id: `sub-${sub.bomID}`,
@@ -141,36 +123,7 @@ export default function BomDetailsPage() {
       for (const p of bom.parts || []) {
         const part = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(p.partID)}`);
 
-        let partAvatarUrl = "";
-
-        if (part?.driveFileId) {
-          partAvatarUrl = `/api/drive/file/id/${part.driveFileId}`;
-        } else if (part?.avatarID && typeof part.avatarID === "string" && part.avatarID.startsWith("data:image")) {
-          partAvatarUrl = part.avatarID;
-        } else if (part?.imageUrl) {
-          partAvatarUrl = part.imageUrl;
-        } else {
-          let docID = part?.onshapeID?.documentID;
-          let elemID = part?.onshapeID?.elementID;
-          let wvmType = part?.onshapeID?.wvmType || "w";
-          let wvmID = part?.onshapeID?.wvmID || "";
-          let targetPartID = part?.onshapeID?.partID || p.partID;
-
-          if (!docID && part?.id && part.id.includes("_")) {
-            const partsArr = part.id.split("_");
-            if (partsArr.length >= 5) {
-              docID = partsArr[0];
-              wvmType = partsArr[1];
-              wvmID = partsArr[2];
-              elemID = partsArr[3];
-              targetPartID = partsArr[4];
-            }
-          }
-
-          if (docID && elemID) {
-            partAvatarUrl = `/api/onshape/part/d/${docID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elemID}/p/${targetPartID}/thumbnail`;
-          }
-        }
+        let partAvatarUrl = recordImageSrc(part as any);
 
         const partRow: BomTableRow = {
           id: `part-${part.id}`,

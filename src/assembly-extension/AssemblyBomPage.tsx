@@ -705,16 +705,25 @@ export default function AssemblyBomPage() {
           if (row.source === "db") {
             // Already saved: keep its data and files, but make its item lists
             // match the current Onshape structure (items added or removed since).
+            // Rows with a saved image show it from Drive; anything else has none saved.
+            const hasSavedImage = typeof row.avatar === "string" && row.avatar.startsWith("/drive/file/id/");
             if (row.isAssembly) {
               const links = buildLinkArrays(row.id);
-              await upsertBomById(row.id, { parts: links.parts, subAssemblies: links.subAssemblies });
+              const patch: Partial<BomModel> = { parts: links.parts, subAssemblies: links.subAssemblies };
+              if (!hasSavedImage) {
+                const avatarID = await syncBomThumbnailToDrive(key, row.name);
+                if (avatarID) patch.avatarID = avatarID;
+                else fileFailures.push(`Thumbnail of "${row.name}"`);
+              }
+              await upsertBomById(row.id, patch);
             } else {
               const patch: Partial<PartModel> = {};
               // Restore a name the server replaced with "Unnamed Part".
               if (row.repairName) patch.name = row.repairName;
 
-              // Saved part without its STL or Parasolid: export just what's missing.
+              // Saved part without its thumbnail, STL or Parasolid: export just what's missing.
               const missing = [
+                ...(!hasSavedImage ? (["thumbnail"] as const) : []),
                 ...(!row.exportSTL ? (["stl"] as const) : []),
                 ...(!row.exportParasolid ? (["parasolid"] as const) : []),
               ];
@@ -724,6 +733,7 @@ export default function AssemblyBomPage() {
                   only: missing,
                 });
                 fileFailures.push(...files.failures);
+                if (files.avatarID) patch.avatarID = files.avatarID;
                 if (files.stlLink) patch.stlLink = files.stlLink;
                 if (files.parasolidLink) patch.parasolidLink = files.parasolidLink;
               }

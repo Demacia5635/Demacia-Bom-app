@@ -4,6 +4,7 @@ import { AuthenticatedImage } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 import type { WorkorderSummary } from "./WorkOrderPage";
+import { recordImageSrc } from "../../util/recordImage";
 
 export const WorkOrderTable: React.FC<{ workOrders: WorkorderSummary[] }> = ({ workOrders }) => {
     const navigate = useNavigate();
@@ -31,35 +32,9 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkorderSummary[] }> = ({ w
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                     {workOrders.map((wo) => {
                         const rawWO = wo as any;
-                        let imageSrc = "";
-
-                        if (rawWO?.driveFileId) {
-                            imageSrc = `/api/drive/file/id/${rawWO.driveFileId}`;
-                        } else if (rawWO?.bomDriveFileId) {
-                            imageSrc = `/api/drive/file/id/${rawWO.bomDriveFileId}`;
-                        } else if (rawWO?.bomID && typeof rawWO.bomID === "string" && rawWO.bomID.includes("_")) {
-                            const bomParts = rawWO.bomID.split("_");
-                            if (bomParts.length >= 4) {
-                                const documentID = bomParts[0];
-                                const wvmType = bomParts[1] || "w";
-                                const wvmID = bomParts[2] || "";
-                                const elementID = bomParts[3];
-                                imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-                            }
-                        }
-
-                        if (!imageSrc) {
-                            if (wo?.avatarID && typeof wo.avatarID === "string" && wo.avatarID.startsWith("data:image")) {
-                                imageSrc = wo.avatarID;
-                            } else if (wo?.avatarID && wo.avatarID.length > 10) {
-                                imageSrc = `/api/drive/file/id/${wo.avatarID}`;
-                            } else if (rawWO?.imageUrl) {
-                                imageSrc = rawWO.imageUrl;
-                            } else if (rawWO?.onshapeID?.documentID && rawWO?.onshapeID?.elementID) {
-                                const { documentID, wvmType = "w", wvmID = "", elementID } = rawWO.onshapeID;
-                                imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-                            }
-                        }
+                        const imageSrc = rawWO?.driveFileId || !rawWO?.bomDriveFileId
+                            ? recordImageSrc(rawWO)
+                            : `/api/drive/file/id/${rawWO.bomDriveFileId}`;
 
                         return (
                             <tr

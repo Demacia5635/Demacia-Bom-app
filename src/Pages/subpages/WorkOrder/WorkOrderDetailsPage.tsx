@@ -8,6 +8,7 @@ import type WorkOrderTableRow from "./WorkOrderTableRow";
 import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
+import { recordImageSrc } from "../../../util/recordImage";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
@@ -51,7 +52,7 @@ export default function WorkOrderDetailsPage() {
     const [error, setError] = useState<ApiError | null>(null);
     const [loading, setLoading] = useState<boolean>(false);
     const [workOrderData, setWorkOrderData] = useState<WorkorderModel | null>(null);
-    const [assemblyThumbnailUrl, setAssemblyThumbnailUrl] = useState<string>("");
+    const [assemblyThumbnailUrl] = useState<string>(""); // image now comes from the BOM record
 
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
     const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
@@ -121,10 +122,7 @@ export default function WorkOrderDetailsPage() {
                 const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
                 setWorkOrderData(data);
 
-                if ((data as any)?.onshapeID?.documentID && (data as any)?.onshapeID?.elementID) {
-                    const { documentID, wvmType = "w", wvmID, elementID } = (data as any).onshapeID;
-                    setAssemblyThumbnailUrl(`/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`);
-                }
+                // The assembly image comes from the BOM record (WorkOrderDataUI).
             } catch (err: any) {
                 setError(err);
             }
@@ -181,12 +179,7 @@ export default function WorkOrderDetailsPage() {
 
                 const existingWoPart = workOrderData?.parts?.find((p: any) => p.partID === partID);
 
-                let avatarUrl = "";
-                if (part?.onshapeID?.documentID && part?.onshapeID?.elementID) {
-                    const { documentID, wvmType = "w", wvmID, elementID, partID: oidPartID } = part.onshapeID;
-                    const targetPartID = oidPartID || partID;
-                    avatarUrl = `/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${targetPartID}/thumbnail`;
-                }
+                let avatarUrl = recordImageSrc(part as any);
 
                 const rowId = `${workOrderID}-part-${partID}`;
                 rowPartMapRef.current.set(rowId, partID);

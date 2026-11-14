@@ -213,6 +213,11 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
     };
   }, [src]);
 
+  // No saved image for this record (rather than "Loading..." forever).
+  if (!src) {
+    return <span className="text-zinc-600 text-sm">No image</span>;
+  }
+
   if (error) {
     return <span className="text-zinc-600 text-sm">Image Load Failed</span>;
   }

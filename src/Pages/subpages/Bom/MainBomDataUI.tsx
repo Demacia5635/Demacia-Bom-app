@@ -4,6 +4,7 @@ import { type BomModel, type WorkorderModel, type WorkorderPartModel as WorkOrde
 import { createPortal } from "react-dom";
 import { WorkOrderForm, type WorkOrderFormData } from "./CreatingWO";
 import { useNavigate } from "react-router-dom";
+import { recordImageSrc } from "../../../util/recordImage";
 
 const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
   const [isCreatingWO, setCreatingWO] = useState(false);
@@ -96,17 +97,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
     }
   };
 
-  let imageSrc = "";
-  if (bom?.driveFileId) {
-    imageSrc = `/api/drive/file/id/${bom.driveFileId}`;
-  } else if (bom?.avatarID && typeof bom.avatarID === 'string' && bom.avatarID.startsWith("data:image")) {
-    imageSrc = bom.avatarID;
-  } else if (bom?.imageUrl) {
-    imageSrc = bom.imageUrl;
-  } else if (bom?.onshapeID?.documentID && bom?.onshapeID?.elementID) {
-    const { documentID, wvmType = "w", wvmID, elementID } = bom.onshapeID;
-    imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-  }
+  const imageSrc = recordImageSrc(bom as any);
 
   const containerBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
   const imageBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";

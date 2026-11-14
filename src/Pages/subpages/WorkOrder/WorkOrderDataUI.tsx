@@ -3,6 +3,7 @@ import type { WorkorderModel, BomModel } from "../../../util/Models";
 import { AuthenticatedImage, fetchFromApi } from "../../../util/ApiService";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
+import { recordImageSrc } from "../../../util/recordImage";
 
 interface WorkOrderDataUIProps {
     workOrder: WorkorderModel;
@@ -30,31 +31,8 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyTh
     const dividerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
 
     // Resolve image source hierarchy matching the parent BOM exactly
-    let imageSrc = assemblyThumbnailURL || "";
-    if (!imageSrc && bomData) {
-        if (bomData.driveFileId) {
-            imageSrc = `/api/drive/file/id/${bomData.driveFileId}`;
-        } else if (bomData.avatarID && typeof bomData.avatarID === 'string' && bomData.avatarID.startsWith("data:image")) {
-            imageSrc = bomData.avatarID;
-        } else if (bomData.imageUrl) {
-            imageSrc = bomData.imageUrl;
-        } else if (bomData.onshapeID?.documentID && bomData.onshapeID?.elementID) {
-            const { documentID, wvmType = "w", wvmID, elementID } = bomData.onshapeID;
-            imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-        }
-    }
-    
-    // Fallback to workOrder properties if parent BOM isn't loaded yet
-    if (!imageSrc) {
-        if (workOrder?.avatarID && typeof workOrder.avatarID === 'string' && workOrder.avatarID.startsWith("data:image")) {
-            imageSrc = workOrder.avatarID;
-        } else if (workOrder?.imageUrl) {
-            imageSrc = workOrder.imageUrl;
-        } else if (workOrder?.onshapeID?.documentID && workOrder?.onshapeID?.elementID) {
-            const { documentID, wvmType = "w", wvmID, elementID } = workOrder.onshapeID;
-            imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-        }
-    }
+    // The parent BOM's image; the work order's own until the BOM has loaded.
+    const imageSrc = assemblyThumbnailURL || recordImageSrc(bomData as any) || recordImageSrc(workOrder as any);
 
     return (
       <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200 mb-6`}>

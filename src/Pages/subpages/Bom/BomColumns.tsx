@@ -36,18 +36,11 @@ const BomColumns: ColumnConfig[] = [
     label: "Export STL",
     type: "button",
     buttonText: "Download",
-    isDisabled: (row: BomTableRow) => row.isSubAssembly || (!row.exportSTL && !row.documentID),
+    // Files are saved in Google Drive on publish; no Onshape fallback.
+    isDisabled: (row: BomTableRow) => row.isSubAssembly || !row.exportSTL,
     onButtonClick: (row: BomTableRow) => {
-      if (row.isSubAssembly) return; // Hard block for sub-assemblies
-      let downloadUrl = "";
-      if (row.exportSTL) {
-        downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`;
-      } else if (row.documentID && row.elementID) {
-        downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/onshape/part/d/${row.documentID}/wvmT/${row.wvmType || "w"}/wvmI/${row.wvmID || ""}/e/${row.elementID}/p/${row.entityID}/stl`;
-      }
-      if (downloadUrl) {
-        downloadFile(downloadUrl, `${row.name || "part"}.stl`);
-      }
+      if (row.isSubAssembly || !row.exportSTL) return; // Hard block for sub-assemblies
+      downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`, `${row.name || "part"}.stl`);
     },
   },
   // Export Parasolid Action (Disabled and blocked for sub-assemblies)
@@ -56,18 +49,10 @@ const BomColumns: ColumnConfig[] = [
     label: "Export Parasolid",
     type: "button",
     buttonText: "Download",
-    isDisabled: (row: BomTableRow) => row.isSubAssembly || (!row.exportParasolid && !row.documentID),
+    isDisabled: (row: BomTableRow) => row.isSubAssembly || !row.exportParasolid,
     onButtonClick: (row: BomTableRow) => {
-      if (row.isSubAssembly) return; // Hard block for sub-assemblies
-      let downloadUrl = "";
-      if (row.exportParasolid) {
-        downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`;
-      } else if (row.documentID && row.elementID) {
-        downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/onshape/part/d/${row.documentID}/wvmT/${row.wvmType || "w"}/wvmI/${row.wvmID || ""}/e/${row.elementID}/p/${row.entityID}/parasolid`;
-      }
-      if (downloadUrl) {
-        downloadFile(downloadUrl, `${row.name || "part"}.parasolid`);
-      }
+      if (row.isSubAssembly || !row.exportParasolid) return; // Hard block for sub-assemblies
+      downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`, `${row.name || "part"}.x_t`);
     },
   },
 ];

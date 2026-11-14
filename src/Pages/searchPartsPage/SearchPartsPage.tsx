@@ -4,6 +4,7 @@ import { useThemeSync } from "../../util/misc/useThemeSync";
 import type { PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";
 import PartPortal from "./PartPortal";
+import { recordImageSrc } from "../../util/recordImage";
 
 export function PartsSearchPage() {
     const { isLight, toggleTheme } = useThemeSync();
@@ -93,30 +94,7 @@ export function PartsSearchPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredParts.map((part) => {
                             const rawPart = part as any;
-                            let imageSrc = "";
-
-                            // Priority Hierarchy:
-                            // 1. Direct local Google Drive stream via driveFileId
-                            if (rawPart?.driveFileId) {
-                                imageSrc = `/api/drive/file/id/${rawPart.driveFileId}`;
-                            } 
-                            // 2. Base64 avatarID
-                            else if (part.avatarID && typeof part.avatarID === "string" && part.avatarID.startsWith("data:image")) {
-                                imageSrc = part.avatarID;
-                            } 
-                            // 3. Fallback drive File ID stored in avatarID
-                            else if (part.avatarID && part.avatarID.length > 10) {
-                                imageSrc = `/api/drive/file/id/${part.avatarID}`;
-                            } 
-                            // 4. Drive view link / web image URL
-                            else if (rawPart?.imageUrl) {
-                                imageSrc = rawPart.imageUrl;
-                            } 
-                            // 5. Fallback Onshape part thumbnail route
-                            else if (rawPart?.onshapeID?.documentID && rawPart?.onshapeID?.elementID && rawPart?.onshapeID?.partID) {
-                                const { documentID, wvmType = "w", wvmID = "", elementID, partID } = rawPart.onshapeID;
-                                imageSrc = `/api/onshape/part/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/p/${partID}/thumbnail`;
-                            }
+                            const imageSrc = recordImageSrc(rawPart);
 
                             return (
                                 <div

@@ -5,6 +5,7 @@ import { useThemeSync } from "../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 import type { BomSummary } from "./BomsPage";
 import type { BomModel } from "../../util/Models";
+import { recordImageSrc } from "../../util/recordImage";
 
 interface BomRowProps {
   bom: BomSummary;
@@ -29,21 +30,7 @@ const BomRow: React.FC<BomRowProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [hasSubAssemblies, setHasSubAssemblies] = useState<boolean | null>(null);
 
-  const bomOnshapeID = (bom as any).onshapeID;
-  let imageSrc = "";
-
-  if ((bom as any)?.driveFileId) {
-    imageSrc = `/api/drive/file/id/${(bom as any).driveFileId}`;
-  } else if (bom?.avatarID && typeof bom.avatarID === "string" && bom.avatarID.startsWith("data:image")) {
-    imageSrc = bom.avatarID;
-  } else if ((bom as any)?.imageUrl) {
-    imageSrc = (bom as any).imageUrl;
-  } else if (bomOnshapeID?.documentID && bomOnshapeID?.elementID) {
-    const { documentID, wvmType = "w", wvmID = "", elementID } = bomOnshapeID;
-    imageSrc = `/api/onshape/bom/d/${documentID}/wvmT/${wvmType}/wvmI/${wvmID}/e/${elementID}/thumbnail`;
-  } else if ((bom as any)?.thumbnailURL) {
-    imageSrc = (bom as any).thumbnailURL;
-  }
+  const imageSrc = recordImageSrc(bom as any);
 
   // Pre-check if this sub-assembly has any sub-assemblies inside it
   useEffect(() => {
