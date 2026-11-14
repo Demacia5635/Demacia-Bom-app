@@ -57,6 +57,9 @@ export default function AssemblyBomPage() {
   const [rootOnshapeBom, setRootOnshapeBom] = useState<OnshapeBomTable | null>(null);
   const [currentUser, setCurrentUser] = useState<string>("");
 
+  /** Tree-loading progress; null until the root BOM has been read. */
+  const [loadProgress, setLoadProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -247,6 +250,7 @@ export default function AssemblyBomPage() {
 
     setLoading(true);
     setError(null);
+    setLoadProgress(null);
 
     const visitedBomIds = new Set<string>();
     const allRows: AssemblyBomRow[] = [];
@@ -258,11 +262,17 @@ export default function AssemblyBomPage() {
       setRootOnshapeBom(rootNode.onshapeBom ?? null);
       visitedBomIds.add(rootNode.bomID!);
 
+      // The root BOM is multi-level, so its item count covers the whole tree
+      // (an estimate: repeated sub-assemblies are resolved only once).
+      const total = rootNode.onshapeBom?.items?.length ?? 0;
+      setLoadProgress({ done: 0, total, current: "" });
+
       async function expand(node: ResolvedNode, isRoot: boolean) {
         const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
         const childParentId = isRoot ? null : node.row.id;
 
         for (const item of parsedItems) {
+          setLoadProgress({ done: allRows.length, total, current: item.name });
           if (item.isSubassembly) {
             const subKey: OnshapeKey = {
               documentID: item.itemSource.documentId,
@@ -585,8 +595,10 @@ export default function AssemblyBomPage() {
       };
 
       try {
+        const isUpdate = Boolean(rootBomDB);
         const rootLinks = buildLinkArrays(rootRowId);
-        const rootBomAvatarID = await syncBomThumbnailToDrive(rootKey, values.name);
+        // On an update, keep the saved thumbnail instead of uploading a new copy to Drive.
+        const rootBomAvatarID = rootBomDB?.avatarID || (await syncBomThumbnailToDrive(rootKey, values.name));
         await upsertBomById(rootID, {
           id: rootID,
           name: values.name,
@@ -605,7 +617,15 @@ export default function AssemblyBomPage() {
         });
 
         for (const row of rows) {
-          if (row.source === "db") continue;
+          if (row.source === "db") {
+            // Already saved: keep its data and files, but make its item lists
+            // match the current Onshape structure (items added or removed since).
+            if (row.isAssembly) {
+              const links = buildLinkArrays(row.id);
+              await upsertBomById(row.id, { parts: links.parts, subAssemblies: links.subAssemblies });
+            }
+            continue;
+          }
 
           const key: OnshapeKey = {
             documentID: row.documentID,
@@ -616,7 +636,7 @@ export default function AssemblyBomPage() {
           const engineer = row.engineer || values.defaultEngineer;
           if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
-            const bomAvatarId = await syncBomThumbnailToDrive(key, values.name);
+            const bomAvatarId = await syncBomThumbnailToDrive(key, row.name);
             await upsertBomById(row.id, {
               id: row.id,
               name: row.name,
@@ -664,7 +684,11 @@ export default function AssemblyBomPage() {
           }
         }
 
-        client.showMessageBubble(`"${values.name}" and its contents were published to the database.`);
+        client.showMessageBubble(
+          isUpdate
+            ? `"${values.name}" was updated in the database.`
+            : `"${values.name}" and its contents were published to the database.`
+        );
         setPublishOpen(false);
         await loadTree();
       } catch (err: any) {
@@ -727,16 +751,15 @@ export default function AssemblyBomPage() {
               </button>
             </div>
 
-            {!rootIsPublished && (
-              <button
-                type="button"
-                className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
-                onClick={() => setPublishOpen(true)}
-                disabled={loading}
-              >
-                {rootIsPublished ? "Update published BOM" : "Publish to database"}
-              </button>
-            )}
+            <button
+              type="button"
+              className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
+              onClick={() => setPublishOpen(true)}
+              disabled={loading}
+              title={rootIsPublished ? "Add new items and refresh the assembly structure in the database" : undefined}
+            >
+              {rootIsPublished ? "Update BOM" : "Publish to database"}
+            </button>
           </div>
         </div>
 
@@ -749,7 +772,25 @@ export default function AssemblyBomPage() {
         )}
 
         {loading ? (
-          <div className="p-8 text-center text-zinc-400">Resolving assembly tree...</div>
+          <div className="assembly-bom-progress p-8 text-center text-zinc-400">
+            <p>{loadProgress ? "Resolving assembly tree..." : "Reading the BOM from Onshape..."}</p>
+            {loadProgress && loadProgress.total > 0 && (
+              <>
+                <div className="mt-3 h-1.5 w-full max-w-xs mx-auto rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-200"
+                    style={{ width: `${Math.min(100, Math.round((loadProgress.done / loadProgress.total) * 100))}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs">
+                  {Math.min(loadProgress.done, loadProgress.total)} of {loadProgress.total} items
+                </p>
+                {loadProgress.current && (
+                  <p className="mt-1 text-xs text-zinc-500 truncate">{loadProgress.current}</p>
+                )}
+              </>
+            )}
+          </div>
         ) : (
           <Table
             data={rows}
@@ -760,13 +801,25 @@ export default function AssemblyBomPage() {
           />
         )}
 
-        <PublishBomModal
-          open={publishOpen}
-          initialName={rootBomDB?.name || rootOnshapeBom?.name || ""}
-          onCancel={() => (publishing ? undefined : setPublishOpen(false))}
-          onSubmit={handlePublish}
-          submitting={publishing}
-        />
+        {publishOpen && (
+          <PublishBomModal
+            open
+            mode={rootIsPublished ? "update" : "publish"}
+            initialValues={
+              rootBomDB
+                ? {
+                    name: rootBomDB.name || displayName,
+                    catalogNumber: rootBomDB.catalogNumber || "",
+                    description: rootBomDB.description || "",
+                    comments: rootBomDB.comments || "",
+                  }
+                : { name: displayName }
+            }
+            onCancel={() => (publishing ? undefined : setPublishOpen(false))}
+            onSubmit={handlePublish}
+            submitting={publishing}
+          />
+        )}
 
         {publishError && !publishOpen && (
           <div className="mt-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">

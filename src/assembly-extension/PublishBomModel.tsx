@@ -13,7 +13,10 @@ export interface PublishBomFormValues {
 
 interface PublishBomModalProps {
   open: boolean;
-  initialName?: string;
+  /** "update" when the assembly is already in the database. */
+  mode?: "publish" | "update";
+  /** Read once when the modal mounts; mount it only while open so it picks up fresh values. */
+  initialValues?: Partial<PublishBomFormValues>;
   onCancel: () => void;
   onSubmit: (values: PublishBomFormValues) => void;
   submitting?: boolean;
@@ -21,16 +24,18 @@ interface PublishBomModalProps {
 
 export default function PublishBomModal({
   open,
-  initialName = "",
+  mode = "publish",
+  initialValues = {},
   onCancel,
   onSubmit,
   submitting = false,
 }: PublishBomModalProps) {
-  const [name, setName] = useState(initialName);
-  const [description, setDescription] = useState("");
-  const [comments, setComments] = useState("");
-  const [catalogNumber, setCatalogNumber] = useState("");
-  const [defaultEngineer, setDefaultEngineer] = useState("");
+  const [name, setName] = useState(initialValues.name ?? "");
+  const [description, setDescription] = useState(initialValues.description ?? "");
+  const [comments, setComments] = useState(initialValues.comments ?? "");
+  const [catalogNumber, setCatalogNumber] = useState(initialValues.catalogNumber ?? "");
+  const [defaultEngineer, setDefaultEngineer] = useState(initialValues.defaultEngineer ?? "");
+  const isUpdate = mode === "update";
 
   if (!open) return null;
 
@@ -46,10 +51,11 @@ export default function PublishBomModal({
     <div className="publish-modal-overlay" onClick={submitting ? undefined : onCancel}>
       <div className="publish-modal" onClick={(e) => e.stopPropagation()}>
         <div className="publish-modal-header">
-          <h2>Publish assembly to the database</h2>
+          <h2>{isUpdate ? "Update assembly in the database" : "Publish assembly to the database"}</h2>
           <p>
-            This will save the assembly and every part or sub-assembly beneath it that isn't
-            already in the database.
+            {isUpdate
+              ? "This will save the details below, add every part or sub-assembly that isn't in the database yet, and update which items each assembly contains to match Onshape. Items already saved keep their data and files."
+              : "This will save the assembly and every part or sub-assembly beneath it that isn't already in the database."}
           </p>
         </div>
 
@@ -98,11 +104,11 @@ export default function PublishBomModal({
           </label>
 
           <label className="publish-field">
-            <span>Default engineer</span>
+            <span>{isUpdate ? "Engineer for new items" : "Default engineer"}</span>
             <input
               value={defaultEngineer}
               onChange={(e) => setDefaultEngineer(e.target.value)}
-              placeholder="Applied to any part without one set"
+              placeholder={isUpdate ? "Applied to new items without one set" : "Applied to any part without one set"}
               disabled={submitting}
             />
           </label>
@@ -112,7 +118,7 @@ export default function PublishBomModal({
               Cancel
             </button>
             <button type="submit" className="publish-btn-primary" disabled={!canSubmit || submitting}>
-              {submitting ? "Publishing..." : "Publish"}
+              {submitting ? (isUpdate ? "Updating..." : "Publishing...") : isUpdate ? "Update" : "Publish"}
             </button>
           </div>
         </form>
