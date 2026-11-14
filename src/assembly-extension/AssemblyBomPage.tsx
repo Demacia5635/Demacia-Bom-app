@@ -252,6 +252,7 @@ export default function AssemblyBomPage() {
         exportParasolid: dbPart?.parasolidLink || "",
         dbAction: isExist ? "" : "add",
         vendor: dbPart?.vendor || parsedItem.vendor || "",
+        configuration: parsedItem.itemSource.configuration || "",
       };
     },
     [context.server, fetchWithUserKeys]
@@ -422,11 +423,15 @@ export default function AssemblyBomPage() {
             vendor: row.vendor,
           });
         } else {
-          const { avatarID, stlLink, parasolidLink } = await syncPartFilesToDrive(
+          const { avatarID, stlLink, parasolidLink, failures } = await syncPartFilesToDrive(
             key,
             row.entityID,
-            row.name
+            row.name,
+            { configuration: row.configuration }
           );
+          if (failures.length > 0) {
+            client.showMessageBubble(`Some files could not be saved: ${failures.join("; ")}`);
+          }
 
           await upsertPartById(row.id, {
             id: row.id,
@@ -672,23 +677,53 @@ export default function AssemblyBomPage() {
           onshapeURL: `https://cad.onshape.com/documents/${rootKey.documentID}/${rootKey.wvmType}/${rootKey.wvmID}/e/${rootKey.elementID}`,
         });
 
-        for (const row of rows) {
-          if (row.source === "db") {
-            // Already saved: keep its data and files, but make its item lists
-            // match the current Onshape structure (items added or removed since).
-            if (row.isAssembly) {
-              const links = buildLinkArrays(row.id);
-              await upsertBomById(row.id, { parts: links.parts, subAssemblies: links.subAssemblies });
-            }
-            continue;
-          }
+        // Export problems don't stop the publish; they're reported at the end.
+        const fileFailures: string[] = [];
+        // A part used in several places is exported once.
+        const handledPartIds = new Set<string>();
 
+        for (const row of rows) {
           const key: OnshapeKey = {
             documentID: row.documentID,
             wvmType: row.wvmType,
             wvmID: row.wvmID,
             elementID: row.elementID,
           };
+
+          if (!row.isAssembly) {
+            if (handledPartIds.has(row.id)) continue;
+            handledPartIds.add(row.id);
+          }
+
+          if (row.source === "db") {
+            // Already saved: keep its data and files, but make its item lists
+            // match the current Onshape structure (items added or removed since).
+            if (row.isAssembly) {
+              const links = buildLinkArrays(row.id);
+              await upsertBomById(row.id, { parts: links.parts, subAssemblies: links.subAssemblies });
+            } else {
+              // Saved part without its STL or Parasolid: export just what's missing.
+              const missing = [
+                ...(!row.exportSTL ? (["stl"] as const) : []),
+                ...(!row.exportParasolid ? (["parasolid"] as const) : []),
+              ];
+              if (missing.length > 0) {
+                const files = await syncPartFilesToDrive(key, row.entityID, row.name, {
+                  configuration: row.configuration,
+                  only: missing,
+                });
+                fileFailures.push(...files.failures);
+                if (files.stlLink || files.parasolidLink) {
+                  await upsertPartById(row.id, {
+                    ...(files.stlLink ? { stlLink: files.stlLink } : {}),
+                    ...(files.parasolidLink ? { parasolidLink: files.parasolidLink } : {}),
+                  });
+                }
+              }
+            }
+            continue;
+          }
+
           const engineer = row.engineer || values.defaultEngineer;
           if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
@@ -711,11 +746,13 @@ export default function AssemblyBomPage() {
               vendor: row.vendor
             });
           } else {
-            const { avatarID, stlLink, parasolidLink } = await syncPartFilesToDrive(
+            const { avatarID, stlLink, parasolidLink, failures } = await syncPartFilesToDrive(
               key,
               row.entityID,
-              row.name
+              row.name,
+              { configuration: row.configuration }
             );
+            fileFailures.push(...failures);
             await upsertPartById(row.id, {
               id: row.id,
               name: row.name,
@@ -745,6 +782,13 @@ export default function AssemblyBomPage() {
             ? `"${values.name}" was updated in the database.`
             : `"${values.name}" and its contents were published to the database.`
         );
+        if (fileFailures.length > 0) {
+          console.warn("[publish] files not saved:", fileFailures);
+          client.showMessageBubble(
+            `${fileFailures.length} file${fileFailures.length === 1 ? "" : "s"} could not be saved to Drive ` +
+              `(first: ${fileFailures[0]}). Run Update BOM again to retry the missing ones.`
+          );
+        }
         setPublishOpen(false);
         await loadTree();
       } catch (err: any) {

@@ -52,7 +52,7 @@ The **BOM App** bridges computer-aided design (CAD) workflows in Onshape with re
 
 - **Google Drive Integration:**
   - OAuth2 service account / refresh token integration.
-  - Root directory folder organization (`GOOGLE_DRIVE_ROOT_FOLDER_ID`).
+  - Files sorted into folders by type: thumbnails (`GOOGLE_DRIVE_IMAGE_FOLDER_ID`), STL (`GOOGLE_DRIVE_STL_FOLDER_ID`) and Parasolid (`GOOGLE_DRIVE_PARASOLID_FOLDER_ID`).
   - Binary streaming uploads, file metadata indexing, and attachment management.
 
 ---
@@ -98,7 +98,9 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=https://developers.google.com/oauthplayground
 GOOGLE_REFRESH_TOKEN=your_google_refresh_token
-GOOGLE_DRIVE_ROOT_FOLDER_ID=your_drive_folder_id
+GOOGLE_DRIVE_IMAGE_FOLDER_ID=your_image_folder_id
+GOOGLE_DRIVE_STL_FOLDER_ID=your_stl_folder_id
+GOOGLE_DRIVE_PARASOLID_FOLDER_ID=your_parasolid_folder_id
 ```
 
 ### Installation & Execution
@@ -148,7 +150,7 @@ The `onshapeService.ts` module uses Onshape's Glassworks REST API with HTTP Basi
 ## 📁 Google Drive Integration
 
 `driveService.ts` handles asset attachment and document storage:
-- Automatically scopes operations to `GOOGLE_DRIVE_ROOT_FOLDER_ID`.
+- Uploads go to the image, STL or Parasolid folder by file type (`folderForUpload`).
 - Supports streaming binary uploads (`express.raw`), file deletion, metadata inspection, and custom folder structures.
 
 ---

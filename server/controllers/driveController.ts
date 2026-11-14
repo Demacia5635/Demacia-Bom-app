@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { GoogleDriveService } from "../services/driveService";
+import { GoogleDriveService, folderForUpload } from "../services/driveService";
 
 export async function checkConnection(
   client: GoogleDriveService,
@@ -98,7 +98,9 @@ export async function uploadFile(
     const file = await client.uploadFile({
       buffer: safeBuffer,
       fileName: req.params.fileName,
-      mimeType: req.params.mimeType
+      mimeType: req.params.mimeType,
+      // STL / Parasolid / image folder, by file type.
+      folderId: folderForUpload(req.params.fileName, req.params.mimeType),
     });
     return res.status(201).json(file);
   } catch (err) {

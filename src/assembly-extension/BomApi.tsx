@@ -195,20 +195,20 @@ export function updateOnshapeBomMetadata(
 /* Onshape binary files (thumbnail, STL, Parasolid) -> Google Drive        */
 /* ---------------------------------------------------------------------- */
 
-export function getOnshapePartThumbnail(key: OnshapeKey, partID: string): Promise<Blob> {
-  if (isChromeExtension()) return onshapeDirect.getPartThumbnail(key, partID);
+export function getOnshapePartThumbnail(key: OnshapeKey, partID: string, configuration?: string): Promise<Blob> {
+  if (isChromeExtension()) return onshapeDirect.getPartThumbnail(key, partID, configuration);
   const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/thumbnail`;
   return fetchFileBytes(url, "image/png");
 }
 
-export function getOnshapePartStl(key: OnshapeKey, partID: string): Promise<Blob> {
-  if (isChromeExtension()) return onshapeDirect.exportPartStl(key, partID);
+export function getOnshapePartStl(key: OnshapeKey, partID: string, configuration?: string): Promise<Blob> {
+  if (isChromeExtension()) return onshapeDirect.exportPartStl(key, partID, configuration);
   const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/stl`;
   return fetchFileBytes(url, "model/stl");
 }
 
-export function getOnshapePartParasolid(key: OnshapeKey, partID: string): Promise<Blob> {
-  if (isChromeExtension()) return onshapeDirect.exportPartParasolid(key, partID);
+export function getOnshapePartParasolid(key: OnshapeKey, partID: string, configuration?: string): Promise<Blob> {
+  if (isChromeExtension()) return onshapeDirect.exportPartParasolid(key, partID, configuration);
   const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/parasolid`;
   return fetchFileBytes(url, "application/x-parasolid");
 }
@@ -274,29 +274,50 @@ export async function uploadFileToDrive(blob: Blob, fileName: string): Promise<D
   return JSON.parse(text) as DriveUploadResult;
 }
 
+export type PartFileKind = "thumbnail" | "stl" | "parasolid";
+
+export interface PartFilesResult {
+  /** Drive file IDs; null when not requested or when it failed. */
+  avatarID: string | null;
+  stlLink: string | null;
+  parasolidLink: string | null;
+  /** One message per requested file that could not be exported or uploaded. */
+  failures: string[];
+}
+
+/**
+ * Exports a part's files from Onshape and uploads them to Google Drive. The
+ * server puts each file in its folder by type (image / STL / Parasolid).
+ * `only` limits which files are made (e.g. just the missing ones); by default
+ * all three. Failures don't throw: they're listed in `failures`.
+ */
 export async function syncPartFilesToDrive(
   key: OnshapeKey,
   partID: string,
-  partName: string
-): Promise<{ avatarID: string | null; stlLink: string | null; parasolidLink: string | null }> {
-  const safeName = partName.replace(/[\\/:*?"<>|]/g, "_") || partID;
+  partName: string,
+  options: { configuration?: string; only?: PartFileKind[] } = {}
+): Promise<PartFilesResult> {
+  const safeName = partName.replace(/[\\/:*?"<>|]/g, "_") || partID.replace(/[\\/]/g, "_");
+  const wanted = new Set<PartFileKind>(options.only ?? ["thumbnail", "stl", "parasolid"]);
+  const failures: string[] = [];
+
+  const make = async (kind: PartFileKind, label: string, get: () => Promise<Blob>, fileName: string) => {
+    if (!wanted.has(kind)) return null;
+    try {
+      return (await uploadFileToDrive(await get(), fileName)).id;
+    } catch (err: any) {
+      failures.push(`${label} of "${partName}": ${err?.message || err}`);
+      return null;
+    }
+  };
 
   const [avatarID, stlLink, parasolidLink] = await Promise.all([
-    getOnshapePartThumbnail(key, partID)
-      .then((blob) => uploadFileToDrive(blob, `${safeName}-thumbnail.png`))
-      .then((r) => r.id)
-      .catch(() => null),
-    getOnshapePartStl(key, partID)
-      .then((blob) => uploadFileToDrive(blob, `${safeName}.stl`))
-      .then((r) => r.id)
-      .catch(() => null),
-    getOnshapePartParasolid(key, partID)
-      .then((blob) => uploadFileToDrive(blob, `${safeName}.x_t`))
-      .then((r) => r.id)
-      .catch(() => null),
+    make("thumbnail", "Thumbnail", () => getOnshapePartThumbnail(key, partID, options.configuration), `${safeName}-thumbnail.png`),
+    make("stl", "STL", () => getOnshapePartStl(key, partID, options.configuration), `${safeName}.stl`),
+    make("parasolid", "Parasolid", () => getOnshapePartParasolid(key, partID, options.configuration), `${safeName}.x_t`),
   ]);
 
-  return { avatarID, stlLink, parasolidLink };
+  return { avatarID, stlLink, parasolidLink, failures };
 }
 
 export async function syncBomThumbnailToDrive(key: OnshapeKey, bomName: string): Promise<string | null> {

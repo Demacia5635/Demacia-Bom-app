@@ -3,12 +3,29 @@ import { OAuth2Client } from "google-auth-library";
 import { Readable } from "stream";
 import "dotenv/config";
 
-const ROOT_FOLDER_ID = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID as string;
+const IMAGE_FOLDER_ID = process.env.GOOGLE_DRIVE_IMAGE_FOLDER_ID as string;
+const STL_FOLDER_ID = process.env.GOOGLE_DRIVE_STL_FOLDER_ID as string;
+const PARASOLID_FOLDER_ID = process.env.GOOGLE_DRIVE_PARASOLID_FOLDER_ID as string;
 
-if (!ROOT_FOLDER_ID) {
-  console.warn(
-    "[googleDriveService] GOOGLE_DRIVE_ROOT_FOLDER_ID is not set. All Drive operations will fail.",
-  );
+for (const [name, value] of [
+  ["GOOGLE_DRIVE_IMAGE_FOLDER_ID", IMAGE_FOLDER_ID],
+  ["GOOGLE_DRIVE_STL_FOLDER_ID", STL_FOLDER_ID],
+  ["GOOGLE_DRIVE_PARASOLID_FOLDER_ID", PARASOLID_FOLDER_ID],
+]) {
+  if (!value) console.warn(`[googleDriveService] ${name} is not set.`);
+}
+
+/**
+ * Drive folder for an uploaded file, chosen by its type: STL files go to the
+ * STL folder, Parasolid files to the Parasolid folder, everything else
+ * (thumbnails) to the image folder.
+ */
+export function folderForUpload(fileName: string, mimeType: string): string {
+  const name = fileName.toLowerCase();
+  const mime = mimeType.toLowerCase();
+  if (name.endsWith(".stl") || mime.includes("stl")) return STL_FOLDER_ID;
+  if (/\.x_[tb]$/.test(name) || mime.includes("parasolid")) return PARASOLID_FOLDER_ID;
+  return IMAGE_FOLDER_ID;
 }
 
 export interface DriveFile {
@@ -42,9 +59,9 @@ export class GoogleDriveService {
   }
 
   async getAllFilesInFolder(
-    folderId: string = ROOT_FOLDER_ID,
+    folderId: string = IMAGE_FOLDER_ID,
   ): Promise<DriveFile[]> {
-    this.assertRootConfigured();
+    this.assertImageFolderConfigured();
 
     const files: DriveFile[] = [];
     let pageToken: string | undefined = undefined;
@@ -66,11 +83,11 @@ export class GoogleDriveService {
     return files;
   }
 
-  async findFileByPartID(partID: string): Promise<DriveFile | null> {
-    this.assertRootConfigured();
+  async findFileByPartID(partID: string, folderId: string = IMAGE_FOLDER_ID): Promise<DriveFile | null> {
+    this.assertImageFolderConfigured();
     try {
       const res = await this.drive.files.list({
-        q: `'${ROOT_FOLDER_ID}' in parents and name contains 'part_${partID}_' and trashed = false`,
+        q: `'${folderId}' in parents and name contains 'part_${partID}_' and trashed = false`,
         fields: "files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)",
         pageSize: 1,
       });
@@ -109,7 +126,7 @@ export class GoogleDriveService {
    * Upload a file with built-in atomic deduplication locking.
    */
   async uploadFile(params: UploadFileParams): Promise<DriveFile> {
-    this.assertRootConfigured();
+    this.assertImageFolderConfigured();
     const { fileName, mimeType, buffer, folderId, partID } = params;
 
     // Convert input to a clean Node.js Buffer if necessary
@@ -125,7 +142,7 @@ export class GoogleDriveService {
       const uploadPromise = (async (): Promise<DriveFile> => {
         try {
           // Pre-flight check inside lock
-          const existing = await this.findFileByPartID(partID);
+          const existing = await this.findFileByPartID(partID, folderId ?? IMAGE_FOLDER_ID);
           if (existing) {
             console.log(`>>> [GLOBAL LOCK] Found existing file in Drive during lock for partID: ${partID}`);
             return existing;
@@ -136,7 +153,7 @@ export class GoogleDriveService {
           const res = await this.drive.files.create({
             requestBody: {
               name: fileName,
-              parents: [folderId ?? ROOT_FOLDER_ID],
+              parents: [folderId ?? IMAGE_FOLDER_ID],
             },
             media: {
               mimeType,
@@ -164,7 +181,7 @@ export class GoogleDriveService {
     const res = await this.drive.files.create({
       requestBody: {
         name: fileName,
-        parents: [folderId ?? ROOT_FOLDER_ID],
+        parents: [folderId ?? IMAGE_FOLDER_ID],
       },
       media: {
         mimeType,
@@ -187,9 +204,9 @@ export class GoogleDriveService {
 
   async createFolder(
     folderName: string,
-    parentFolderId: string = ROOT_FOLDER_ID,
+    parentFolderId: string = IMAGE_FOLDER_ID,
   ): Promise<DriveFile> {
-    this.assertRootConfigured();
+    this.assertImageFolderConfigured();
 
     const res = await this.drive.files.create({
       requestBody: {
@@ -204,10 +221,10 @@ export class GoogleDriveService {
     return this.mapFile(res.data);
   }
 
-  private assertRootConfigured() {
-    if (!ROOT_FOLDER_ID) {
+  private assertImageFolderConfigured() {
+    if (!IMAGE_FOLDER_ID) {
       throw new Error(
-        "GOOGLE_DRIVE_ROOT_FOLDER_ID is not set. Add it to your environment variables.",
+        "GOOGLE_DRIVE_IMAGE_FOLDER_ID is not set. Add it to your environment variables.",
       );
     }
   }

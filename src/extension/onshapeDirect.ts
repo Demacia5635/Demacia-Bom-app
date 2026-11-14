@@ -288,11 +288,22 @@ export async function getPartThumbnail(
   return new Blob([bytes], { type: "image/png" });
 }
 
-/** Same defaults as the server: binary STL in meters. */
-export function exportPartStl(key: OnshapeElementKey, partID: string): Promise<Blob> {
-  return onshapeBlob(`/parts/${seg(key)}/partid/${pid(partID)}/stl?units=meter&mode=binary`, "model/stl");
+/** `?configuration=...` (or "") so exports match the configuration used in the assembly. */
+function configQuery(configuration: string | undefined, sep: "?" | "&"): string {
+  return configuration ? `${sep}configuration=${encodeURIComponent(configuration)}` : "";
 }
 
-export function exportPartParasolid(key: OnshapeElementKey, partID: string): Promise<Blob> {
-  return onshapeBlob(`/parts/${seg(key)}/partid/${pid(partID)}/parasolid`, "application/x-parasolid");
+/** Same defaults as the server: binary STL in meters. */
+export function exportPartStl(key: OnshapeElementKey, partID: string, configuration?: string): Promise<Blob> {
+  return onshapeBlob(
+    `/parts/${seg(key)}/partid/${pid(partID)}/stl?units=meter&mode=binary${configQuery(configuration, "&")}`,
+    "model/stl"
+  );
+}
+
+export function exportPartParasolid(key: OnshapeElementKey, partID: string, configuration?: string): Promise<Blob> {
+  return onshapeBlob(
+    `/parts/${seg(key)}/partid/${pid(partID)}/parasolid${configQuery(configuration, "?")}`,
+    "application/x-parasolid"
+  );
 }

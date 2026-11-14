@@ -25,4 +25,6 @@ export default interface AssemblyBomRow extends BomTableRow {
    * and left empty when the row is already saved in the DB.
    */
   dbAction: string;
+  /** Onshape configuration of a part row (empty for the default); exports use it. */
+  configuration?: string;
 }
