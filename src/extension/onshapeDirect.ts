@@ -268,8 +268,24 @@ export function getElementThumbnail(key: OnshapeElementKey, size = "300x300"): P
   return onshapeBlob(`/thumbnails/${seg(key)}/s/${size}`, "image/png");
 }
 
-export function getPartThumbnail(key: OnshapeElementKey, partID: string, size = "300x300"): Promise<Blob> {
-  return onshapeBlob(`/thumbnails/${seg(key)}/p/${pid(partID)}/s/${size}`, "image/png");
+/**
+ * PNG of just this part, for saving to Drive on publish. A rendered view, not
+ * the stored thumbnail: Onshape stores thumbnails per Part Studio, so a part
+ * in a multi-part Part Studio would get a picture of the whole studio.
+ */
+export async function getPartThumbnail(
+  key: OnshapeElementKey,
+  partID: string,
+  configuration?: string,
+  px = 300
+): Promise<Blob> {
+  const url = shadedViewUrl(key, partID, configuration, px);
+  const res = await onshapeFetch(url.slice(`${onshapeServer}/api`.length));
+  const json = (await res.json()) as { images?: string[] };
+  const base64 = json.images?.[0];
+  if (!base64) throw onshapeError(404, "Onshape returned no rendered image for this part");
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: "image/png" });
 }
 
 /** Same defaults as the server: binary STL in meters. */

@@ -214,21 +214,22 @@ export function getOnshapePartParasolid(key: OnshapeKey, partID: string): Promis
 }
 
 /**
- * Image src for a row that isn't saved in the database yet: Onshape's own
- * thumbnail in the Chrome extension, nothing in the web app (no session there).
- * Standard Content parts have no stored thumbnail, so they get a rendered view
- * of their configuration instead.
+ * Image src for a row that isn't saved in the database yet, in the Chrome
+ * extension (the web app has no Onshape session, so nothing there).
+ * - Assemblies: Onshape's stored thumbnail of the element.
+ * - Parts: a rendered view of just that part (in its configuration). Onshape
+ *   stores thumbnails per Part Studio, not per part, so the thumbnail of a
+ *   part in a multi-part Part Studio shows the whole studio; Standard Content
+ *   parts have no stored thumbnail at all.
  */
 export function getOnshapeThumbnailSrc(
   key: OnshapeKey,
   partID?: string,
-  source?: { isStandardContent?: boolean; configuration?: string }
+  source?: { configuration?: string }
 ): string {
   if (!isChromeExtension()) return "";
-  if (partID && source?.isStandardContent) {
-    return onshapeDirect.shadedViewUrl(key, partID, source.configuration);
-  }
-  return onshapeDirect.thumbnailUrl(key, partID);
+  if (partID) return onshapeDirect.shadedViewUrl(key, partID, source?.configuration);
+  return onshapeDirect.thumbnailUrl(key);
 }
 
 export function getOnshapeBomThumbnail(key: OnshapeKey): Promise<Blob> {
