@@ -341,7 +341,11 @@ export default function WorkOrderDetailsPage() {
             const partData = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(partId)}`);
             setSelectedPart(partData);
             setIsPartPortalOpen(true);
-        } catch (err) {
+        } catch (err: any) {
+            if (err?.statusCode === 404) {
+                window.alert(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`);
+                return;
+            }
             console.error("Failed to fetch part data for modal portal", err);
         }
     };

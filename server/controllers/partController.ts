@@ -58,34 +58,22 @@ export async function getAllParts(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/**
+ * Read-only lookup of a saved part. 404 when there is no such part: a GET
+ * never creates records (saving goes through POST /id/:id). The Onshape link
+ * and identity are filled in on the response when the record lacks them.
+ */
 export async function getPartByID(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const id = req.params.id;
-    const onshapeIDObj = parseOnshapeIDFromCompoundKey(id);
+    const part = await Part.findOne({ id }).lean<Record<string, any>>();
+    if (!part) return res.status(404).json({ message: `Part ${id} not found` });
 
-    // Atomically find or create using findOneAndUpdate (no manual .save() required)
-    let part = await Part.findOneAndUpdate(
-      { id: id },
-      { $setOnInsert: { id: id, onshapeID: onshapeIDObj || undefined } },
-      { returnDocument: "after", upsert: true, setDefaultsOnInsert: true }
-    );
-
-    let updatedFields: any = {};
-    const effectiveOnshapeID = onshapeIDObj || part?.onshapeID;
-
-    if (effectiveOnshapeID && effectiveOnshapeID.documentID) {
-      const { documentID, wvmType = "w", wvmID, elementID, partID } = effectiveOnshapeID;
-      updatedFields.onshapeURL = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
-      updatedFields.onshapeID = effectiveOnshapeID;
-
-    }
-
-    if (Object.keys(updatedFields).length > 0) {
-      part = await Part.findOneAndUpdate(
-        { id: id },
-        { $set: updatedFields },
-        { returnDocument: "after", upsert: true }
-      );
+    const onshapeID = part.onshapeID?.documentID ? part.onshapeID : parseOnshapeIDFromCompoundKey(id);
+    if (onshapeID?.documentID) {
+      const { documentID, wvmType = "w", wvmID, elementID, partID } = onshapeID;
+      part.onshapeID = onshapeID;
+      part.onshapeURL ||= `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
     }
 
     return res.status(200).json(part);
@@ -144,8 +132,7 @@ export async function deletePartByID(req: Request<{ id: string }>, res: Response
 
 /**
  * Read-only MongoDB lookup of a part by its Onshape identity. 404 when the part
- * isn't saved. Unlike getPartByID it never creates a record or triggers Drive
- * uploads, and it never calls the Onshape API (which counts against the yearly
+ * isn't saved. It never creates a record or triggers Drive uploads, and it never calls the Onshape API (which counts against the yearly
  * API limit). Used by the Chrome extension to tell saved parts from unsaved ones.
  */
 export async function findPartByOnshapeKey(req: Request<OnshapeID>, res: Response, next: NextFunction) {
