@@ -137,24 +137,36 @@ interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageEleme
   src: string;
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
+/** Bytes of a base64 string (atob is native, so this is fast even for large images). */
+function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
+/**
+ * Loads an image that needs our client secret or the Onshape session, and shows
+ * it through an in-memory object URL (URL.createObjectURL). That avoids
+ * re-encoding every image as a huge base64 data: string, which was slow and
+ * memory-hungry. The object URL is released when the image goes away.
+ */
 export function AuthenticatedImage({ src, alt, className, ...props }: AuthenticatedImageProps) {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [error, setError] = useState<boolean>(false);
 
   useEffect(() => {
-    let isMounted = true;
-    const secret = import.meta.env.VITE_CLIENT_SECRET;
-
     if (!src) return;
+    // Inline images need no fetching.
+    if (src.startsWith("data:")) {
+      setImageSrc(src);
+      setError(false);
+      return;
+    }
+
+    let isMounted = true;
+    let objectUrl: string | null = null;
+    const secret = import.meta.env.VITE_CLIENT_SECRET;
 
     const getPicture = async () => {
       try {
@@ -184,43 +196,37 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
         const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
         const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
 
-        let base64String;
-        let mime = "image/png";
-
+        let blob: Blob;
         if (looksLikeJson) {
-          const text = new TextDecoder().decode(arrayBuffer);
-          const json = JSON.parse(text);
+          const json = JSON.parse(new TextDecoder().decode(arrayBuffer));
           if (json.type === "Buffer" && Array.isArray(json.data)) {
-            const bytes = new Uint8Array(json.data);
-            base64String = bytesToBase64(bytes);
+            blob = new Blob([new Uint8Array(json.data)], { type: "image/png" });
           } else if (Array.isArray(json.images) && typeof json.images[0] === "string") {
             // Onshape shaded-view render: { images: [base64Png] }
-            base64String = json.images[0];
+            blob = new Blob([base64ToBytes(json.images[0])], { type: "image/png" });
           } else {
             throw new Error(json.message || "Invalid image format");
           }
         } else {
           const responseContentType = res.headers.get("content-type");
-          if (responseContentType && responseContentType.includes("image")) {
-            mime = responseContentType;
-          }
-          const bytes = new Uint8Array(arrayBuffer);
-          base64String = bytesToBase64(bytes);
+          const mime = responseContentType && responseContentType.includes("image") ? responseContentType : "image/png";
+          blob = new Blob([arrayBuffer], { type: mime });
         }
 
-        if (isMounted) {
-          setImageSrc(`data:${mime};base64,${base64String}`);
-          setError(false);
-        }
-      } catch (err) {
+        if (!isMounted) return;
+        objectUrl = URL.createObjectURL(blob);
+        setImageSrc(objectUrl);
+        setError(false);
+      } catch {
         if (isMounted) setError(true);
-      } 
+      }
     };
 
     getPicture();
 
     return () => {
       isMounted = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [src]);
 
