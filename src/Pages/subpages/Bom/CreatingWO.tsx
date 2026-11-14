@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { fetchFromApi } from "../../../util/ApiService";
+import { fetchPartsByIds } from "../../../util/records";
 import { isPurchasedPart, type BomModel, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
 
 export interface WorkOrderFormData {
@@ -57,8 +58,11 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             collectedParts.push(...subParts);
         }
 
+        // This assembly's parts in one request instead of one per part.
+        const partRecords = await fetchPartsByIds((currentBom.parts || []).map((p) => p.partID));
+
         for (const p of currentBom.parts || []) {
-            const partRecord = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(p.partID)}`).catch(() => null);
+            const partRecord: PartModel | null = partRecords.get(p.partID) ?? null;
             
             const catalogNumber = partRecord?.catalogNumber || "";
             const material = partRecord?.material?.trim() || "";

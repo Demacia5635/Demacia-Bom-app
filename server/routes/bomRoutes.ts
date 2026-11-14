@@ -4,6 +4,8 @@ import * as bomController from '../controllers/bomController';
 const router = express.Router();
 
 router.get('/all', bomController.getAllBoms);
+// Read-only batch lookup: { ids: [...] } -> the assemblies that exist.
+router.post('/ids', bomController.getBomsByIds);
 
 router.get('/id/:id', bomController.getBomByID);
 router.post('/id/:id', bomController.upsertBomByID);

@@ -9,6 +9,7 @@ import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
+import { fetchPartsByIds } from "../../../util/records";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
@@ -133,25 +134,25 @@ export default function WorkOrderDetailsPage() {
     useEffect(() => {
         if (!workOrderID || !workOrderData || !workOrderData.bomID) return;
 
-        async function fetchBomPartsRecursively(
-            targetBomId: string,
-            multiplier: number = 1,
-            accMap: Map<string, number> = new Map()
-        ): Promise<Map<string, number>> {
+        /**
+         * Every part under an assembly with its quantity, sub-assemblies first,
+         * in the same order as before. Sub-assemblies are loaded in parallel.
+         */
+        async function collectParts(targetBomId: string, multiplier: number): Promise<[string, number][]> {
             const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
+            const subLists = await Promise.all(
+                (currentBom.subAssemblies || []).map((sub) => collectParts(sub.bomID, (sub.quantity ?? 1) * multiplier))
+            );
+            const ownParts = (currentBom.parts || []).map((p): [string, number] => [p.partID, (p.quantity ?? 1) * multiplier]);
+            return [...subLists.flat(), ...ownParts];
+        }
 
-            for (const sub of currentBom.subAssemblies || []) {
-                const subQuantity = (sub.quantity ?? 1) * multiplier;
-                await fetchBomPartsRecursively(sub.bomID, subQuantity, accMap);
+        async function fetchBomPartsRecursively(targetBomId: string): Promise<Map<string, number>> {
+            const aggregated = new Map<string, number>();
+            for (const [partID, quantity] of await collectParts(targetBomId, 1)) {
+                aggregated.set(partID, (aggregated.get(partID) || 0) + quantity);
             }
-
-            for (const p of currentBom.parts || []) {
-                const partQuantity = (p.quantity ?? 1) * multiplier;
-                const existingQty = accMap.get(p.partID) || 0;
-                accMap.set(p.partID, existingQty + partQuantity);
-            }
-
-            return accMap;
+            return aggregated;
         }
 
         async function getPartsData(): Promise<WorkOrderTableRow[]> {
@@ -159,12 +160,13 @@ export default function WorkOrderDetailsPage() {
             const collectedRows: WorkOrderTableRow[] = [];
             rowPartMapRef.current.clear();
 
+            // All parts in one request instead of one per part.
+            const partRecords = await fetchPartsByIds([...aggregatedQuantities.keys()]);
+
             for (const [partID, totalQty] of aggregatedQuantities.entries()) {
-                let part: PartModel | null = null;
-                
-                try {
-                    part = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(partID)}`);
-                } catch {
+                let part: PartModel | null = partRecords.get(partID) ?? null;
+
+                if (!part) {
                     part = {
                         id: partID,
                         name: partID,

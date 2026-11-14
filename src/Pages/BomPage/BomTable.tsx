@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import type { BomSummary } from "./BomsPage";
 import type { BomModel } from "../../util/Models";
 import { recordImageSrc } from "../../util/recordImage";
+import { fetchBomsByIds } from "../../util/records";
 
 interface BomRowProps {
   bom: BomSummary;
@@ -37,6 +38,12 @@ const BomRow: React.FC<BomRowProps> = ({
     let isMounted = true;
 
     async function checkSubAssemblies() {
+      // The list request already returns full records: no extra request needed.
+      const listed = (bom as Partial<BomModel>).subAssemblies;
+      if (Array.isArray(listed)) {
+        setHasSubAssemblies(listed.length > 0);
+        return;
+      }
       try {
         const fullBom = await fetchFromApi<BomModel>(`/db/bom/id/${bom.id}`);
         if (isMounted) {
@@ -61,11 +68,15 @@ const BomRow: React.FC<BomRowProps> = ({
     if (!isExpanded && subAssemblies.length === 0) {
       setLoading(true);
       try {
-        const fullBom = await fetchFromApi<BomModel>(`/db/bom/id/${bom.id}`);
+        const listed = (bom as Partial<BomModel>).subAssemblies;
+        const fullBom = Array.isArray(listed) ? { subAssemblies: listed } : await fetchFromApi<BomModel>(`/db/bom/id/${bom.id}`);
         if (fullBom?.subAssemblies && fullBom.subAssemblies.length > 0) {
+          // All sub-assemblies in one request.
+          const records = await fetchBomsByIds(fullBom.subAssemblies.map((sub) => sub.bomID));
           const subBoms = await Promise.all(
             fullBom.subAssemblies.map(async (sub) => {
-              const subBomRecord = await fetchFromApi<BomModel>(`/db/bom/id/${sub.bomID}`).catch(() => null);
+              // Older records also carry driveFileId / imageUrl (not in BomModel).
+              const subBomRecord = (records.get(sub.bomID) ?? null) as (BomModel & { driveFileId?: string; imageUrl?: string }) | null;
               return {
                 id: sub.bomID,
                 name: subBomRecord?.name || sub.bomID,

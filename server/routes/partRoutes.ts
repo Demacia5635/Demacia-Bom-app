@@ -5,6 +5,8 @@ const router = express.Router();
 
 // Parts by database ID
 router.get('/all', partController.getAllParts);
+// Read-only batch lookup: { ids: [...] } -> the parts that exist.
+router.post('/ids', partController.getPartsByIds);
 router.get('/id/:id', partController.getPartByID);
 router.post('/id/:id', partController.upsertPartByID);
 router.delete('/id/:id', partController.deletePartByID);

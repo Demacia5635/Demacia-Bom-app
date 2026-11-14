@@ -8,6 +8,7 @@ import MainBomDataUI from "./MainBomDataUI";
 import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
+import { fetchBomsByIds, fetchPartsByIds } from "../../../util/records";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
@@ -85,8 +86,14 @@ export default function BomDetailsPage() {
       const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
       const collectedRows: BomTableRow[] = [];
 
+      // All sub-assemblies and parts in two requests instead of one per item.
+      const [subBoms, parts] = await Promise.all([
+        fetchBomsByIds((bom.subAssemblies || []).map((s) => s.bomID)),
+        fetchPartsByIds((bom.parts || []).map((p) => p.partID)),
+      ]);
+
       for (const sub of bom.subAssemblies || []) {
-        const subBomRecord = await fetchFromApi<BomModel>(`/db/bom/id/${sub.bomID}`).catch(() => null);
+        const subBomRecord = subBoms.get(sub.bomID) ?? null;
         let subAvatarUrl = recordImageSrc(subBomRecord as any);
 
         const subAssemblyRow: BomTableRow = {
@@ -121,7 +128,8 @@ export default function BomDetailsPage() {
       }
 
       for (const p of bom.parts || []) {
-        const part = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(p.partID)}`);
+        // A part missing from the database shows as a plain row with its ID.
+        const part = parts.get(p.partID) ?? ({ id: p.partID } as PartModel);
 
         let partAvatarUrl = recordImageSrc(part as any);
 
