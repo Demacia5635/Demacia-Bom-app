@@ -2,25 +2,33 @@ import type { ColumnConfig } from "../../../components/Table";
 import { downloadFile } from "../../../util/ApiService";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 
+/** Vendor parts and Onshape Standard Content: their name isn't edited here. */
+const isBoughtPart = (row: WorkOrderTableRow) => row.vendor !== "" || !!row.isStandardContent;
+
+// Avatar and name come first: the table freezes the first two columns.
 const WorkOrderColumns: ColumnConfig[] = [
-    { key: "avatar", label: "Avatar", type: "image", isDisabled: (row) => row.vendor !== "" },
+    { key: "avatar", label: "Avatar", type: "image", isDisabled: isBoughtPart },
+    { key: "name", label: "Name", type: "string", isDisabled: isBoughtPart },
     { key: "lastUpadte", label: "Last Updated", type: "string", isDisabled: () => true },
     { key: "productionMakingOwner", label: "Production Making Owner", type: "string" },
     { key: "catalogNumber", label: "Catalogue Number", type: "string", isDisabled: () => true }, // Read-only
-    { key: "name", label: "Name", type: "string", isDisabled: (row) => row.vendor !== "" },
     { key: "quantityTotal", label: "Qty Per Assembly", type: "number", isDisabled: () => true },
-    { 
-        key: "statusCode", 
-        label: "Status", 
-        type: "select", 
-        options: ['CATNUM Written', 'In Planning', 'Manufacturing approved', 'In manufacturing', 'Finished Manufacturing'] 
+    {
+        key: "statusCode",
+        label: "Status",
+        type: "select",
+        options: ['CATNUM Written', 'In Planning', 'Manufacturing approved', 'In manufacturing', 'Finished Manufacturing', 'Untracked'],
+        // Standard Content is purchased: not tracked through manufacturing.
+        isDisabled: (row: WorkOrderTableRow) => !!row.isStandardContent,
     },
     { key: "approxArrivalDate", label: "Approx. Arrival Date", type: "string" },
-    { 
-        key: "manufacturingMethod", 
-        label: "Manufacturing Method", 
-        type: "select", 
-        options: ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased']
+    {
+        key: "manufacturingMethod",
+        label: "Manufacturing Method",
+        type: "select",
+        options: ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased'],
+        // Standard Content is always "Purchased".
+        isDisabled: (row: WorkOrderTableRow) => !!row.isStandardContent,
     },
     { key: "material", label: "Material", type: "string", isDisabled: () => true }, // Read-only
     { 

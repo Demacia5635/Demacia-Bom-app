@@ -18,4 +18,6 @@ export default interface WorkOrderTableRow extends RowData {
     exportSTL: string;
     exportParasolid: string;
     vendor: string;
+    /** Onshape Standard Content (screws, nuts...): purchased, so its name and method are fixed. */
+    isStandardContent?: boolean;
 }

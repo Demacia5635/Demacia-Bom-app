@@ -542,3 +542,44 @@ body.light-theme-active .context-menu .delete-btn:hover,
   background-color: #fee2e2 !important;
   color: #991b1b !important;
 }
+/* ---- Frozen header row and left columns (Table stickyHeader / frozenColumns) ----
+ * Light-theme versions: the rules above force "position: relative" and hide
+ * vertical scrolling with higher specificity, which would undo the freeze. */
+body.light-theme-active .table-wrapper.table-wrapper-sticky,
+.table-page-container.theme-light .table-wrapper.table-wrapper-sticky {
+  overflow: auto;
+}
+
+body.light-theme-active .table-th.th-sticky,
+.table-page-container.theme-light .table-th.th-sticky {
+  position: sticky !important;
+  top: 0;
+  z-index: 20;
+  background-color: var(--bg-surface, #ffffff);
+}
+
+body.light-theme-active .table-th.cell-frozen,
+body.light-theme-active .table-td.cell-frozen,
+.table-page-container.theme-light .table-th.cell-frozen,
+.table-page-container.theme-light .table-td.cell-frozen {
+  position: sticky !important;
+  z-index: 12;
+  background-color: var(--bg-surface, #ffffff);
+}
+
+body.light-theme-active .table-th.th-sticky.cell-frozen,
+.table-page-container.theme-light .table-th.th-sticky.cell-frozen {
+  z-index: 30;
+}
+
+body.light-theme-active .table-th.cell-frozen-last,
+body.light-theme-active .table-td.cell-frozen-last,
+.table-page-container.theme-light .table-th.cell-frozen-last,
+.table-page-container.theme-light .table-td.cell-frozen-last {
+  box-shadow: 4px 0 6px -2px rgba(0, 0, 0, 0.18);
+}
+
+body.light-theme-active .table-td.cell-frozen.cell-disabled,
+.table-page-container.theme-light .table-td.cell-frozen.cell-disabled {
+  background-color: var(--bg-surface-disabled, #f1f5f9);
+}

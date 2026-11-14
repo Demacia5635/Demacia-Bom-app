@@ -206,7 +206,8 @@ export default function WorkOrderDetailsPage() {
                     onshapeURL: part?.onshapeURL || "",
                     exportSTL: part?.stlLink || "",
                     exportParasolid: part?.parasolidLink || "",
-                    vendor: part?.vendor || ""
+                    vendor: part?.vendor || "",
+                    isStandardContent: !!part?.isStandardContent,
                 };
                 collectedRows.push(partRow);
             }
@@ -381,6 +382,9 @@ export default function WorkOrderDetailsPage() {
                         columnsData={WorkOrderColumns}
                         newRowFunction={undefined}
                         setData={(newData) => handleTableDataChange(newData as WorkOrderTableRow[])}
+                        // Like Excel's freeze panes: header row + avatar and name stay visible.
+                        stickyHeader
+                        frozenColumns={2}
                     />
 
                     {contextMenu && (

@@ -157,7 +157,8 @@ export default function BomDetailsPage() {
           onshapeURL: part.onshapeURL || "",
           exportSTL: part.stlLink || "",
           exportParasolid: part.parasolidLink || "",
-          vendor: part.vendor || ""
+          vendor: part.vendor || "",
+          isStandardContent: !!part.isStandardContent,
         };
         collectedRows.push(partRow);
       }
@@ -337,6 +338,9 @@ export default function BomDetailsPage() {
             setData={(newData) => handleTableDataChange(newData as BomTableRow[])}
             newRowFunction={undefined}
             initialSort={{ key: "catalogNumber", direction: "asc" }}
+            // Like Excel's freeze panes: header row + avatar and name stay visible.
+            stickyHeader
+            frozenColumns={2}
           />
 
           {contextMenu && (

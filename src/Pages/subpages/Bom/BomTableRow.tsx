@@ -21,4 +21,13 @@ export default interface BomTableRow extends RowData {
   exportSTL: string;
   exportParasolid: string;
   vendor: string;
+  /** Onshape Standard Content (screws, nuts...): bought, so its details aren't editable. */
+  isStandardContent?: boolean;
+  isSubAssembly?: boolean;
+  subBomId?: string;
+}
+
+/** Standard Content and vendor parts aren't edited here (same rule as the BOM extension). */
+export function isLockedBomRow(row: BomTableRow): boolean {
+  return row.vendor !== "" || !!row.isStandardContent;
 }

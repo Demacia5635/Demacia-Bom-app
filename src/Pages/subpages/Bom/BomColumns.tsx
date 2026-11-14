@@ -1,19 +1,20 @@
 import type { ColumnConfig } from "../../../components/Table";
 import { downloadFile } from "../../../util/ApiService";
 import type BomTableRow from "./BomTableRow";
+import { isLockedBomRow } from "./BomTableRow";
 
 const BomColumns: ColumnConfig[] = [
-  { key: "avatar", label: "Avatar", type: "image", isDisabled: (row) => row.vendor !== "" },
-  { key: "name", label: "Name", type: "string", isDisabled: (row) => row.vendor !== "" },
-  { key: "description", label: "Description", type: "string", isDisabled: (row) => row.vendor !== "" },
-  { key: "catalogNumber", label: "Catalog No.", type: "string", isDisabled: (row) => row.vendor !== "" },
-  { key: "revision", label: "Revision", type: "string", isDisabled: (row) => row.vendor !== "" },
-  { key: "engineer", label: "Engineer", type: "string", isDisabled: (row) => row.vendor !== "" },
+  { key: "avatar", label: "Avatar", type: "image", isDisabled: isLockedBomRow },
+  { key: "name", label: "Name", type: "string", isDisabled: isLockedBomRow },
+  { key: "description", label: "Description", type: "string", isDisabled: isLockedBomRow },
+  { key: "catalogNumber", label: "Catalog No.", type: "string", isDisabled: isLockedBomRow },
+  { key: "revision", label: "Revision", type: "string", isDisabled: isLockedBomRow },
+  { key: "engineer", label: "Engineer", type: "string", isDisabled: isLockedBomRow },
   { key: "quantity", label: "Quantity", type: "number", isDisabled: () => true },
-  { key: "material", label: "Material", type: "string", isDisabled: (row) => row.vendor !== "" },
-  { key: "mass", label: "Mass", type: "number", isDisabled: (row) => row.vendor !== "" },
-  { key: "price", label: "Price", type: "number", isDisabled: (row) => row.vendor !== "" },
-  { key: "comments", label: "Comments", type: "string", isDisabled: (row) => row.vendor !== "" },
+  { key: "material", label: "Material", type: "string", isDisabled: isLockedBomRow },
+  { key: "mass", label: "Mass", type: "number", isDisabled: isLockedBomRow },
+  { key: "price", label: "Price", type: "number", isDisabled: isLockedBomRow },
+  { key: "comments", label: "Comments", type: "string", isDisabled: isLockedBomRow },
   
   // External Link Action (Sub-assemblies can open their Onshape document URL if available)
   {
@@ -21,8 +22,10 @@ const BomColumns: ColumnConfig[] = [
     label: "Links",
     type: "button",
     buttonText: "Open Onshape",
-    isDisabled: (row: BomTableRow) => !row.onshapeURL && !row.documentID,
+    // Standard Content lives in Onshape's library, not in your documents: no link.
+    isDisabled: (row: BomTableRow) => !!row.isStandardContent || (!row.onshapeURL && !row.documentID),
     onButtonClick: (row: BomTableRow) => {
+      if (row.isStandardContent) return;
       let url = row.onshapeURL;
       if (!url && row.documentID && row.elementID) {
         url = `https://cad.onshape.com/documents/${row.documentID}/${row.wvmType || "w"}/${row.wvmID}/e/${row.elementID}`;
