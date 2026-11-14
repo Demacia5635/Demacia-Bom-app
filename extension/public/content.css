@@ -5,6 +5,17 @@
  */
 #demacia-bom-open {
   cursor: pointer;
+  /* Purple like Demacia, logo centered; size and border stay Onshape's. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #7c3aed;
+  color: #fff;
+}
+#demacia-bom-open:hover,
+#demacia-bom-open:focus-visible {
+  background: #6d28d9;
+  color: #fff;
 }
 #demacia-bom-open[hidden] {
   display: none !important;
@@ -13,6 +24,7 @@
 /* The Demacia logo (logo.svg), filled with the icon color via a mask. */
 #demacia-bom-open .demacia-bom-logo {
   display: block;
+  flex: none;
   width: 20px;
   height: 20px;
   background-color: currentColor;
