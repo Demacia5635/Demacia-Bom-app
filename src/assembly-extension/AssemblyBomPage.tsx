@@ -57,6 +57,9 @@ function sameValue(field: string, a: unknown, b: unknown): boolean {
   return String(a ?? "").trim() === String(b ?? "").trim();
 }
 
+/** Engineer written for Onshape Standard Content (screws, nuts, washers...). */
+const STANDARD_PART_ENGINEER = "Standard Part";
+
 /** Standard Content and vendor parts come from outside Onshape documents you own: not editable. */
 function isLockedRow(row: AssemblyBomRow): boolean {
   return row.vendor !== "" || !!row.isStandardContent;
@@ -249,6 +252,9 @@ export default function AssemblyBomPage() {
       const pickNumber = (field: OptionalBomField, dbValue: number | undefined) =>
         field in fromOnshape ? Number(fromOnshape[field]) || 0 : dbValue || 0;
 
+      // Standard Content (screws, nuts...): bought, so no engineer, files or Onshape link.
+      const standard = !!parsedItem.itemSource.isStandardContent;
+
       const savedValues: FieldValues | null = dbPart
         ? {
             name: dbPart.name ?? "",
@@ -274,7 +280,7 @@ export default function AssemblyBomPage() {
         catalogNumber: pickText("partNumber", dbPart?.catalogNumber),
         revision: pickText("revision", dbPart?.revision),
         description: pickText("description", dbPart?.description),
-        engineer: pickText("engineer", dbPart?.engineer),
+        engineer: standard ? STANDARD_PART_ENGINEER : pickText("engineer", dbPart?.engineer),
         material: pickText("material", dbPart?.material),
         mass: pickNumber("mass", dbPart?.mass),
         price: pickNumber("price", dbPart?.price),
@@ -290,9 +296,9 @@ export default function AssemblyBomPage() {
         wvmID: key.wvmID,
         elementID: key.elementID,
         entityID: partID,
-        onshapeURL: dbPart?.onshapeURL || onshapeUrl,
-        exportSTL: dbPart?.stlLink || "",
-        exportParasolid: dbPart?.parasolidLink || "",
+        onshapeURL: standard ? "" : dbPart?.onshapeURL || onshapeUrl,
+        exportSTL: standard ? "" : dbPart?.stlLink || "",
+        exportParasolid: standard ? "" : dbPart?.parasolidLink || "",
         dbAction: isExist ? "" : "add",
         vendor: dbPart?.vendor || parsedItem.vendor || "",
         configuration: parsedItem.itemSource.configuration || "",
@@ -598,7 +604,11 @@ export default function AssemblyBomPage() {
           }
 
           // 2. The full record, with fresh files.
-          const engineer = row.vendor !== "" ? row.vendor : row.engineer || values.defaultEngineer;
+          const engineer = row.isStandardContent
+            ? STANDARD_PART_ENGINEER
+            : row.vendor !== ""
+              ? row.vendor
+              : row.engineer || values.defaultEngineer;
           const toDelete: string[] = [];
           if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
@@ -625,13 +635,23 @@ export default function AssemblyBomPage() {
             });
             rowUpdates.set(row.id, { saved: { avatarID } });
           } else {
-            report(row.name, "Exporting thumbnail, STL and Parasolid");
-            const files = await syncPartFilesToDrive(key, row.entityID, row.name, { configuration: row.configuration });
+            // Standard Content (screws, nuts...) is bought, not made: thumbnail only,
+            // no STL / Parasolid / Onshape link (any saved earlier are removed).
+            const standard = !!row.isStandardContent;
+            report(row.name, standard ? "Saving thumbnail" : "Exporting thumbnail, STL and Parasolid");
+            const files = await syncPartFilesToDrive(key, row.entityID, row.name, {
+              configuration: row.configuration,
+              ...(standard ? { only: ["thumbnail" as const] } : {}),
+            });
             problems.push(...files.failures);
+            if (standard) {
+              if (row.saved?.stlLink) toDelete.push(row.saved.stlLink);
+              if (row.saved?.parasolidLink) toDelete.push(row.saved.parasolidLink);
+            }
             const saved = {
               avatarID: replaceFile(row.saved?.avatarID, files.avatarID, toDelete),
-              stlLink: replaceFile(row.saved?.stlLink, files.stlLink, toDelete),
-              parasolidLink: replaceFile(row.saved?.parasolidLink, files.parasolidLink, toDelete),
+              stlLink: standard ? "" : replaceFile(row.saved?.stlLink, files.stlLink, toDelete),
+              parasolidLink: standard ? "" : replaceFile(row.saved?.parasolidLink, files.parasolidLink, toDelete),
             };
             report(row.name, "Saving");
             await upsertPartById(row.id, {
@@ -648,7 +668,7 @@ export default function AssemblyBomPage() {
               avatarID: saved.avatarID,
               stlLink: saved.stlLink,
               parasolidLink: saved.parasolidLink,
-              onshapeURL: onshapeUrlOf(key),
+              onshapeURL: standard ? "" : onshapeUrlOf(key),
               onshapeID: {
                 ...key,
                 partID: row.entityID,
@@ -657,7 +677,12 @@ export default function AssemblyBomPage() {
               // Work orders treat these as purchased (no catalog number needed).
               isStandardContent: !!row.isStandardContent,
             });
-            rowUpdates.set(row.id, { saved, exportSTL: saved.stlLink, exportParasolid: saved.parasolidLink });
+            rowUpdates.set(row.id, {
+              saved,
+              exportSTL: saved.stlLink,
+              exportParasolid: saved.parasolidLink,
+              ...(standard ? { onshapeURL: "", engineer } : {}),
+            });
           }
 
           // 3. The record now points at the new files; remove the ones it replaced.
