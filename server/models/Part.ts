@@ -39,6 +39,14 @@ const partSchema = new mongoose.Schema(
     // Onshape Standard Content (screws, nuts, washers...): bought, not made.
     isStandardContent: { type: Boolean, default: false },
 
+    // Which files Publish BOM keeps for this part (set in the BOM extension).
+    // Absent on parts saved before these choices existed.
+    wantStl: { type: Boolean },
+    wantParasolid: { type: Boolean },
+    // Model version (Part Studio change marker + configuration) the saved
+    // thumbnail/STL/Parasolid were made from; unchanged -> not re-exported.
+    filesModelVersion: { type: String },
+
     driveFileId: { type: String },
     imageUrl: { type: String },
   },

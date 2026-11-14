@@ -47,6 +47,9 @@ const bomSchema = new mongoose.Schema(
 
     // Added fields to support Google Drive caching:
     driveFileId: { type: String, default: "" },
+    // Model version (fingerprint of the tree's change markers) the saved
+    // thumbnail was rendered from; unchanged -> not rendered again on publish.
+    filesModelVersion: { type: String },
     imageUrl: { type: String, default: "" },
 
     comments: { type: String },

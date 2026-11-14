@@ -43,8 +43,37 @@ function rootBomSummary(bom: OnshapeBomTable | null | undefined) {
   return bom ? { id: bom.id, name: bom.name, description: bom.description || "", partNumber: bom.partNumber || "" } : null;
 }
 
-/** Cells the user may edit (written to Onshape and the database on Publish BOM). */
-const EDITABLE_FIELDS = ["name", "description", "catalogNumber", "revision", "engineer", "material", "price", "comments"];
+/** Cells the user may edit (saved to the database on Publish BOM). */
+const EDITABLE_FIELDS = [
+  "name",
+  "description",
+  "catalogNumber",
+  "revision",
+  "engineer",
+  "material",
+  "price",
+  "comments",
+  "wantStl",
+  "wantParasolid",
+];
+
+/** Edited cells that are also written back to Onshape (the rest live only in the database). */
+const DATABASE_ONLY_FIELDS = new Set(["material", "wantStl", "wantParasolid"]);
+
+/**
+ * Which files a part not chosen yet should get, from its material:
+ * 3D-printing plastics -> STL; aluminum -> Parasolid; acetal/Delrin/POM and
+ * anything else -> neither.
+ */
+function fileDefaultsForMaterial(material: string): { wantStl: boolean; wantParasolid: boolean } {
+  const m = material.toLowerCase();
+  if (/\b(delrin|acetal|pom|polyoxymethylene)\b/.test(m)) return { wantStl: false, wantParasolid: false };
+  if (/\b(pla\+?|abs|tpu|petg|pet-g|asa|nylon|pa\s?\d*|onyx|resin|tpe|hips|pc|polycarbonate)\b/.test(m)) {
+    return { wantStl: true, wantParasolid: false };
+  }
+  if (/\b(alumin(i)?um|al\s?\d{4}|\d{4}-t\d+)\b/.test(m)) return { wantStl: false, wantParasolid: true };
+  return { wantStl: false, wantParasolid: false };
+}
 
 type FieldValues = Record<string, string | number>;
 
@@ -57,6 +86,7 @@ function editableValues(row: AssemblyBomRow): FieldValues {
 /** Equal for display purposes: trimmed text; for price, 0 and empty are the same. */
 function sameValue(field: string, a: unknown, b: unknown): boolean {
   if (field === "price") return (Number(a) || 0) === (Number(b) || 0);
+  if (field === "wantStl" || field === "wantParasolid") return Boolean(a) === Boolean(b);
   return String(a ?? "").trim() === String(b ?? "").trim();
 }
 
@@ -204,15 +234,19 @@ function fingerprint(text: string): string {
   return (hash >>> 0).toString(16);
 }
 
+/** Model version of each row (by row ID), and of the whole tree. */
+interface ModelVersions {
+  /** Parts: their Part Studio's change marker; null when unknown. */
+  byRow: Map<string, string | null>;
+  /** Fingerprint of every marker in the tree (assembly pictures show parts from across it). */
+  tree: string | null;
+}
+
 /**
- * The current model version of every row image, for the image store
- * (imageCache.ts): one request per document workspace in the tree for its
- * tabs' change markers. Parts use their Part Studio's marker (versions never
- * change); assembly pictures show parts from across the tree, so they use a
- * fingerprint of every marker in it. Images with an unknown version aren't
- * stored.
+ * Current model versions for a tree: one request per document workspace in
+ * it for its tabs' change markers (versions and microversions never change).
  */
-async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter): Promise<Map<string, string>> {
+async function computeModelVersions(rows: AssemblyBomRow[], limit: Limiter): Promise<ModelVersions> {
   const workspaces = new Map<string, Promise<Map<string, string> | null>>();
   for (const r of rows) {
     const key = `${r.documentID}/${r.wvmID}`;
@@ -228,14 +262,33 @@ async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter): Pro
       ? `${r.wvmType}:${r.wvmID}` // versions/microversions never change
       : markers.get(`${r.documentID}/${r.wvmID}`)?.get(r.elementID) ?? null;
 
-  const all = rows.map(modelVersion);
-  const treeVersion = all.every(Boolean) ? `tree:${fingerprint([...new Set(all)].sort().join(","))}` : null;
+  const byRow = new Map<string, string | null>(rows.map((r) => [r.id, modelVersion(r)]));
+  const all = [...byRow.values()];
+  const tree = all.every(Boolean) ? `tree:${fingerprint([...new Set(all)].sort().join(","))}` : null;
+  return { byRow, tree };
+}
 
+/**
+ * Version a part's saved files were made from: its model version plus its
+ * configuration (a configured part's files depend on both). null when unknown.
+ */
+function partFilesVersion(row: AssemblyBomRow, versions: ModelVersions): string | null {
+  const model = versions.byRow.get(row.id);
+  return model ? `${model}|${row.configuration ?? ""}` : null;
+}
+
+/**
+ * The current model version of every row image, for the image store
+ * (imageCache.ts). Parts use their Part Studio's marker; assemblies the tree
+ * fingerprint. Images with an unknown version aren't stored.
+ */
+async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter): Promise<Map<string, string>> {
+  const { byRow, tree } = await computeModelVersions(rows, limit);
   const versions = new Map<string, string>();
-  rows.forEach((r, i) => {
-    const version = r.isAssembly ? treeVersion : all[i];
+  for (const r of rows) {
+    const version = r.isAssembly ? tree : byRow.get(r.id);
     if (r.avatar && version) versions.set(r.avatar, version);
-  });
+  }
   return versions;
 }
 
@@ -338,7 +391,7 @@ export default function AssemblyBomPage() {
         price: 0,
         quantity: parentItem?.quantity || 1,
         comments: pick("comments", dbBom?.comments),
-        saved: { avatarID: dbBom?.avatarID || undefined },
+        saved: { avatarID: dbBom?.avatarID || undefined, filesModelVersion: dbBom?.filesModelVersion || undefined },
         documentID: key.documentID,
         wvmType: key.wvmType,
         wvmID: key.wvmID,
@@ -410,8 +463,20 @@ export default function AssemblyBomPage() {
       // Standard Content (screws, nuts...): bought, so no engineer, files or Onshape link.
       const standard = !!parsedItem.itemSource.isStandardContent;
 
+      // Which files Publish BOM keeps: the saved choice; for parts saved before
+      // choices existed, the files they already have; otherwise from the material.
+      const material = pickText("material", dbPart?.material);
+      const hasSavedChoice = !!dbPart && (typeof dbPart.wantStl === "boolean" || typeof dbPart.wantParasolid === "boolean");
+      const files = standard
+        ? { wantStl: false, wantParasolid: false }
+        : hasSavedChoice
+          ? { wantStl: !!dbPart!.wantStl, wantParasolid: !!dbPart!.wantParasolid }
+          : dbPart
+            ? { wantStl: !!dbPart.stlLink, wantParasolid: !!dbPart.parasolidLink }
+            : fileDefaultsForMaterial(material);
+
       const savedValues: FieldValues | null = dbPart
-        ? {
+        ? ({
             name: dbPart.name ?? "",
             description: dbPart.description ?? "",
             catalogNumber: dbPart.catalogNumber ?? "",
@@ -420,7 +485,9 @@ export default function AssemblyBomPage() {
             material: dbPart.material ?? "",
             price: dbPart.price ?? 0,
             comments: dbPart.comments ?? "",
-          }
+            wantStl: files.wantStl,
+            wantParasolid: files.wantParasolid,
+          } as unknown as FieldValues)
         : null;
 
       return withChangeTracking({
@@ -436,7 +503,7 @@ export default function AssemblyBomPage() {
         revision: pickText("revision", dbPart?.revision),
         description: pickText("description", dbPart?.description),
         engineer: standard ? STANDARD_PART_ENGINEER : pickText("engineer", dbPart?.engineer),
-        material: pickText("material", dbPart?.material),
+        material,
         mass: pickNumber("mass", dbPart?.mass),
         price: pickNumber("price", dbPart?.price),
         quantity: parsedItem.quantity || 1,
@@ -445,7 +512,10 @@ export default function AssemblyBomPage() {
           avatarID: dbPart?.avatarID || undefined,
           stlLink: dbPart?.stlLink || undefined,
           parasolidLink: dbPart?.parasolidLink || undefined,
+          filesModelVersion: dbPart?.filesModelVersion || undefined,
         },
+        wantStl: files.wantStl,
+        wantParasolid: files.wantParasolid,
         documentID: key.documentID,
         wvmType: key.wvmType,
         wvmID: key.wvmID,
@@ -730,11 +800,19 @@ export default function AssemblyBomPage() {
 
       try {
         const isUpdate = Boolean(rootBomDB);
-        const rootTrack = track(values.name, isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
+        const rootTrack = track(values.name, "Checking which models changed");
+        // Current model versions: files made from an unchanged model are kept,
+        // not exported again (one request per document). Unknown -> export.
+        const versions = await computeModelVersions(rows, createLimiter(REFRESH_CONCURRENCY)).catch(
+          (): ModelVersions => ({ byRow: new Map(), tree: null })
+        );
+
+        rootTrack.step(isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
         const rootLinks = buildLinkArrays(rootRowId);
         const rootToDelete: string[] = [];
-        const rootAvatar = await syncBomThumbnailToDrive(rootKey, values.name);
-        if (!rootAvatar) problems.push(`Thumbnail of "${values.name}"`);
+        const rootUnchanged = !!versions.tree && rootBomDB?.filesModelVersion === versions.tree && !!rootBomDB?.avatarID;
+        const rootAvatar = rootUnchanged ? null : await syncBomThumbnailToDrive(rootKey, values.name);
+        if (!rootUnchanged && !rootAvatar) problems.push(`Thumbnail of "${values.name}"`);
         const savedRoot = await upsertBomById(rootID, {
           id: rootID,
           name: values.name,
@@ -745,6 +823,8 @@ export default function AssemblyBomPage() {
           parts: rootLinks.parts,
           subAssemblies: rootLinks.subAssemblies,
           avatarID: replaceFile(rootBomDB?.avatarID, rootAvatar, rootToDelete),
+          // A failed render leaves no version, so the next publish tries again.
+          filesModelVersion: !rootUnchanged && !rootAvatar ? "" : versions.tree ?? "",
           onshapeID: {
             ...rootKey,
             bomID: rootOnshapeBom.id
@@ -781,8 +861,8 @@ export default function AssemblyBomPage() {
                 if (edited.includes("catalogNumber")) data["part number"] = row.catalogNumber;
                 if (Object.keys(data).length > 0) await updateOnshapeBomMetadata(key, data);
               } else {
-                // Material is a library reference in Onshape; it's saved to the database only.
-                const data = Object.fromEntries(edited.filter((k) => k !== "material").map((k) => [k, values_[k]]));
+                // Material (a library reference in Onshape) and the file choices are database-only.
+                const data = Object.fromEntries(edited.filter((k) => !DATABASE_ONLY_FIELDS.has(k)).map((k) => [k, values_[k]]));
                 if (Object.keys(data).length > 0) await updateOnshapePartMetadata(key, row.entityID, data);
               }
             } catch (err: any) {
@@ -800,9 +880,14 @@ export default function AssemblyBomPage() {
           const toDelete: string[] = [];
           if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
-            progress.step("Saving thumbnail");
-            const avatar = await syncBomThumbnailToDrive(key, row.name);
-            if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
+            // The picture shows parts from across the tree: re-rendered when anything in it changed.
+            const unchanged = !!versions.tree && row.saved?.filesModelVersion === versions.tree && !!row.saved?.avatarID;
+            let avatar: string | null = null;
+            if (!unchanged) {
+              progress.step("Saving thumbnail");
+              avatar = await syncBomThumbnailToDrive(key, row.name);
+              if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
+            }
             const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
             await upsertBomById(row.id, {
               id: row.id,
@@ -815,31 +900,55 @@ export default function AssemblyBomPage() {
               subAssemblies: links.subAssemblies,
               onshapeURL: onshapeUrlOf(key),
               avatarID,
+              // A failed render leaves no version, so the next publish tries again.
+              filesModelVersion: !unchanged && !avatar ? "" : versions.tree ?? "",
               onshapeID: {
                 ...key,
                 bomID: row.entityID,
               },
               vendor: row.vendor
             });
-            rowUpdates.set(row.id, { saved: { avatarID } });
-          } else {
-            // Standard Content (screws, nuts...) is bought, not made: thumbnail only,
-            // no STL / Parasolid / Onshape link (any saved earlier are removed).
-            const standard = !!row.isStandardContent;
-            progress.step(standard ? "Saving thumbnail" : "Exporting thumbnail, STL and Parasolid");
-            const files = await syncPartFilesToDrive(key, row.entityID, row.name, {
-              configuration: row.configuration,
-              ...(standard ? { only: ["thumbnail" as const] } : {}),
+            rowUpdates.set(row.id, {
+              saved: { avatarID, filesModelVersion: !unchanged && !avatar ? undefined : versions.tree ?? undefined },
             });
-            problems.push(...files.failures);
-            if (standard) {
-              if (row.saved?.stlLink) toDelete.push(row.saved.stlLink);
-              if (row.saved?.parasolidLink) toDelete.push(row.saved.parasolidLink);
+          } else {
+            // Standard Content (screws, nuts...) is bought, not made: no STL / Parasolid /
+            // Onshape link. Other parts keep the files ticked in the STL / Parasolid columns.
+            const standard = !!row.isStandardContent;
+            const wantStl = !standard && !!row.wantStl;
+            const wantParasolid = !standard && !!row.wantParasolid;
+
+            // Files made from the same model version are kept; only changed models,
+            // missing files and newly ticked ones are exported.
+            const version = partFilesVersion(row, versions);
+            const unchanged = !!version && row.saved?.filesModelVersion === version;
+            const toExport = [
+              ...(!(unchanged && row.saved?.avatarID) ? (["thumbnail"] as const) : []),
+              ...(wantStl && !(unchanged && row.saved?.stlLink) ? (["stl"] as const) : []),
+              ...(wantParasolid && !(unchanged && row.saved?.parasolidLink) ? (["parasolid"] as const) : []),
+            ];
+            let files = { avatarID: null as string | null, stlLink: null as string | null, parasolidLink: null as string | null };
+            let exportFailed = false;
+            if (toExport.length > 0) {
+              progress.step(`Exporting ${toExport.map((k) => (k === "stl" ? "STL" : k === "parasolid" ? "Parasolid" : "thumbnail")).join(", ")}`);
+              const result = await syncPartFilesToDrive(key, row.entityID, row.name, {
+                configuration: row.configuration,
+                only: [...toExport],
+              });
+              problems.push(...result.failures);
+              exportFailed = result.failures.length > 0;
+              files = result;
             }
+            // Unticked (or Standard Content): the saved file is deleted.
+            if (!wantStl && row.saved?.stlLink) toDelete.push(row.saved.stlLink);
+            if (!wantParasolid && row.saved?.parasolidLink) toDelete.push(row.saved.parasolidLink);
             const saved = {
               avatarID: replaceFile(row.saved?.avatarID, files.avatarID, toDelete),
-              stlLink: standard ? "" : replaceFile(row.saved?.stlLink, files.stlLink, toDelete),
-              parasolidLink: standard ? "" : replaceFile(row.saved?.parasolidLink, files.parasolidLink, toDelete),
+              stlLink: wantStl ? replaceFile(row.saved?.stlLink, files.stlLink, toDelete) : "",
+              parasolidLink: wantParasolid ? replaceFile(row.saved?.parasolidLink, files.parasolidLink, toDelete) : "",
+              // After a failed export the saved files may be stale: no version, so
+              // the next publish exports again.
+              filesModelVersion: exportFailed ? undefined : version ?? undefined,
             };
             progress.step("Saving to the database");
             await upsertPartById(row.id, {
@@ -864,6 +973,9 @@ export default function AssemblyBomPage() {
               vendor: row.vendor,
               // Work orders treat these as purchased (no catalog number needed).
               isStandardContent: !!row.isStandardContent,
+              wantStl,
+              wantParasolid,
+              filesModelVersion: saved.filesModelVersion ?? "",
             });
             rowUpdates.set(row.id, {
               saved,

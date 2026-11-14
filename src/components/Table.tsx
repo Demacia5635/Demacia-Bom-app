@@ -693,9 +693,9 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                     ) : col.type === 'boolean' ? (
                                                         <input
                                                             type="checkbox"
-                                                            checked={row[col.key] as boolean}
+                                                            checked={!!row[col.key]}
                                                             onChange={(e) => handleCellChange(row.id, col, e.target.checked)}
-                                                            className="bg-zinc-950 border border-zinc-800 rounded px-3 text-white mt-4 cell-input"
+                                                            className="cell-checkbox"
                                                             disabled={isCellDisabled}
                                                         />
                                                     ) : col.type === 'number' ? (

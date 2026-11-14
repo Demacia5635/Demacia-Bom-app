@@ -336,6 +336,21 @@ body.dark-theme-active .table-page-container,
   background-color: var(--bg-surface-hover, #334155) !important;
 }
 
+/* Yes/No cells (Table type 'boolean'). */
+.cell-checkbox {
+  display: block;
+  margin: 8px auto;
+  width: 16px;
+  height: 16px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.cell-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
 /* Edited, not published yet (BOM extension). */
 .cell-modified {
   background-color: rgba(245, 158, 11, 0.14);

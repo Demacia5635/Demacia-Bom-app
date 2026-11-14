@@ -18,6 +18,8 @@ export interface BomModel {
   parts: { partID: string; quantity: number }[];
   subAssemblies: { bomID: string; quantity: number }[];
   vendor?: string;
+  /** Model version the saved thumbnail was rendered from. */
+  filesModelVersion?: string;
   updatedAt?: Date;
   createdAt?: Date;
 }
@@ -41,6 +43,11 @@ export interface PartModel {
   vendor?: string;
   /** Onshape Standard Content (screws, nuts, washers...): bought, not made. */
   isStandardContent?: boolean;
+  /** Whether Publish BOM keeps an STL / Parasolid for this part (absent on older records). */
+  wantStl?: boolean;
+  wantParasolid?: boolean;
+  /** Model version the saved thumbnail/STL/Parasolid were made from. */
+  filesModelVersion?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

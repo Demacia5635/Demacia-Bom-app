@@ -1,5 +1,4 @@
 import type { ColumnConfig } from "../components/Table";
-import { downloadFile } from "../util/ApiService";
 import type AssemblyBomRow from "./AssemblyBomRow";
 
 /** Standard Content (bolts, nuts...) and vendor parts come from outside and aren't editable. */
@@ -45,29 +44,21 @@ export default function buildAssemblyBomColumns(): ColumnConfig[] {
         if (row.onshapeURL) window.open(row.onshapeURL, "_blank");
       },
     },
+    // Which files Publish BOM keeps for each part (unticking deletes the file on
+    // publish). Defaults come from the material. Downloads are on the website.
     {
-      key: "exportSTL",
-      label: "Export STL",
-      type: "button",
-      buttonText: "Download",
-      isDisabled: isStandardContent,
-      onButtonClick: (row: AssemblyBomRow) => {
-        if (row.exportSTL) {
-          downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`, `${row.name || "part"}.stl`);
-        }
-      },
+      key: "wantStl",
+      label: "STL",
+      type: "boolean",
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
+      isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantStl"),
     },
     {
-      key: "exportParasolid",
-      label: "Export Parasolid",
-      type: "button",
-      buttonText: "Download",
-      isDisabled: isStandardContent,
-      onButtonClick: (row: AssemblyBomRow) => {
-        if (row.exportParasolid) {
-          downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`, `${row.name || "part"}.x_t`);
-        }
-      },
+      key: "wantParasolid",
+      label: "Parasolid",
+      type: "boolean",
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
+      isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantParasolid"),
     },
   ];
 }

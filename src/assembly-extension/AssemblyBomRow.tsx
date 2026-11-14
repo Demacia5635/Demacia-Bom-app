@@ -40,5 +40,8 @@ export default interface AssemblyBomRow extends BomTableRow {
   /** Editable values as loaded by the last Refresh BOM; cells changed from these are written to Onshape. */
   loaded?: Record<string, string | number>;
   /** Drive file IDs currently saved for this item, replaced (then deleted) by Publish BOM. */
-  saved?: { avatarID?: string; stlLink?: string; parasolidLink?: string };
+  saved?: { avatarID?: string; stlLink?: string; parasolidLink?: string; filesModelVersion?: string };
+  /** Parts: whether Publish BOM keeps an STL / Parasolid (unticking deletes it on publish). */
+  wantStl?: boolean;
+  wantParasolid?: boolean;
 }
