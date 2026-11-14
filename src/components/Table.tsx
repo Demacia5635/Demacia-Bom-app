@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthenticatedImage } from "../util/ApiService";
 
 export interface RowData {
@@ -373,26 +373,36 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         });
     };
 
-    const getVisibleData = (): RenderRow[] => {
+    // Children of each row, built once per data change. Looking them up by
+    // scanning every row for every row made large tables slow (n x n work).
+    const childrenByParent = useMemo(() => {
+        const map = new Map<string | null, (RowData & any)[]>();
+        for (const row of data) {
+            const list = map.get(row.parentId);
+            if (list) list.push(row);
+            else map.set(row.parentId, [row]);
+        }
+        return map;
+    }, [data]);
+
+    const isParent = (id: string) => childrenByParent.has(id);
+
+    const visibleData = useMemo((): RenderRow[] => {
         const result: RenderRow[] = [];
         const addChildren = (parentId: string | null, level: number) => {
-            const children = sortSiblings(data.filter(row => row.parentId === parentId));
+            const children = sortSiblings(childrenByParent.get(parentId) ?? []);
             for (const child of children) {
-                result.push({ ...child, level })
-                if (isParent(child.id) && child.isExpanded) {
+                result.push({ ...child, level });
+                if (childrenByParent.has(child.id) && child.isExpanded) {
                     addChildren(child.id, level + 1);
                 }
             }
         };
         addChildren(null, 0);
         return result;
-    };
-
-    const isParent = (id: string) => {
-        return data.find((row) => row.parentId === id);
-    }
-
-    const visibleData = getVisibleData();
+        // sortSiblings only depends on sortConfig.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [childrenByParent, sortConfig]);
 
     const handleAddRow = (parentId: string | null = null) => {
         const newId = Date.now().toString();
