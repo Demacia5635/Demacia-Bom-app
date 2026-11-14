@@ -1,5 +1,5 @@
-import { HomeIcon, SearchIcon, ClipboardList, X, LogInIcon, LogOutIcon, Box, type LucideProps } from "lucide-react";
-import { useEffect, useState, type ForwardRefExoticComponent, RefAttributes } from "react";
+import { HomeIcon, SearchIcon, ClipboardList, X, type LucideProps } from "lucide-react";
+import { type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
 
@@ -8,22 +8,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     const location = useLocation();
     const { isLight } = useThemeSync();
 
-    const username = localStorage.getItem("username");
-    
-    // Read the saved Onshape query from sessionStorage
-    const [onshapeQuery, setOnshapeQuery] = useState(sessionStorage.getItem("onshapeQuery") || "");
-
-    // 1. Intercept and save the Onshape query parameters permanently for this session
-    useEffect(() => {
-        if (location.search.includes("documentId")) {
-            sessionStorage.setItem("onshapeQuery", location.search);
-            setOnshapeQuery(location.search);
-        }
-    }, [location.search]);
-
-    // 2. We are in Onshape if the path is /onshape OR if we have a saved query string
-    const isOnshapeContext = location.pathname.toLowerCase().includes("/onshape") || Boolean(onshapeQuery);
-
     const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
         { label: 'Search Parts', path: '/partSearch', icon: SearchIcon },
@@ -31,21 +15,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     ];
 
     const handleNavigation = (path: string) => {
-        let finalPath = path;
-        
-        // 3. If navigating back to Onshape, ALWAYS attach the saved query string so it doesn't get stuck loading!
-        if (path.includes("/onshape") && onshapeQuery) {
-            finalPath = `/onshape${onshapeQuery}`;
-        }
-        
-        navigate(finalPath);
-        onClose();
-    };
-
-    const handleLogout = () => {
-        localStorage.removeItem("username");
-        // Ensure signin page also gets the params so it can auto-redirect correctly
-        navigate(onshapeQuery ? `/signin${onshapeQuery}` : "/signin");
+        navigate(path);
         onClose();
     };
 
@@ -84,7 +54,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                 {/* Header */}
                 <div className={`h-12 flex items-center justify-between px-4 border-b ${headerBg}`}>
                     <span className="font-semibold text-xs uppercase tracking-wider">
-                        {username ? `User: ${username}` : "Navigation"}
+                        Navigation
                     </span>
                     <button
                         onClick={onClose}
@@ -110,39 +80,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                             </button>
                         );
                     })}
-
-                    {/* Conditionally Rendered Onshape Link (Only if in Onshape Frame) */}
-                    {isOnshapeContext && (
-                        <button
-                            onClick={() => handleNavigation(`/onshape`)}
-                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors mt-4 border-t ${isLight ? "border-zinc-200 pt-4" : "border-gray-800 pt-4"} ${location.pathname.includes('/onshape') ? navActive : navInactive}`}
-                        >
-                            <Box className={`w-4 h-4 ${iconColor}`} />
-                            <span>Assembly BOM</span>
-                        </button>
-                    )}
                 </nav>
-
-                {/* Footer Auth Action */}
-                <div className={`p-3 border-t ${isLight ? "border-zinc-200 bg-zinc-50" : "border-gray-800 bg-gray-900/50"}`}>
-                    {username ? (
-                        <button
-                            onClick={handleLogout}
-                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-red-500 ${isLight ? "hover:bg-red-50" : "hover:bg-red-950/40"}`}
-                        >
-                            <LogOutIcon className="w-4 h-4 text-red-500" />
-                            <span>Sign Out</span>
-                        </button>
-                    ) : (
-                        <button
-                            onClick={() => handleNavigation("/signin")}
-                            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${navInactive}`}
-                        >
-                            <LogInIcon className={`w-4 h-4 ${iconColor}`} />
-                            <span>Sign In</span>
-                        </button>
-                    )}
-                </div>
 
             </aside>
         </div>

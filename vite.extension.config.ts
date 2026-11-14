@@ -58,16 +58,6 @@ export default defineConfig(({ mode }) => {
     envDir: ROOT,
     publicDir: resolve(EXT_DIR, 'public'),
     plugins: [react(), tailwindcss(), manifestPlugin(backendUrl)],
-    resolve: {
-      alias: [
-        {
-          // AssemblyBomPage's Onshape iframe hooks -> side-panel equivalents
-          // (context from the active tab URL, toasts instead of message bubbles).
-          find: /^\.\.\/util\/OnshapeExtension$/,
-          replacement: resolve(ROOT, 'src/extension/onshapeHostShim.tsx'),
-        },
-      ],
-    },
     build: {
       outDir: resolve(ROOT, 'dist-extension'),
       emptyOutDir: true,

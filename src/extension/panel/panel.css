@@ -75,9 +75,3 @@ body {
   margin-top: 4px;
 }
 
-/* Identity comes from the Onshape session in the extension, so "Sign Out"
- * would only bounce back; hide it and its separator. */
-.assembly-bom-page button[title^="Sign out"],
-.assembly-bom-page div:has(> button[title^="Sign out"]) > .w-px {
-  display: none;
-}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { Appbar } from "./Appbar";
 import { Sidebar } from "./Sidebar";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -10,8 +10,8 @@ export default function MainLayout() {
     const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);
     const { isLight } = useThemeSync();
 
-    const location = useLocation();
-    const isSidebar = location.pathname !== "/onshape";
+    // Every page has the sidebar (the old in-Onshape "/onshape" page didn't).
+    const isSidebar = true;
 
     const layoutBg = isLight 
         ? "bg-zinc-50 text-zinc-900" 

@@ -41,7 +41,7 @@ app.use(cors({
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-client-secret", "x-username", "Authorization"]
+    allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"]
 }));
 
 app.use(express.json());
@@ -60,9 +60,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     next();
 });
 
-// Selective Auth Middleware: Bypass checkAuth for public Drive streams and Auth routes
+// Selective Auth Middleware: only *reading* a Drive file is public (images in
+// <img> tags can't send the client secret). Deleting one still needs the secret.
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith('/drive/file/id/') || req.path.startsWith('/auth/')) {
+    if (req.method === "GET" && req.path.startsWith('/drive/file/id/')) {
         return next();
     }
     return checkAuth(req, res, next);

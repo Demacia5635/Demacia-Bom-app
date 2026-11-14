@@ -3,30 +3,22 @@
  * =============================================================================
  */
 
-import { fetchFileBytes, type ApiError } from "../util/ApiService";
+import type { ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import type { OnshapeBomTable } from "./OnshapeBom";
 import * as onshapeDirect from "../extension/onshapeDirect";
-import { isChromeExtension } from "../extension/onshapeDirect";
 
 const BASE_URL = `${import.meta.env.VITE_CLIENT_URL}/api`;
 
-/**
- * Builds standard headers including the global client secret and the logged-in user's username.
- */
+/** Standard headers for our server: content type and the client secret. */
 function getBomApiHeaders(contentType = "application/json"): Record<string, string> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
-  const username = localStorage.getItem("username") || "";
-
   const headers: Record<string, string> = {};
   if (contentType) {
     headers["Content-Type"] = contentType;
   }
   if (secret) {
     headers["x-client-secret"] = secret;
-  }
-  if (username) {
-    headers["x-username"] = username;
   }
   return headers;
 }
@@ -71,7 +63,7 @@ export async function postToApi<T>(endpoint: string, body: unknown): Promise<T> 
 }
 
 /**
- * Custom GET helper to ensure x-username is sent with every query.
+ * GET helper for our server (client secret header).
  */
 async function fetchJsonFromApi<T>(endpoint: string): Promise<T> {
   try {
@@ -160,18 +152,12 @@ export function upsertPartById(id: string, data: Partial<PartModel>): Promise<Pa
 }
 
 /* ---------------------------------------------------------------------- */
-/* Live Onshape data (fallback source when not yet in the DB)              */
-/*                                                                         */
-/* Inside the Chrome extension these call Onshape directly with the user's */
-/* browser session (src/extension/onshapeDirect.ts). In the web app they   */
-/* still go through the server's /api/onshape/* proxy; that branch goes    */
-/* away when the Onshape iframe extension is retired.                      */
+/* Onshape, called directly with the user's browser session                */
+/* (src/extension/onshapeDirect.ts). The server never calls Onshape.       */
 /* ---------------------------------------------------------------------- */
 
-export async function getOnshapeBom(key: OnshapeKey): Promise<OnshapeBomTable> {
-  if (isChromeExtension()) return onshapeDirect.getBom(key);
-  const response = await fetchJsonFromApi<OnshapeBomTable>(`/onshape/bom${onshapeKeySegment(key)}`);
-  return response;
+export function getOnshapeBom(key: OnshapeKey): Promise<OnshapeBomTable> {
+  return onshapeDirect.getBom(key);
 }
 
 export function updateOnshapePartMetadata(
@@ -179,43 +165,27 @@ export function updateOnshapePartMetadata(
   partID: string,
   data: Record<string, unknown>
 ): Promise<unknown> {
-  if (isChromeExtension()) return onshapeDirect.updatePartMetadata(key, partID, data);
-  return postToApi(`/onshape/part${onshapeKeySegment(key)}/p/${partID}`, data);
+  return onshapeDirect.updatePartMetadata(key, partID, data);
 }
 
-export function updateOnshapeBomMetadata(
-  key: OnshapeKey,
-  data: Record<string, unknown>
-): Promise<unknown> {
-  if (isChromeExtension()) return onshapeDirect.updateElementMetadata(key, data);
-  return postToApi(`/onshape/bom${onshapeKeySegment(key)}`, data);
+export function updateOnshapeBomMetadata(key: OnshapeKey, data: Record<string, unknown>): Promise<unknown> {
+  return onshapeDirect.updateElementMetadata(key, data);
 }
-
-/* ---------------------------------------------------------------------- */
-/* Onshape binary files (thumbnail, STL, Parasolid) -> Google Drive        */
-/* ---------------------------------------------------------------------- */
 
 export function getOnshapePartThumbnail(key: OnshapeKey, partID: string, configuration?: string): Promise<Blob> {
-  if (isChromeExtension()) return onshapeDirect.getPartThumbnail(key, partID, configuration);
-  const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/thumbnail`;
-  return fetchFileBytes(url, "image/png");
+  return onshapeDirect.getPartThumbnail(key, partID, configuration);
 }
 
 export function getOnshapePartStl(key: OnshapeKey, partID: string, configuration?: string): Promise<Blob> {
-  if (isChromeExtension()) return onshapeDirect.exportPartStl(key, partID, configuration);
-  const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/stl`;
-  return fetchFileBytes(url, "model/stl");
+  return onshapeDirect.exportPartStl(key, partID, configuration);
 }
 
 export function getOnshapePartParasolid(key: OnshapeKey, partID: string, configuration?: string): Promise<Blob> {
-  if (isChromeExtension()) return onshapeDirect.exportPartParasolid(key, partID, configuration);
-  const url = `${BASE_URL}/onshape/part${onshapeKeySegment(key)}/p/${partID}/parasolid`;
-  return fetchFileBytes(url, "application/x-parasolid");
+  return onshapeDirect.exportPartParasolid(key, partID, configuration);
 }
 
 /**
- * Image src for a row that isn't saved in the database yet, in the Chrome
- * extension (the web app has no Onshape session, so nothing there).
+ * Image src for a row, shown live from Onshape:
  * - Assemblies: a rendered view of the assembly as it is now. Onshape's
  *   stored element thumbnail can be out of date (e.g. still showing a feature
  *   that was removed).
@@ -229,15 +199,12 @@ export function getOnshapeThumbnailSrc(
   partID?: string,
   source?: { configuration?: string }
 ): string {
-  if (!isChromeExtension()) return "";
   if (partID) return onshapeDirect.shadedViewUrl(key, partID, source?.configuration);
   return onshapeDirect.assemblyShadedViewUrl(key);
 }
 
 export function getOnshapeBomThumbnail(key: OnshapeKey): Promise<Blob> {
-  if (isChromeExtension()) return onshapeDirect.getElementThumbnail(key);
-  const url = `${BASE_URL}/onshape/bom${onshapeKeySegment(key)}/thumbnail`;
-  return fetchFileBytes(url, "image/png");
+  return onshapeDirect.getElementThumbnail(key);
 }
 
 export interface DriveUploadResult {

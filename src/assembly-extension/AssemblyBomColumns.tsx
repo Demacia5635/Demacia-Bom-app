@@ -1,77 +1,46 @@
 import type { ColumnConfig } from "../components/Table";
 import { downloadFile } from "../util/ApiService";
-import { isChromeExtension } from "../extension/onshapeDirect";
 import type AssemblyBomRow from "./AssemblyBomRow";
 
-interface BuildColumnsOptions {
-  /** Called when the user clicks "Add to DB" on an onshape-only row. */
-  onAddToDb: (row: AssemblyBomRow) => void;
-  /**
-   * Whether the ROOT assembly is already published. Before it is, nothing
-   * underneath it can be in the DB either, so every row is edited straight
-   * against its live Onshape metadata instead of being locked read-only.
-   * Once the root is published, a row is only editable if it's actually in
-   * the DB (source === "db") - anything still onshape-only at that point is
-   * a genuinely missing child that needs its own "Add to DB" action.
-   */
-  rootIsPublished: boolean;
+/** Standard Content (bolts, nuts...) comes from Onshape's library and isn't editable. */
+const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "";
+
+/** Editable column: disabled for Standard Content, marked while it has an unpublished change. */
+function editable(key: string, label: string, type: "string" | "number"): ColumnConfig {
+  return {
+    key,
+    label,
+    type,
+    isDisabled: isStandardContent,
+    isModified: (row: AssemblyBomRow) => !!row.modified?.includes(key),
+  };
 }
 
 /**
- * NOTE: for `type: 'button'` columns, Table.tsx enables/disables the button
- * based on the truthiness of `row[col.key]` itself (not `isDisabled`), so
- * button-enabled-ness is controlled by what value we put on the row for
- * that key, not by isDisabled below.
+ * Columns of the BOM table in the Chrome extension. Edits stay in the browser
+ * until Publish BOM. NOTE: for `type: 'button'` columns, Table.tsx enables the
+ * button from the truthiness of `row[col.key]` itself.
  */
-function buildIsReadOnlyRow(rootIsPublished: boolean) {
-  return (row: AssemblyBomRow) => (rootIsPublished && row.source === "onshape-only") || row.vendor !== "";
-}
-
-/** Raw Onshape identifiers: useful for debugging, too wide for the Chrome side panel. */
-const ID_COLUMN_KEYS = new Set(["documentID", "wvmType", "wvmID", "elementID", "entityID"]);
-
-export default function buildAssemblyBomColumns(options: BuildColumnsOptions): ColumnConfig[] {
-  const columns = buildAllColumns(options);
-  if (!isChromeExtension()) return columns;
-
-  // Chrome extension: edits stay local until Publish BOM, so every row except
-  // Standard Content is editable, edited cells are marked, and the per-row
-  // "Add to DB" column is replaced by Publish BOM.
-  return columns
-    .filter((c) => !ID_COLUMN_KEYS.has(c.key) && c.key !== "dbAction")
-    .map((c) =>
-      c.type === "string" || (c.type === "number" && c.key === "price")
-        ? {
-            ...c,
-            isDisabled: (row: AssemblyBomRow) => row.vendor !== "",
-            isModified: (row: AssemblyBomRow) => !!row.modified?.includes(c.key),
-          }
-        : c
-    );
-}
-
-function buildAllColumns({ onAddToDb, rootIsPublished }: BuildColumnsOptions): ColumnConfig[] {
-  const isReadOnlyRow = buildIsReadOnlyRow(rootIsPublished);
+export default function buildAssemblyBomColumns(): ColumnConfig[] {
   return [
-    { key: "avatar", label: "Avatar", type: "image", isDisabled: (row) => row.vendor !== ""},
-    { key: "name", label: "Name", type: "string", isDisabled: isReadOnlyRow },
-    { key: "description", label: "Description", type: "string", isDisabled: isReadOnlyRow },
-    { key: "catalogNumber", label: "Catalog No.", type: "string", isDisabled: isReadOnlyRow },
-    { key: "revision", label: "Revision", type: "string", isDisabled: isReadOnlyRow },
-    { key: "engineer", label: "Engineer", type: "string", isDisabled: isReadOnlyRow },
+    { key: "avatar", label: "Avatar", type: "image", isDisabled: isStandardContent },
+    editable("name", "Name", "string"),
+    editable("description", "Description", "string"),
+    editable("catalogNumber", "Catalog No.", "string"),
+    editable("revision", "Revision", "string"),
+    editable("engineer", "Engineer", "string"),
     { key: "quantity", label: "Quantity", type: "number", isDisabled: () => true },
-    { key: "material", label: "Material", type: "string", isDisabled: isReadOnlyRow },
-    // Mass is computed by Onshape from geometry + material - never
-    // user-settable, so it's always disabled regardless of publish state.
+    editable("material", "Material", "string"),
+    // Mass is computed by Onshape from geometry + material - never user-settable.
     { key: "mass", label: "Mass", type: "number", isDisabled: () => true },
-    { key: "price", label: "Price", type: "number", isDisabled: isReadOnlyRow },
-    { key: "comments", label: "Comments", type: "string", isDisabled: isReadOnlyRow },
+    editable("price", "Price", "number"),
+    editable("comments", "Comments", "string"),
     {
       key: "onshapeURL",
       label: "Links",
       type: "button",
       buttonText: "Open Onshape",
-      isDisabled: (row) => row.vendor !== "",
+      isDisabled: isStandardContent,
       onButtonClick: (row: AssemblyBomRow) => {
         if (row.onshapeURL) window.open(row.onshapeURL, "_blank");
       },
@@ -81,11 +50,10 @@ function buildAllColumns({ onAddToDb, rootIsPublished }: BuildColumnsOptions): C
       label: "Export STL",
       type: "button",
       buttonText: "Download",
-      isDisabled: (row) => row.vendor !== "",
+      isDisabled: isStandardContent,
       onButtonClick: (row: AssemblyBomRow) => {
         if (row.exportSTL) {
-          const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`;
-          downloadFile(downloadUrl, `${row.name || "part"}.stl`);
+          downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`, `${row.name || "part"}.stl`);
         }
       },
     },
@@ -94,31 +62,12 @@ function buildAllColumns({ onAddToDb, rootIsPublished }: BuildColumnsOptions): C
       label: "Export Parasolid",
       type: "button",
       buttonText: "Download",
-      isDisabled: (row) => row.vendor !== "",
+      isDisabled: isStandardContent,
       onButtonClick: (row: AssemblyBomRow) => {
         if (row.exportParasolid) {
-          const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`;
-          downloadFile(downloadUrl, `${row.name || "part"}.parasolid`);
+          downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`, `${row.name || "part"}.x_t`);
         }
       },
     },
-    {
-      // `row.dbAction` is a synthetic field (see AssemblyBomRow) that's only
-      // truthy for onshape-only rows, so the button is naturally disabled
-      // ("Saved") for rows already in the database. Before the root itself
-      // is published, this stays enabled on every row too (nothing can be
-      // individually in the DB yet) but clicking it just points the user at
-      // publishing the whole assembly instead - see onAddToDb in the page.
-      key: "dbAction",
-      label: "Database",
-      type: "button",
-      buttonText: rootIsPublished ? "Add to DB" : "Publish assembly first",
-      onButtonClick: (row: AssemblyBomRow) => onAddToDb(row),
-    },
-    { key: "documentID", label: "Onshape Doc ID", type: "string", isDisabled: () => true },
-    { key: "wvmType", label: "WVM Type", type: "string", isDisabled: () => true },
-    { key: "wvmID", label: "WVM ID", type: "string", isDisabled: () => true },
-    { key: "elementID", label: "Element ID", type: "string", isDisabled: () => true },
-    { key: "entityID", label: "BOM/Part ID", type: "string", isDisabled: () => true },
   ];
 }

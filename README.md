@@ -78,7 +78,6 @@ The **BOM App** bridges computer-aided design (CAD) workflows in Onshape with re
 ### Prerequisites
 - **Node.js:** v18.0.0 or higher
 - **MongoDB:** Active MongoDB instance (Local or Atlas)
-- **Onshape API Key:** API Access Key and Secret Key from [Onshape Developer Portal](https://dev.onshape.com/)
 - **Google Cloud Console:** OAuth2 Client ID, Client Secret, and Refresh Token with Drive API scope.
 
 ### Environment Variables
@@ -87,11 +86,6 @@ Create a `.env` file in the root directory:
 ```env
 PORT=3000
 MONGODB_URI=mongodb://localhost:27017/bom-app
-
-# Onshape API Credentials
-ONSHAPE_BASE_URL=https://cad.onshape.com/api
-ONSHAPE_ACCESS_KEY=your_onshape_access_key
-ONSHAPE_SECRET_KEY=your_onshape_secret_key
 
 # Google Drive API Credentials
 GOOGLE_CLIENT_ID=your_google_client_id
@@ -125,25 +119,24 @@ npm run preview
 
 | Mount Point | Sub-Route | Method | Description |
 | :--- | :--- | :--- | :--- |
-| `/api/` | `/` | GET | Health & Auth check |
+| `/api/` | `/` | GET | Health check |
 | `/api/db` | `/` | GET | MongoDB Connection Check |
-| `/api/db/part` | `/all`, `/id/:id`, `/d/.../p/:partID` | GET/POST/DEL | Part CRUD & Onshape Key operations |
+| `/api/db/part` | `/all`, `/id/:id`, `/d/.../p/:partID` | GET/POST/DEL | Part CRUD (also looked up by Onshape identity) |
 | `/api/db/bom` | `/all`, `/id/:id`, `/d/.../e/:elementID` | GET/POST/DEL | BOM CRUD & Assembly operations |
 | `/api/db/workOrder` | `/all`, `/id/:id` | GET/POST/DEL | Work Order production management |
 | `/api/enum` | `/productionType/*`, `/status/*` | GET | Enums for status & production classification |
-| `/api/onshape` | `/part/...`, `/bom/...` | GET/POST | Live Onshape metadata, thumbnails & exports |
 | `/api/drive` | `/file/*`, `/folder/*` | GET/POST/DEL | Google Drive file manipulation |
 
 ---
 
 ## 📐 CAD & Onshape Integration
 
-The `onshapeService.ts` module uses Onshape's Glassworks REST API with HTTP Basic Authentication (`accessKey:secretKey`).
+The server never calls Onshape and stores no Onshape API keys or user accounts. Onshape is read and written by the **Chrome extension** (`src/extension`, built with `npm run build:extension`), using the signed-in user's own Onshape browser session, so its requests don't count against Onshape's yearly API limit:
 
-### Supported Exports:
-1. **STL Export (`/api/onshape/part/.../stl`):** Direct binary stream supporting unit conversions (`meter`, `millimeter`, `inch`) and mode selection (`binary`, `ascii`).
-2. **Parasolid Export (`/api/onshape/part/.../parasolid`):** Returns Parasolid text (`.x_t`) or binary (`.x_b`) streams with 307 redirect auto-handling.
-3. **SolidWorks Export (`/api/onshape/part/.../solidworks`):** Triggers an asynchronous Onshape Translation job, polls until `COMPLETED`, and returns the `.sldprt` file buffer.
+- **Refresh BOM:** reads the assembly tree, properties and live part/assembly renders from Onshape.
+- **Publish BOM:** writes edited properties to Onshape, exports each part's thumbnail, STL (binary, meters) and Parasolid (`.x_t`), uploads them through `/api/drive`, and saves the BOM and parts to MongoDB.
+
+The website shows what has been published to the database.
 
 ---
 

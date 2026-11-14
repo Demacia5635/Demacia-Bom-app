@@ -10,8 +10,7 @@
  *    which fetch follows fine from the extension origin;
  *  - session calls don't count against the yearly API limit.
  *
- * Behaviour mirrors server/services/onshapeService.ts so callers see the same
- * results as through the old /api/onshape/* proxy.
+ * This is the only place the app talks to Onshape; the server never does.
  */
 import type { ApiError } from "../util/ApiService";
 import type { OnshapeBomTable } from "../assembly-extension/OnshapeBom";
@@ -24,12 +23,7 @@ export interface OnshapeElementKey {
   elementID: string;
 }
 
-/**
- * Error thrown for a failed Onshape call. `statusCode` is deliberately left
- * unset for Onshape auth/rate errors: the page treats statusCode 401/403/429
- * as "your Demacia sign-in expired" and redirects to /signin, which would be
- * the wrong fix when it's the Onshape session that's missing.
- */
+/** Error thrown for a failed Onshape call; `message` says what to do (e.g. sign in to Onshape). */
 export interface OnshapeApiError extends ApiError {
   source: "onshape";
   onshapeStatus: number;
@@ -46,11 +40,6 @@ export function setOnshapeServer(server: string): void {
 
 export function getOnshapeServer(): string {
   return onshapeServer;
-}
-
-/** True when running inside the Chrome extension (vs. the GitHub Pages web app). */
-export function isChromeExtension(): boolean {
-  return typeof chrome !== "undefined" && !!chrome.runtime?.id && !!chrome.cookies;
 }
 
 async function getXsrfToken(): Promise<string> {
@@ -71,8 +60,7 @@ function onshapeError(status: number, detail: string): OnshapeApiError {
   return {
     source: "onshape",
     onshapeStatus: status,
-    // Only pass through statuses the page doesn't treat as a Demacia sign-in problem.
-    statusCode: status === 401 || status === 403 || status === 429 ? undefined : status,
+    statusCode: status,
     message: `Onshape request failed (${status}): ${detail}.${hint}`,
   };
 }

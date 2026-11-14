@@ -27,7 +27,7 @@ export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "x-client-secret": secret,
-        ...options.headers, // Merge custom headers (e.g., x-username)
+        ...options.headers, // Merge custom headers
       },
     });
 

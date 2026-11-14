@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
 import Table from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
-import { useOnshapeClient, useOnshapeContext } from "../util/OnshapeExtension";
+import { useOnshapeClient, useOnshapeContext } from "../extension/onshapeHostShim";
 import "../css/AssemblyBomPage.css";
 import {
   getBomByOnshapeKey,
@@ -16,7 +15,6 @@ import {
   updateOnshapeBomMetadata,
   syncPartFilesToDrive,
   syncBomThumbnailToDrive,
-  postToApi,
   getOnshapeThumbnailSrc,
   deleteDriveFile
 } from "./BomApi";
@@ -93,19 +91,15 @@ interface ResolvedNode {
 }
 
 export default function AssemblyBomPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const context = useOnshapeContext();
   const client = useOnshapeClient({ context });
 
   const [rows, setRows] = useState<AssemblyBomRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<ApiError | null>(null);
-  const [isVerifyingApi, setIsVerifyingApi] = useState<boolean>(true);
   const [rootBomDB, setRootBomDB] = useState<BomModel | null>(null);
   const [rootIsPublished, setRootIsPublished] = useState<boolean>(false);
   const [rootOnshapeBom, setRootOnshapeBom] = useState<OnshapeBomTable | null>(null);
-  const [currentUser, setCurrentUser] = useState<string>("");
 
   /** Tree-loading progress; null until the root BOM has been read. */
   const [loadProgress, setLoadProgress] = useState<{ done: number; total: number; current: string } | null>(null);
@@ -122,58 +116,6 @@ export default function AssemblyBomPage() {
   const [publishProgress, setPublishProgress] = useState<PublishProgress | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
-
-  const fetchWithUserKeys = useCallback(async (url: string, options: RequestInit = {}) => {
-    const username = localStorage.getItem("username") || "";
-    const headers = {
-      ...options.headers,
-      "x-username": username,
-    };
-    return fetchFromApi(url, { ...options, headers });
-  }, []);
-
-  // 1. Test sending an API request on mount. If out of requests or unauthenticated, redirect to signin.
-  useEffect(() => {
-    let isMounted = true;
-    const username = localStorage.getItem("username");
-    
-    if (!username) {
-      // Pass the Onshape URL search context to the sign-in page
-      navigate(`/signin${location.search}`, { replace: true });
-      return;
-    }
-
-    setCurrentUser(username);
-
-    postToApi(`/auth/verify-requests`, { username })
-      .then(() => {
-        if (!isMounted) return;
-        setIsVerifyingApi(false);
-      })
-      .catch((err: any) => {
-        if (!isMounted) return;
-        // The server has no /auth/verify-requests route yet; a 404 means the
-        // check isn't available, not that the user is signed out.
-        if (err?.statusCode === 404) {
-          setIsVerifyingApi(false);
-          return;
-        }
-        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-          navigate(`/signin${location.search}`, { replace: true });
-        } else {
-          navigate(`/signin${location.search}`, { replace: true });
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [navigate, location.search]);
-
-  const handleSignOut = () => {
-    localStorage.removeItem("username");
-    navigate(`/signin${location.search}`, { replace: true });
-  };
 
   // Memoized on the ID strings: a new object every render made loadTree (and
   // its effect) change every render, reloading the tree endlessly.
@@ -262,7 +204,7 @@ export default function AssemblyBomPage() {
       );
       return { node: { row: tracked, key, bomID, onshapeBom }, dbBom };
     },
-    [context.server, fetchWithUserKeys]
+    [context.server]
   );
 
   const resolvePartRow = useCallback(
@@ -351,7 +293,7 @@ export default function AssemblyBomPage() {
         configuration: parsedItem.itemSource.configuration || "",
       }, savedValues);
     },
-    [context.server, fetchWithUserKeys]
+    [context.server]
   );
 
   /**
@@ -389,7 +331,7 @@ export default function AssemblyBomPage() {
     const getParentBom: ParentBomLoader = (bomRowId) => {
       let request = parentBomRequests.get(bomRowId);
       if (!request) {
-        request = (fetchWithUserKeys(`/db/bom/id/${encodeURIComponent(bomRowId)}`) as Promise<BomModel>).catch(
+        request = fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomRowId)}`).catch(
           () => null
         );
         parentBomRequests.set(bomRowId, request);
@@ -452,163 +394,22 @@ export default function AssemblyBomPage() {
       });
       return { rows: freshRows, rootBomDB: dbBom, rootOnshapeBom: rootNode.onshapeBom ?? null };
     } catch (err: any) {
-      if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-        navigate(`/signin${location.search}`, { replace: true });
-        return null;
-      }
       setError(err as ApiError);
       return null;
     } finally {
       setLoading(false);
     }
-  }, [rootKey, resolveBomNode, resolvePartRow, fetchWithUserKeys, navigate, location.search]);
+  }, [rootKey, resolveBomNode, resolvePartRow]);
 
   // Opening an assembly: show its saved copy if there is one; otherwise load it.
   useEffect(() => {
-    if (!isVerifyingApi && rootKey) {
+    if (rootKey) {
       loadTree({ preferCache: true });
     }
-  }, [isVerifyingApi, rootKey, loadTree]);
+  }, [rootKey, loadTree]);
 
-  const columns = useMemo(
-    () =>
-      buildAssemblyBomColumns({
-        rootIsPublished,
-        onAddToDb: (row) => {
-          if (loading || publishing) {
-            client.showMessageBubble("Wait until the refresh has finished.");
-            return;
-          }
-          if (!rootIsPublished) {
-            client.showMessageBubble(
-              `Publish the top-level assembly to save "${row.name}" and everything else to the database.`
-            );
-            return;
-          }
-          return handlePublishItem(row);
-        },
-      }),
-    [client, rootIsPublished, loading, publishing]
-  );
-
-  const handlePublishItem = useCallback(
-    async (row: AssemblyBomRow) => {
-      const key: OnshapeKey = {
-        documentID: row.documentID,
-        wvmType: row.wvmType,
-        wvmID: row.wvmID,
-        elementID: row.elementID,
-      };
-
-      if (!rootBomDB || !rootKey) return;
-
-      try {
-        if (row.isAssembly) {
-          const children = rows.filter((r) => r.parentId === row.id);
-          const parts = children
-            .filter((c) => !c.isAssembly)
-            .map((c) => ({ partID: c.id, quantity: c.quantity || 1 }));
-          const subAssemblies = children
-            .filter((c) => c.isAssembly)
-            .map((c) => ({ bomID: c.id, quantity: c.quantity || 1 }));
-
-          const bomAvatarId = await syncBomThumbnailToDrive(key, row.name);
-
-          await upsertBomById(row.id, {
-            id: row.id,
-            name: row.name,
-            description: row.description,
-            catalogNumber: row.catalogNumber,
-            comments: row.comments,
-            engineer: row.vendor === "" ? row.engineer : row.vendor,
-            parts: parts,
-            subAssemblies: subAssemblies,
-            onshapeURL: `https://cad.onshape.com/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`,
-            avatarID: bomAvatarId || "",
-            onshapeID: {
-              ...key,
-              bomID: row.entityID,
-            },
-            vendor: row.vendor,
-          });
-        } else {
-          const { avatarID, stlLink, parasolidLink, failures } = await syncPartFilesToDrive(
-            key,
-            row.entityID,
-            row.name,
-            { configuration: row.configuration }
-          );
-          if (failures.length > 0) {
-            client.showMessageBubble(`Some files could not be saved: ${failures.join("; ")}`);
-          }
-
-          await upsertPartById(row.id, {
-            id: row.id,
-            name: row.name,
-            description: row.description,
-            catalogNumber: row.catalogNumber,
-            revision: row.revision,
-            material: row.material,
-            mass: row.mass,
-            price: row.price,
-            comments: row.comments,
-            engineer: row.vendor === "" ? row.engineer : row.vendor,
-            ...(avatarID ? { avatarID } : {}),
-            ...(stlLink ? { stlLink } : {}),
-            ...(parasolidLink ? { parasolidLink } : {}),
-            onshapeURL: `https://cad.onshape.com/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`,
-            onshapeID: {
-              ...key,
-              partID: row.entityID,
-            },
-            vendor: row.vendor,
-          });
-        }
-
-        if (row.parentId !== null) {
-          if (row.isAssembly) {
-            const children = await fetchWithUserKeys(`/db/bom/id/${row.parentId}`) as BomModel;
-            if (children.subAssemblies.length === 0) return;
-            await upsertBomById(row.parentId, {
-              subAssemblies: [...children.subAssemblies, { bomID: row.id, quantity: row.quantity || 1 }]
-            });
-          } else {
-            const children = await fetchWithUserKeys(`/db/bom/id/${row.parentId}`) as BomModel;
-            if (children.parts.length === 0) return;
-            await upsertBomById(row.parentId, {
-              parts: [...children.parts, { partID: row.id, quantity: row.quantity || 1 }]
-            });
-          }
-        } else {
-          const rootID = rootBomDB?.id || `${rootKey.documentID}_${rootKey.wvmType}_${rootKey.wvmID}_${rootKey.elementID}_${rootOnshapeBom?.id}` || "wrong id";
-          if (row.isAssembly) {
-            const children = await fetchWithUserKeys(`/db/bom/id/${rootID}`) as BomModel;
-            if (children.subAssemblies.length === 0) return;
-            await upsertBomById(rootID, {
-              subAssemblies: [...children.subAssemblies, { bomID: row.id, quantity: row.quantity || 1 }]
-            });
-          } else {
-            const children = await fetchWithUserKeys(`/db/bom/id/${rootID}`) as BomModel;
-            if (children.parts.length === 0) return;
-            await upsertBomById(rootID, {
-              parts: [...children.parts, { partID: row.id, quantity: row.quantity || 1 }]
-            });
-          }
-        }
-
-        client.showMessageBubble(`"${row.name}" was published to the database.`);
-        await loadTree();
-      } catch (err: any) {
-        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-          navigate(`/signin${location.search}`, { replace: true });
-          return;
-        }
-        const apiErr = err as ApiError;
-        client.showMessageBubble(`Publish failed: ${apiErr.message}`);
-      }
-    },
-    [rows, client, loadTree, rootBomDB, rootKey, rootOnshapeBom?.id, fetchWithUserKeys, navigate, location.search]
-  );
+  // The extension's column set never changes (edits are local until Publish BOM).
+  const columns = useMemo(() => buildAssemblyBomColumns(), []);
 
   /**
    * Table edits stay in this browser until Publish BOM: cells that differ
@@ -888,10 +689,6 @@ export default function AssemblyBomPage() {
         }
         setPublishOpen(false);
       } catch (err: any) {
-        if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-          navigate(`/signin${location.search}`, { replace: true });
-          return;
-        }
         const apiErr = err as ApiError;
         setPublishError(apiErr.message);
         client.showMessageBubble(`Publish failed: ${apiErr.message}`);
@@ -900,7 +697,7 @@ export default function AssemblyBomPage() {
         setPublishProgress(null);
       }
     },
-    [rootKey, client, navigate, location.search]
+    [rootKey, client]
   );
 
   /**
@@ -921,14 +718,6 @@ export default function AssemblyBomPage() {
     }
     loadTree();
   }, [loadTree]);
-
-  if (isVerifyingApi) {
-    return (
-      <div className="p-8 text-center text-zinc-400">
-        Verifying API access and request limits...
-      </div>
-    );
-  }
 
   if (!rootKey) {
     return (
@@ -959,18 +748,6 @@ export default function AssemblyBomPage() {
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-xs bg-zinc-100 dark:bg-zinc-800/50 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700/50">
-              <span className="text-zinc-600 dark:text-zinc-400">👤 {currentUser}</span>
-              <div className="w-px h-3 bg-zinc-300 dark:bg-zinc-600 mx-1"></div>
-              <button 
-                onClick={handleSignOut} 
-                className="text-zinc-600 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 font-semibold transition-colors"
-                title="Sign out of Onshape Integration"
-              >
-                Sign Out
-              </button>
-            </div>
-
             <button
               type="button"
               className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"

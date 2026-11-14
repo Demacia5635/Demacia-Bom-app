@@ -1,26 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { google } from "googleapis";
 import Part from "../models/Part";
-import onshapeService from "../services/onshapeService";
-import { GoogleDriveService } from "../services/driveService";
-
-console.log(">>> [DEBUG] CLEAN PART CONTROLLER LOADED <<<");
-
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI,
-);
-
-if (process.env.GOOGLE_REFRESH_TOKEN) {
-  oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
-}
-
-const driveService = new GoogleDriveService(oauth2Client);
-
-const activePartUploads = new Map<string, Promise<string | null>>();
-const activeStlUploads = new Map<string, Promise<string | null>>();
-const activeParasolidUploads = new Map<string, Promise<string | null>>();
 
 interface OnshapeID {
   documentID: string;
@@ -70,126 +49,6 @@ function parseOnshapeIDFromCompoundKey(id: string): OnshapeID | null {
   };
 }
 
-function ensureBuffer(data: any): Buffer | null {
-  if (!data) return null;
-  if (Buffer.isBuffer(data)) return data;
-  if (typeof data === "string") {
-    if (data.startsWith("data:")) {
-      return Buffer.from(data.split(",")[1], "base64");
-    }
-    return Buffer.from(data, "base64");
-  }
-  if (data instanceof ArrayBuffer || data instanceof Uint8Array) return Buffer.from(data);
-  if (typeof data === "object" && "data" in data && Array.isArray(data.data)) {
-    return Buffer.from(data.data);
-  }
-  try {
-    return Buffer.from(data);
-  } catch (err) {
-    return null;
-  }
-}
-
-// 1. Thumbnail Sync to Drive
-async function forceUploadToDrive(id: string, onshapeID: OnshapeID): Promise<string | null> {
-  const partID = onshapeID.partID;
-  if (activePartUploads.has(partID)) return activePartUploads.get(partID)!;
-
-  const uploadPromise = (async (): Promise<string | null> => {
-    try {
-      const existingInDb = await Part.findOne({ "onshapeID.partID": partID, driveFileId: { $exists: true,$ne: "" } });
-      if (existingInDb?.driveFileId) return existingInDb.driveFileId;
-
-      const thumbnail = await onshapeService.getPartThumbnail(onshapeID);
-      const safeBuffer = ensureBuffer(thumbnail);
-      if (!safeBuffer) return null;
-
-      const uploaded = await driveService.uploadFile({
-        buffer: safeBuffer,
-        fileName: `part_${partID}_${Date.now()}.png`,
-        mimeType: "image/png",
-        partID: partID,
-      });
-
-      return uploaded?.id || null;
-    } catch (err: any) {
-      console.error(`>>> [THUMBNAIL UPLOAD ERROR] ${partID}:`, err?.message || err);
-      return null;
-    }
-  })();
-
-  activePartUploads.set(partID, uploadPromise);
-  try { return await uploadPromise; } finally { setTimeout(() => activePartUploads.delete(partID), 1000); }
-}
-
-// 2. STL Sync to Drive
-async function forceUploadStlToDrive(onshapeID: OnshapeID): Promise<string | null> {
-  const partID = onshapeID.partID;
-  if (activeStlUploads.has(partID)) return activeStlUploads.get(partID)!;
-
-  const uploadPromise = (async (): Promise<string | null> => {
-    try {
-      const existingInDb = await Part.findOne({ "onshapeID.partID": partID, stlLink: { $exists: true,$ne: "" } });
-      if (existingInDb?.stlLink) return existingInDb.stlLink;
-
-      const stlData = await onshapeService.exportPartToStl(onshapeID);
-      const safeBuffer = ensureBuffer(stlData);
-      if (!safeBuffer) return null;
-
-      const folderId = process.env.GOOGLE_DRIVE_STL_FOLDER_ID;
-      const uploaded = await driveService.uploadFile({
-        buffer: safeBuffer,
-        fileName: `part_${partID}_${Date.now()}.stl`,
-        mimeType: "model/stl",
-        partID: `${partID}_stl`,
-        folderId: folderId,
-      });
-
-      return uploaded?.id || null;
-    } catch (err: any) {
-      console.error(`>>> [STL UPLOAD ERROR] ${partID}:`, err?.message || err);
-      return null;
-    }
-  })();
-
-  activeStlUploads.set(partID, uploadPromise);
-  try { return await uploadPromise; } finally { setTimeout(() => activeStlUploads.delete(partID), 1000); }
-}
-
-// 3. Parasolid Sync to Drive
-async function forceUploadParasolidToDrive(onshapeID: OnshapeID): Promise<string | null> {
-  const partID = onshapeID.partID;
-  if (activeParasolidUploads.has(partID)) return activeParasolidUploads.get(partID)!;
-
-  const uploadPromise = (async (): Promise<string | null> => {
-    try {
-      const existingInDb = await Part.findOne({ "onshapeID.partID": partID, parasolidLink: { $exists: true,$ne: "" } });
-      if (existingInDb?.parasolidLink) return existingInDb.parasolidLink;
-
-      const parasolidData = await onshapeService.exportPartToParasolid(onshapeID);
-      const safeBuffer = ensureBuffer(parasolidData);
-      if (!safeBuffer) return null;
-
-      const folderId = process.env.GOOGLE_DRIVE_PARASOLID_FOLDER_ID;
-      const uploaded = await driveService.uploadFile({
-        buffer: safeBuffer,
-        fileName: `part_${partID}_${Date.now()}.x_t`,
-        mimeType: "application/x-parasolid",
-        partID: `${partID}_parasolid`,
-        folderId: folderId,
-      });
-
-      return uploaded?.id || null;
-    } catch (err: any) {
-      console.error(`>>> [PARASOLID UPLOAD ERROR] ${partID}:`, err?.message || err);
-      return null;
-    }
-  })();
-
-  activeParasolidUploads.set(partID, uploadPromise);
-  try { return await uploadPromise; } finally { setTimeout(() => activeParasolidUploads.delete(partID), 1000); }
-}
-
 export async function getAllParts(req: Request, res: Response, next: NextFunction) {
   try {
     const parts = await Part.find().sort({ id: 1 });
@@ -219,30 +78,6 @@ export async function getPartByID(req: Request<{ id: string }>, res: Response, n
       updatedFields.onshapeURL = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
       updatedFields.onshapeID = effectiveOnshapeID;
 
-      // Trigger async background tasks for Drive assets if missing
-      if (!part.driveFileId) {
-        forceUploadToDrive(id, effectiveOnshapeID).then((fileId) => {
-          if (fileId) {
-            Part.updateOne({ id: id }, { $set: { driveFileId: fileId, imageUrl: `https://lh3.googleusercontent.com/d/${fileId}` } }).catch(() => {});
-          }
-        }).catch(() => {});
-      }
-
-      if (!part.stlLink) {
-        forceUploadStlToDrive(effectiveOnshapeID).then((stlId) => {
-          if (stlId) {
-            Part.updateOne({ id: id }, { $set: { stlLink: stlId } }).catch(() => {});
-          }
-        }).catch(() => {});
-      }
-
-      if (!part.parasolidLink) {
-        forceUploadParasolidToDrive(effectiveOnshapeID).then((parasolidId) => {
-          if (parasolidId) {
-            Part.updateOne({ id: id }, { $set: { parasolidLink: parasolidId } }).catch(() => {});
-          }
-        }).catch(() => {});
-      }
     }
 
     if (Object.keys(updatedFields).length > 0) {
