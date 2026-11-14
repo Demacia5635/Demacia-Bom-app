@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import Table from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
@@ -23,6 +23,7 @@ import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import PublishBomModal, { type PublishBomFormValues } from "./PublishBomModel";
+import { describeAge, readTreeCache, treeCacheKey, writeTreeCache } from "./treeCache";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
   if (context.workspaceId) return { wvmType: "w", wvmID: context.workspaceId };
@@ -34,6 +35,9 @@ function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string 
   const base = server || "https://cad.onshape.com";
   return `${base}/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
 }
+
+/** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
+type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
 
 interface ResolvedNode {
   row: AssemblyBomRow;
@@ -59,6 +63,10 @@ export default function AssemblyBomPage() {
 
   /** Tree-loading progress; null until the root BOM has been read. */
   const [loadProgress, setLoadProgress] = useState<{ done: number; total: number; current: string } | null>(null);
+  /** When the rows on screen come from the saved copy: when it was saved. */
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
+  /** The saved copy is only shown on the first load; later reloads keep the current rows. */
+  const triedCacheRef = useRef(false);
 
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -127,7 +135,12 @@ export default function AssemblyBomPage() {
   }, [documentId, workspaceId, versionId, elementId]);
 
   const resolveBomNode = useCallback(
-    async (key: OnshapeKey, parentRowId: string | null, rootBom: BomModel | null | 'root'): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
+    async (
+      key: OnshapeKey,
+      parentRowId: string | null,
+      rootBom: BomModel | null | 'root',
+      getParentBom: ParentBomLoader
+    ): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
       const onshapeBom = await getOnshapeBom(key);
       const bomID = onshapeBom.id || key.elementID;
 
@@ -142,10 +155,7 @@ export default function AssemblyBomPage() {
       const isPublished = Boolean(dbBom);
       const isExist = isPublished && rootBom !== 'root' && rootBom !== null && (
         parentRowId
-          ? await (async () => {
-            const bom = await fetchWithUserKeys(`/db/bom/id/${parentRowId}`) as BomModel;
-            return bom.subAssemblies.find((c) => c.bomID === rowId);
-          })() :
+          ? Boolean((await getParentBom(parentRowId))?.subAssemblies?.find((c) => c.bomID === rowId)) :
           Boolean(rootBom.subAssemblies.find((c) => c.bomID === rowId))
       );
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
@@ -185,7 +195,12 @@ export default function AssemblyBomPage() {
   );
 
   const resolvePartRow = useCallback(
-    async (parsedItem: ParsedOnshapeBomRow, parentRowId: string | null, rootBom: BomModel | null): Promise<AssemblyBomRow> => {
+    async (
+      parsedItem: ParsedOnshapeBomRow,
+      parentRowId: string | null,
+      rootBom: BomModel | null,
+      getParentBom: ParentBomLoader
+    ): Promise<AssemblyBomRow> => {
       const key: OnshapeKey = {
         documentID: parsedItem.itemSource.documentId,
         wvmType: parsedItem.itemSource.wvmType,
@@ -205,10 +220,7 @@ export default function AssemblyBomPage() {
       const isPublished = Boolean(dbPart);
       const isExist = isPublished && rootBom !== null && (
         parentRowId
-          ? await (async () => {
-            const bom = await fetchWithUserKeys(`/db/bom/id/${parentRowId}`) as BomModel;
-            return bom.parts.find((c) => c.partID === rowId);
-          })() :
+          ? Boolean((await getParentBom(parentRowId))?.parts?.find((c) => c.partID === rowId)) :
           Boolean(rootBom.parts.find((c) => c.partID === rowId))
       );
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
@@ -252,11 +264,40 @@ export default function AssemblyBomPage() {
     setError(null);
     setLoadProgress(null);
 
+    // First load: show the saved copy (if any) while the fresh tree loads.
+    const cacheKey = treeCacheKey(rootKey);
+    if (!triedCacheRef.current) {
+      triedCacheRef.current = true;
+      const cached = readTreeCache(cacheKey);
+      if (cached) {
+        setRows(cached.rows);
+        setRootBomDB(cached.rootBomDB);
+        setRootIsPublished(Boolean(cached.rootBomDB));
+        setRootOnshapeBom(
+          cached.rootBom ? ({ ...cached.rootBom, headers: [], items: [] } as OnshapeBomTable) : null
+        );
+        setCachedAt(cached.savedAt);
+      }
+    }
+
+    // Each parent assembly's DB record is fetched once per load, not once per child row.
+    const parentBomRequests = new Map<string, Promise<BomModel | null>>();
+    const getParentBom: ParentBomLoader = (bomRowId) => {
+      let request = parentBomRequests.get(bomRowId);
+      if (!request) {
+        request = (fetchWithUserKeys(`/db/bom/id/${encodeURIComponent(bomRowId)}`) as Promise<BomModel>).catch(
+          () => null
+        );
+        parentBomRequests.set(bomRowId, request);
+      }
+      return request;
+    };
+
     const visitedBomIds = new Set<string>();
     const allRows: AssemblyBomRow[] = [];
 
     try {
-      const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root');
+      const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', getParentBom);
       setRootBomDB(dbBom);
       setRootIsPublished(Boolean(dbBom));
       setRootOnshapeBom(rootNode.onshapeBom ?? null);
@@ -284,11 +325,11 @@ export default function AssemblyBomPage() {
             if (visitedBomIds.has(subKeyId)) continue;
             visitedBomIds.add(subKeyId);
 
-            const { node: subNode } = await resolveBomNode(subKey, childParentId, dbBom);
+            const { node: subNode } = await resolveBomNode(subKey, childParentId, dbBom, getParentBom);
             allRows.push(subNode.row);
             await expand(subNode, false);
           } else {
-            const partRow = await resolvePartRow(item, childParentId, dbBom);
+            const partRow = await resolvePartRow(item, childParentId, dbBom, getParentBom);
             allRows.push(partRow);
           }
         }
@@ -296,6 +337,12 @@ export default function AssemblyBomPage() {
 
       await expand(rootNode, true);
       setRows(allRows);
+      setCachedAt(null);
+      writeTreeCache(cacheKey, {
+        rows: allRows,
+        rootBomDB: dbBom,
+        rootBom: rootNode.onshapeBom ? { id: rootNode.onshapeBom.id, name: rootNode.onshapeBom.name } : null,
+      });
     } catch (err: any) {
       if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
         navigate(`/signin${location.search}`, { replace: true });
@@ -305,7 +352,7 @@ export default function AssemblyBomPage() {
     } finally {
       setLoading(false);
     }
-  }, [rootKey, resolveBomNode, resolvePartRow, navigate, location.search]);
+  }, [rootKey, resolveBomNode, resolvePartRow, fetchWithUserKeys, navigate, location.search]);
 
   useEffect(() => {
     if (!isVerifyingApi && rootKey) {
@@ -318,6 +365,10 @@ export default function AssemblyBomPage() {
       buildAssemblyBomColumns({
         rootIsPublished,
         onAddToDb: (row) => {
+          if (loading) {
+            client.showMessageBubble("Wait until the assembly tree has finished refreshing.");
+            return;
+          }
           if (!rootIsPublished) {
             client.showMessageBubble(
               `Publish the top-level assembly to save "${row.name}" and everything else to the database.`
@@ -327,7 +378,7 @@ export default function AssemblyBomPage() {
           return handlePublishItem(row);
         },
       }),
-    [client, rootIsPublished]
+    [client, rootIsPublished, loading]
   );
 
   const handlePublishItem = useCallback(
@@ -456,6 +507,11 @@ export default function AssemblyBomPage() {
 
       if (!changed) return;
       if (changed.vendor !== "") return;
+      if (loading) {
+        // The rows may be the saved copy; editing them could save stale data.
+        client.showMessageBubble("Wait until the assembly tree has finished refreshing, then edit again.");
+        return;
+      }
 
       setRows(newData);
 
@@ -561,7 +617,7 @@ export default function AssemblyBomPage() {
 
       persist();
     },
-    [rows, client, rootIsPublished, navigate, location.search]
+    [rows, client, rootIsPublished, loading, navigate, location.search]
   );
 
   const handlePublish = useCallback(
@@ -771,7 +827,7 @@ export default function AssemblyBomPage() {
           </div>
         )}
 
-        {loading ? (
+        {loading && rows.length === 0 ? (
           <div className="assembly-bom-progress p-8 text-center text-zinc-400">
             <p>{loadProgress ? "Resolving assembly tree..." : "Reading the BOM from Onshape..."}</p>
             {loadProgress && loadProgress.total > 0 && (
@@ -792,6 +848,34 @@ export default function AssemblyBomPage() {
             )}
           </div>
         ) : (
+          <>
+          {loading && (
+            <div className="assembly-bom-refreshing mb-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">
+                  {cachedAt !== null ? `Saved copy from ${describeAge(cachedAt)} - refreshing...` : "Refreshing..."}
+                </span>
+                {loadProgress && loadProgress.total > 0 && (
+                  <span className="shrink-0">
+                    {Math.min(loadProgress.done, loadProgress.total)} / {loadProgress.total}
+                  </span>
+                )}
+              </div>
+              {loadProgress && loadProgress.total > 0 && (
+                <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-blue-500 transition-all duration-200"
+                    style={{ width: `${Math.min(100, Math.round((loadProgress.done / loadProgress.total) * 100))}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {!loading && cachedAt !== null && (
+            <div className="assembly-bom-refreshing mb-2 text-xs text-amber-400">
+              Showing the saved copy from {describeAge(cachedAt)}; refreshing failed.
+            </div>
+          )}
           <Table
             data={rows}
             columnsData={columns}
@@ -799,6 +883,7 @@ export default function AssemblyBomPage() {
             newRowFunction={undefined}
             initialSort={{ key: "catalogNumber", direction: "asc" }}
           />
+          </>
         )}
 
         {publishOpen && (
