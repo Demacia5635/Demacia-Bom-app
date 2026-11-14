@@ -118,9 +118,11 @@ interface TableParam {
      * (opened, whatever their expand state). Undefined shows everything.
      */
     rowFilter?: (row: RowData & any) => boolean;
+    /** Rows this returns true for are left out (with anything under them); expanding works as usual. */
+    hideRow?: (row: RowData & any) => boolean;
 }
 
-export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter }) => {
+export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }) => {
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
     const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
     const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -418,6 +420,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         const addChildren = (parentId: string | null, level: number) => {
             const children = sortSiblings(childrenByParent.get(parentId) ?? []);
             for (const child of children) {
+                if (hideRow?.(child)) continue;
                 if (filterSets && !filterSets.matches.has(child.id) && !filterSets.ancestors.has(child.id)) continue;
                 const open = childrenByParent.has(child.id) && (filterSets ? filterSets.ancestors.has(child.id) : child.isExpanded);
                 result.push({ ...child, level, open });
@@ -428,7 +431,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         return result;
         // sortSiblings only depends on sortConfig.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [childrenByParent, sortConfig, filterSets]);
+    }, [childrenByParent, sortConfig, filterSets, hideRow]);
 
     const handleAddRow = (parentId: string | null = null) => {
         const newId = Date.now().toString();

@@ -356,6 +356,23 @@ async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter): Pro
   return versions;
 }
 
+/** Panel view options remembered in this browser (false when storage is unavailable). */
+const TOGGLE_STORAGE_PREFIX = "demacia-bom:";
+function readToggle(name: string): boolean {
+  try {
+    return localStorage.getItem(TOGGLE_STORAGE_PREFIX + name) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeToggle(name: string, on: boolean) {
+  try {
+    localStorage.setItem(TOGGLE_STORAGE_PREFIX + name, on ? "1" : "0");
+  } catch {
+    // Not remembered; it still works for this session.
+  }
+}
+
 /** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
 type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
 
@@ -958,6 +975,19 @@ export default function AssemblyBomPage() {
     }
     return preview;
   }, [publishOpen, rows, rootIsPublished]);
+
+  /** "Hide standard parts" / "Hide standard assemblies" (remembered in this browser). */
+  const [hideStandardParts, setHideStandardParts] = useState(() => readToggle("hideStandardParts"));
+  const [hideStandardAssemblies, setHideStandardAssemblies] = useState(() => readToggle("hideStandardAssemblies"));
+  useEffect(() => writeToggle("hideStandardParts", hideStandardParts), [hideStandardParts]);
+  useEffect(() => writeToggle("hideStandardAssemblies", hideStandardAssemblies), [hideStandardAssemblies]);
+  const hideRow = useMemo(() => {
+    if (!hideStandardParts && !hideStandardAssemblies) return undefined;
+    return (row: AssemblyBomRow) =>
+      row.isAssembly ? hideStandardAssemblies && !!row.markedStandard : hideStandardParts && isStandardRow(row);
+  }, [hideStandardParts, hideStandardAssemblies]);
+  const standardPartCount = useMemo(() => rows.filter((r) => !r.isAssembly && isStandardRow(r)).length, [rows]);
+  const standardAssemblyCount = useMemo(() => rows.filter((r) => r.isAssembly && r.markedStandard).length, [rows]);
 
   /** Expand all / Collapse all (kept in the saved copy like any other expand). */
   const setAllExpanded = useCallback(
@@ -1590,6 +1620,22 @@ export default function AssemblyBomPage() {
             >
               Collapse all
             </button>
+            <label className="bom-toolbar-toggle" title="Onshape Standard Content (screws, nuts...) and parts marked as standard parts">
+              <input
+                type="checkbox"
+                checked={hideStandardParts}
+                onChange={(e) => setHideStandardParts(e.target.checked)}
+              />
+              Hide standard parts ({standardPartCount})
+            </label>
+            <label className="bom-toolbar-toggle" title="Sub-assemblies marked as standard parts (motors...)">
+              <input
+                type="checkbox"
+                checked={hideStandardAssemblies}
+                onChange={(e) => setHideStandardAssemblies(e.target.checked)}
+              />
+              Hide standard assemblies ({standardAssemblyCount})
+            </label>
           </div>
           <Table
             data={rows}
@@ -1601,6 +1647,7 @@ export default function AssemblyBomPage() {
             stickyHeader
             frozenColumns={2}
             rowFilter={searchFilter}
+            hideRow={hideRow}
           />
           </>
         )}

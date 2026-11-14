@@ -78,6 +78,20 @@ body.light-theme-active .bom-problems-btn:hover:not(:disabled) {
   background: #fee2e2;
 }
 
+.bom-toolbar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: #d4d4d8;
+  cursor: pointer;
+  user-select: none;
+}
+
+body.light-theme-active .bom-toolbar-toggle {
+  color: #3f3f46;
+}
+
 .bom-toolbar-note {
   font-size: 0.75rem;
   color: #a1a1aa;
