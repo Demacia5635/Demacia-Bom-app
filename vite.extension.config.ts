@@ -44,6 +44,14 @@ function manifestPlugin(backendUrl: string): Plugin {
         fileName: 'manifest.json',
         source: JSON.stringify(manifest, null, 2),
       });
+
+      // The Demacia logo for the in-page BOM button, from the web app's own
+      // favicon so there's one source (listed in web_accessible_resources).
+      this.emitFile({
+        type: 'asset',
+        fileName: 'logo.svg',
+        source: readFileSync(resolve(ROOT, 'public/favicon.svg'), 'utf8'),
+      });
     },
   };
 }

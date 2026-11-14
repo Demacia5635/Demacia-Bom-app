@@ -47,7 +47,15 @@ const BUTTON_ID = "demacia-bom-open";
   btn.type = "button";
   btn.hidden = true;
   btn.title = "Open the Demacia BOM side panel";
-  btn.textContent = "☰ BOM";
+  // Demacia logo (logo.svg, from public/favicon.svg) drawn in the text color,
+  // followed by "BOM".
+  const logo = document.createElement("span");
+  logo.className = "demacia-bom-logo";
+  logo.setAttribute("aria-hidden", "true");
+  const logoUrl = `url("${chrome.runtime.getURL("logo.svg")}")`;
+  logo.style.setProperty("-webkit-mask-image", logoUrl);
+  logo.style.setProperty("mask-image", logoUrl);
+  btn.append(logo, document.createTextNode("BOM"));
   btn.addEventListener("click", () => {
     try {
       chrome.runtime.sendMessage({ type: OPEN_PANEL_MESSAGE });
