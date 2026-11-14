@@ -109,9 +109,14 @@ interface TableParam {
     stickyHeader?: boolean;
     /** Number of leftmost columns kept visible while scrolling sideways (like Excel's freeze panes). */
     frozenColumns?: number;
+    /**
+     * Shows only rows this returns true for, plus the parents leading to them
+     * (opened, whatever their expand state). Undefined shows everything.
+     */
+    rowFilter?: (row: RowData & any) => boolean;
 }
 
-export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0 }) => {
+export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter }) => {
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
     const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
     const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -344,7 +349,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         setColumnWidths(prev => ({ ...prev, [key]: Math.max(70, tightFitWidth) }));
     };
 
-    type RenderRow = typeof data[0] & { level: number };
+    /** `open`: its children are shown (expanded, or opened by the row filter). */
+    type RenderRow = typeof data[0] & { level: number; open: boolean };
 
     const sortSiblings = (rows: (RowData & any)[]): (RowData & any)[] => {
         if (!sortConfig) return rows;
@@ -387,22 +393,38 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
     const isParent = (id: string) => childrenByParent.has(id);
 
+    // With a row filter: the matching rows, and every row above one (kept open).
+    const filterSets = useMemo(() => {
+        if (!rowFilter) return null;
+        const byId = new Map(data.map(row => [row.id, row]));
+        const matches = new Set<string>();
+        const ancestors = new Set<string>();
+        for (const row of data) {
+            if (!rowFilter(row)) continue;
+            matches.add(row.id);
+            for (let p = row.parentId; p !== null && !ancestors.has(p); p = byId.get(p)?.parentId ?? null) {
+                ancestors.add(p);
+            }
+        }
+        return { matches, ancestors };
+    }, [data, rowFilter]);
+
     const visibleData = useMemo((): RenderRow[] => {
         const result: RenderRow[] = [];
         const addChildren = (parentId: string | null, level: number) => {
             const children = sortSiblings(childrenByParent.get(parentId) ?? []);
             for (const child of children) {
-                result.push({ ...child, level });
-                if (childrenByParent.has(child.id) && child.isExpanded) {
-                    addChildren(child.id, level + 1);
-                }
+                if (filterSets && !filterSets.matches.has(child.id) && !filterSets.ancestors.has(child.id)) continue;
+                const open = childrenByParent.has(child.id) && (filterSets ? filterSets.ancestors.has(child.id) : child.isExpanded);
+                result.push({ ...child, level, open });
+                if (open) addChildren(child.id, level + 1);
             }
         };
         addChildren(null, 0);
         return result;
         // sortSiblings only depends on sortConfig.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [childrenByParent, sortConfig]);
+    }, [childrenByParent, sortConfig, filterSets]);
 
     const handleAddRow = (parentId: string | null = null) => {
         const newId = Date.now().toString();
@@ -648,7 +670,14 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                             <td key={col.key} style={frozenStyle(colIndex)} className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''}`}>
                                                 <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
                                                     {colIndex === 0 && isRowParent && (
-                                                        <button className="expand-toggle" onClick={(e) => toggleExpand(row.id, e)}>{row.isExpanded ? '▼' : '▶'}</button>
+                                                        <button
+                                                            className="expand-toggle"
+                                                            onClick={(e) => toggleExpand(row.id, e)}
+                                                            disabled={!!filterSets}
+                                                            title={filterSets ? 'Clear the search to expand or collapse' : undefined}
+                                                        >
+                                                            {row.open ? '▼' : '▶'}
+                                                        </button>
                                                     )}
                                                     {colIndex === 0 && !isRowParent && <span className="expand-placeholder" />}
 
@@ -742,7 +771,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                         {visibleData.length === 0 && (
                             <tr>
                                 <td colSpan={columns.length} style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
-                                    No items in table
+                                    {filterSets ? 'No items match' : 'No items in table'}
                                 </td>
                             </tr>
                         )}

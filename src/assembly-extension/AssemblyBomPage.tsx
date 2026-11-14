@@ -714,6 +714,16 @@ export default function AssemblyBomPage() {
     [rows, client, loading, publishing, rootKey, rootBomDB, rootOnshapeBom]
   );
 
+  /** Search box: rows whose name, catalog number or description contain the text. */
+  const [search, setSearch] = useState("");
+  const searchFilter = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return undefined;
+    return (row: AssemblyBomRow) =>
+      [row.name, row.catalogNumber, row.description].some((v) => String(v ?? "").toLowerCase().includes(q));
+  }, [search]);
+  const searchMatchCount = useMemo(() => (searchFilter ? rows.filter(searchFilter).length : 0), [rows, searchFilter]);
+
   /** Expand all / Collapse all (kept in the saved copy like any other expand). */
   const setAllExpanded = useCallback(
     (expanded: boolean) => handleTableEdit(rows.map((r) => (r.isExpanded === expanded ? r : { ...r, isExpanded: expanded }))),
@@ -1217,11 +1227,29 @@ export default function AssemblyBomPage() {
             </div>
           )}
           <div className="assembly-bom-toolbar mb-2 flex flex-wrap items-center gap-2">
+            <div className="bom-search">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setSearch("");
+                }}
+                placeholder="Search name, catalog #, description..."
+                aria-label="Search the BOM"
+              />
+            </div>
+            {searchFilter && (
+              <span className="bom-toolbar-note">
+                {searchMatchCount} match{searchMatchCount === 1 ? "" : "es"}
+              </span>
+            )}
             <button
               type="button"
               className="bom-toolbar-btn"
               onClick={() => setAllExpanded(true)}
-              title="Show every sub-assembly's contents"
+              disabled={!!searchFilter}
+              title={searchFilter ? "Clear the search first" : "Show every sub-assembly's contents"}
             >
               Expand all
             </button>
@@ -1229,7 +1257,8 @@ export default function AssemblyBomPage() {
               type="button"
               className="bom-toolbar-btn"
               onClick={() => setAllExpanded(false)}
-              title="Show only the top level"
+              disabled={!!searchFilter}
+              title={searchFilter ? "Clear the search first" : "Show only the top level"}
             >
               Collapse all
             </button>
@@ -1243,6 +1272,7 @@ export default function AssemblyBomPage() {
             // Like Excel's freeze panes: header row + avatar and name stay visible.
             stickyHeader
             frozenColumns={2}
+            rowFilter={searchFilter}
           />
           </>
         )}
