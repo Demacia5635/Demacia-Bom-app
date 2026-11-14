@@ -22,7 +22,7 @@ import {
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
-import PublishBomModal, { type PublishBomFormValues } from "./PublishBomModel";
+import PublishBomModal, { type PublishBomFormValues, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache } from "./treeCache";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
@@ -34,6 +34,12 @@ function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspa
 function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string {
   const base = server || "https://cad.onshape.com";
   return `${base}/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
+}
+
+/** "thumbnail, STL and Parasolid" from the kinds of files being exported. */
+function describeFileKinds(kinds: readonly ("thumbnail" | "stl" | "parasolid")[]): string {
+  const labels = kinds.map((k) => (k === "stl" ? "STL" : k === "parasolid" ? "Parasolid" : "thumbnail"));
+  return labels.length <= 1 ? labels.join("") : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
 }
 
 /** Placeholder name the server gives a part saved without one. */
@@ -72,6 +78,8 @@ export default function AssemblyBomPage() {
   const triedCacheRef = useRef(false);
 
   const [publishOpen, setPublishOpen] = useState(false);
+  /** Progress of a running Publish / Update BOM; null when idle. */
+  const [publishProgress, setPublishProgress] = useState<PublishProgress | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
@@ -662,8 +670,20 @@ export default function AssemblyBomPage() {
         return { parts, subAssemblies };
       };
 
+      // Progress: the top assembly, each sub-assembly and each distinct part is one item.
+      const total = 1 + rows.filter((r) => r.isAssembly).length + new Set(rows.filter((r) => !r.isAssembly).map((r) => r.id)).size;
+      let started = 0;
+      let failedCount = 0;
+      const report = (current: string, step: string) =>
+        setPublishProgress({ itemNumber: started, total, current, step, failed: failedCount });
+      const startItem = (current: string, step: string) => {
+        started += 1;
+        report(current, step);
+      };
+
       try {
         const isUpdate = Boolean(rootBomDB);
+        startItem(values.name, isUpdate ? "Updating the assembly" : "Saving the assembly");
         const rootLinks = buildLinkArrays(rootRowId);
         // On an update, keep the saved thumbnail instead of uploading a new copy to Drive.
         const rootBomAvatarID = rootBomDB?.avatarID || (await syncBomThumbnailToDrive(rootKey, values.name));
@@ -702,6 +722,9 @@ export default function AssemblyBomPage() {
             handledPartIds.add(row.id);
           }
 
+          failedCount = fileFailures.length;
+          startItem(row.name, row.source === "db" ? "Checking" : "Saving");
+
           if (row.source === "db") {
             // Already saved: keep its data and files, but make its item lists
             // match the current Onshape structure (items added or removed since).
@@ -711,6 +734,7 @@ export default function AssemblyBomPage() {
               const links = buildLinkArrays(row.id);
               const patch: Partial<BomModel> = { parts: links.parts, subAssemblies: links.subAssemblies };
               if (!hasSavedImage) {
+                report(row.name, "Saving thumbnail");
                 const avatarID = await syncBomThumbnailToDrive(key, row.name);
                 if (avatarID) patch.avatarID = avatarID;
                 else fileFailures.push(`Thumbnail of "${row.name}"`);
@@ -728,6 +752,7 @@ export default function AssemblyBomPage() {
                 ...(!row.exportParasolid ? (["parasolid"] as const) : []),
               ];
               if (missing.length > 0) {
+                report(row.name, `Exporting ${describeFileKinds(missing)}`);
                 const files = await syncPartFilesToDrive(key, row.entityID, row.name, {
                   configuration: row.configuration,
                   only: missing,
@@ -746,6 +771,7 @@ export default function AssemblyBomPage() {
           const engineer = row.engineer || values.defaultEngineer;
           if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
+            report(row.name, "Saving with thumbnail");
             const bomAvatarId = await syncBomThumbnailToDrive(key, row.name);
             await upsertBomById(row.id, {
               id: row.id,
@@ -765,6 +791,7 @@ export default function AssemblyBomPage() {
               vendor: row.vendor
             });
           } else {
+            report(row.name, "Exporting thumbnail, STL and Parasolid");
             const { avatarID, stlLink, parasolidLink, failures } = await syncPartFilesToDrive(
               key,
               row.entityID,
@@ -796,6 +823,9 @@ export default function AssemblyBomPage() {
           }
         }
 
+        failedCount = fileFailures.length;
+        report("", "Reloading the tree");
+
         client.showMessageBubble(
           isUpdate
             ? `"${values.name}" was updated in the database.`
@@ -820,6 +850,7 @@ export default function AssemblyBomPage() {
         client.showMessageBubble(`Publish failed: ${apiErr.message}`);
       } finally {
         setPublishing(false);
+        setPublishProgress(null);
       }
     },
     [rootKey, rootOnshapeBom, rootBomDB, rows, client, loadTree, navigate, location.search]
@@ -966,6 +997,7 @@ export default function AssemblyBomPage() {
             onCancel={() => (publishing ? undefined : setPublishOpen(false))}
             onSubmit={handlePublish}
             submitting={publishing}
+            progress={publishProgress}
           />
         )}
 

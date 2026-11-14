@@ -11,7 +11,21 @@ export interface PublishBomFormValues {
   defaultEngineer: string;
 }
 
+/** Progress of a running publish/update, shown in the modal while it saves. */
+export interface PublishProgress {
+  /** 1-based number of the item being worked on. */
+  itemNumber: number;
+  total: number;
+  /** Name of that item ("" once all items are done). */
+  current: string;
+  /** What's happening to it, e.g. "Exporting STL and Parasolid". */
+  step: string;
+  /** Files that could not be saved so far. */
+  failed: number;
+}
+
 interface PublishBomModalProps {
+  progress?: PublishProgress | null;
   open: boolean;
   /** "update" when the assembly is already in the database. */
   mode?: "publish" | "update";
@@ -29,6 +43,7 @@ export default function PublishBomModal({
   onCancel,
   onSubmit,
   submitting = false,
+  progress = null,
 }: PublishBomModalProps) {
   const [name, setName] = useState(initialValues.name ?? "");
   const [description, setDescription] = useState(initialValues.description ?? "");
@@ -112,6 +127,36 @@ export default function PublishBomModal({
               disabled={submitting}
             />
           </label>
+
+          {submitting && progress && (
+            <div className="publish-progress" role="status" aria-live="polite">
+              <div className="publish-progress-row">
+                <span>
+                  {progress.current
+                    ? `${progress.itemNumber} of ${progress.total}`
+                    : `All ${progress.total} items done`}
+                </span>
+                {progress.failed > 0 && (
+                  <span className="publish-progress-failed">
+                    {progress.failed} file{progress.failed === 1 ? "" : "s"} failed
+                  </span>
+                )}
+              </div>
+              <div className="publish-progress-track">
+                <div
+                  className="publish-progress-bar"
+                  style={{
+                    width: `${Math.round(
+                      ((progress.current ? progress.itemNumber - 1 : progress.total) / Math.max(progress.total, 1)) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+              <div className="publish-progress-step">
+                {progress.current ? `${progress.current}: ${progress.step}` : progress.step}
+              </div>
+            </div>
+          )}
 
           <div className="publish-modal-actions">
             <button type="button" className="publish-btn-secondary" onClick={onCancel} disabled={submitting}>
