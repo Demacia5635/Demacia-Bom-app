@@ -184,6 +184,14 @@ function createLimiter(max: number): Limiter {
 /** Requests in flight at once during Refresh BOM (Onshape + our server). */
 const REFRESH_CONCURRENCY = 6;
 
+/**
+ * Items (parts / sub-assemblies) published at once. Each part exports its
+ * thumbnail, STL and Parasolid together, so this is up to 3x as many Onshape
+ * exports in flight. If Onshape rate-limits, those items are reported as
+ * problems and retried by the next Publish BOM.
+ */
+const PUBLISH_CONCURRENCY = 5;
+
 /** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
 type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
 
@@ -618,16 +626,35 @@ export default function AssemblyBomPage() {
         return { parts, subAssemblies };
       };
 
-      // Progress: the top assembly, each sub-assembly and each distinct part is one item.
-      const total = 1 + rows.filter((r) => r.isAssembly).length + new Set(rows.filter((r) => !r.isAssembly).map((r) => r.id)).size;
-      let started = 0;
+      // The top assembly, each sub-assembly and each distinct part is one item.
+      // A part used in several places is published once.
+      const seenParts = new Set<string>();
+      const rowsToPublish = rows.filter((r) => r.isAssembly || (!seenParts.has(r.id) && !!seenParts.add(r.id)));
+      const total = 1 + rowsToPublish.length;
+
+      // Progress: items done, and what each item being worked on is doing.
+      let done = 0;
+      let nextTrackId = 0;
+      const active = new Map<number, { name: string; step: string }>();
       // Problems don't stop the publish; they're reported at the end.
       const problems: string[] = [];
-      const report = (current: string, step: string) =>
-        setPublishProgress({ itemNumber: started, total, current, step, failed: problems.length });
-      const startItem = (current: string, step: string) => {
-        started += 1;
-        report(current, step);
+      const report = () =>
+        setPublishProgress({ done, total, active: Array.from(active.values()), failed: problems.length });
+      const track = (name: string, step: string) => {
+        const id = nextTrackId++;
+        active.set(id, { name, step });
+        report();
+        return {
+          step: (next: string) => {
+            active.set(id, { name, step: next });
+            report();
+          },
+          finish: () => {
+            active.delete(id);
+            done += 1;
+            report();
+          },
+        };
       };
 
       /** New Drive file if one was made, else the saved one; remembers the replaced file. */
@@ -647,7 +674,7 @@ export default function AssemblyBomPage() {
 
       try {
         const isUpdate = Boolean(rootBomDB);
-        startItem(values.name, isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
+        const rootTrack = track(values.name, isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
         const rootLinks = buildLinkArrays(rootRowId);
         const rootToDelete: string[] = [];
         const rootAvatar = await syncBomThumbnailToDrive(rootKey, values.name);
@@ -669,15 +696,15 @@ export default function AssemblyBomPage() {
           onshapeURL: onshapeUrlOf(rootKey),
         });
         await deleteReplaced(rootToDelete);
+        rootTrack.finish();
 
         // What changed per row, applied to the table at the end.
         const rowUpdates = new Map<string, Partial<AssemblyBomRow>>();
         // Rows whose edits could not be written to Onshape stay marked.
         const unsavedEdits = new Set<string>();
-        // A part used in several places is published once.
-        const handledPartIds = new Set<string>();
 
-        for (const row of rows) {
+        /** Publishes one sub-assembly or part (edits to Onshape, files, record). */
+        const publishRow = async (row: AssemblyBomRow, progress: ReturnType<typeof track>) => {
           const key: OnshapeKey = {
             documentID: row.documentID,
             wvmType: row.wvmType,
@@ -685,17 +712,10 @@ export default function AssemblyBomPage() {
             elementID: row.elementID,
           };
 
-          if (!row.isAssembly) {
-            if (handledPartIds.has(row.id)) continue;
-            handledPartIds.add(row.id);
-          }
-
-          startItem(row.name, "Saving");
-
           // 1. Cells changed from what was loaded from Onshape go to Onshape first.
           const edited = changedFields(row, row.loaded);
           if (edited.length > 0 && row.vendor === "") {
-            report(row.name, "Writing edits to Onshape");
+            progress.step("Writing edits to Onshape");
             const values_ = row as unknown as Record<string, unknown>;
             try {
               if (row.isAssembly) {
@@ -724,7 +744,7 @@ export default function AssemblyBomPage() {
           const toDelete: string[] = [];
           if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
-            report(row.name, "Saving thumbnail");
+            progress.step("Saving thumbnail");
             const avatar = await syncBomThumbnailToDrive(key, row.name);
             if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
             const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
@@ -750,7 +770,7 @@ export default function AssemblyBomPage() {
             // Standard Content (screws, nuts...) is bought, not made: thumbnail only,
             // no STL / Parasolid / Onshape link (any saved earlier are removed).
             const standard = !!row.isStandardContent;
-            report(row.name, standard ? "Saving thumbnail" : "Exporting thumbnail, STL and Parasolid");
+            progress.step(standard ? "Saving thumbnail" : "Exporting thumbnail, STL and Parasolid");
             const files = await syncPartFilesToDrive(key, row.entityID, row.name, {
               configuration: row.configuration,
               ...(standard ? { only: ["thumbnail" as const] } : {}),
@@ -765,7 +785,7 @@ export default function AssemblyBomPage() {
               stlLink: standard ? "" : replaceFile(row.saved?.stlLink, files.stlLink, toDelete),
               parasolidLink: standard ? "" : replaceFile(row.saved?.parasolidLink, files.parasolidLink, toDelete),
             };
-            report(row.name, "Saving");
+            progress.step("Saving to the database");
             await upsertPartById(row.id, {
               id: row.id,
               name: row.name,
@@ -798,23 +818,46 @@ export default function AssemblyBomPage() {
           }
 
           // 3. The record now points at the new files; remove the ones it replaced.
+          if (toDelete.length > 0) progress.step("Removing replaced files");
           await deleteReplaced(toDelete);
-        }
+        };
 
-        report("", "Finishing");
+        // Up to PUBLISH_CONCURRENCY items at once. One item failing doesn't stop
+        // the others: it's listed as a problem and keeps its unpublished state.
+        const queue = [...rowsToPublish];
+        const published = new Set<string>();
+        await Promise.all(
+          Array.from({ length: Math.min(PUBLISH_CONCURRENCY, queue.length) }, async () => {
+            for (let row = queue.shift(); row; row = queue.shift()) {
+              const progress = track(row.name, "Starting");
+              try {
+                await publishRow(row, progress);
+                published.add(row.id);
+              } catch (err: any) {
+                problems.push(`Saving "${row.name}": ${err?.message || err}`);
+              } finally {
+                progress.finish();
+              }
+            }
+          })
+        );
 
-        // Everything shown is now saved: update the table in place (no reload).
-        const nextRows = rows.map((r) => ({
-          ...r,
-          ...(rowUpdates.get(r.id) ?? {}),
-          source: "db" as const,
-          dbAction: "",
-          // The database now holds what's shown. Onshape too, unless writing the
-          // edits failed: then the next publish retries them.
-          baseline: editableValues(r),
-          loaded: unsavedEdits.has(r.id) ? r.loaded : editableValues(r),
-          modified: [],
-        }));
+        // What was published is now saved: update those rows in place (no reload).
+        const nextRows = rows.map((r) =>
+          published.has(r.id)
+            ? {
+                ...r,
+                ...(rowUpdates.get(r.id) ?? {}),
+                source: "db" as const,
+                dbAction: "",
+                // The database now holds what's shown. Onshape too, unless writing the
+                // edits failed: then the next publish retries them.
+                baseline: editableValues(r),
+                loaded: unsavedEdits.has(r.id) ? r.loaded : editableValues(r),
+                modified: [],
+              }
+            : r
+        );
         setRows(nextRows);
         setRootBomDB(savedRoot);
         setRootIsPublished(true);
@@ -971,29 +1014,27 @@ export default function AssemblyBomPage() {
             <div className="assembly-bom-refreshing mb-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate">
-                  {publishProgress.current
-                    ? `Saving to database - ${publishProgress.current}: ${publishProgress.step}`
-                    : publishProgress.step}
+                  Publishing to the database
+                  {publishProgress.active.length > 1 ? ` - ${publishProgress.active.length} items at once` : ""}
                 </span>
                 <span className="shrink-0">
                   {publishProgress.failed > 0 && (
-                    <span className="text-amber-400 mr-2">{publishProgress.failed} failed</span>
+                    <span className="text-amber-400 mr-2">{publishProgress.failed} problems</span>
                   )}
-                  {publishProgress.itemNumber} / {publishProgress.total}
+                  {publishProgress.done} / {publishProgress.total}
                 </span>
               </div>
               <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
                 <div
                   className="h-full bg-blue-500 transition-all duration-200"
-                  style={{
-                    width: `${Math.round(
-                      ((publishProgress.current ? publishProgress.itemNumber - 1 : publishProgress.total) /
-                        Math.max(publishProgress.total, 1)) *
-                        100
-                    )}%`,
-                  }}
+                  style={{ width: `${Math.round((publishProgress.done / Math.max(publishProgress.total, 1)) * 100)}%` }}
                 />
               </div>
+              {publishProgress.active.map((item, i) => (
+                <div key={i} className="mt-1 truncate text-zinc-500">
+                  {item.name}: {item.step}
+                </div>
+              ))}
             </div>
           )}
           {!loading && !publishing && cachedAt !== null && (

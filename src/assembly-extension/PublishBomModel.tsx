@@ -11,16 +11,14 @@ export interface PublishBomFormValues {
   defaultEngineer: string;
 }
 
-/** Progress of a running publish/update, shown in the modal while it saves. */
+/** Progress of a running publish, shown in the modal while it saves. */
 export interface PublishProgress {
-  /** 1-based number of the item being worked on. */
-  itemNumber: number;
+  /** Items finished. */
+  done: number;
   total: number;
-  /** Name of that item ("" once all items are done). */
-  current: string;
-  /** What's happening to it, e.g. "Exporting STL and Parasolid". */
-  step: string;
-  /** Problems so far (files not saved, edits not written to Onshape). */
+  /** Items being worked on right now (several run at once), and what each is doing. */
+  active: { name: string; step: string }[];
+  /** Problems so far (files not saved, edits not written to Onshape, items not saved). */
   failed: number;
 }
 
@@ -132,8 +130,8 @@ export default function PublishBomModal({
             <div className="publish-progress" role="status" aria-live="polite">
               <div className="publish-progress-row">
                 <span>
-                  {progress.current
-                    ? `${progress.itemNumber} of ${progress.total}`
+                  {progress.done < progress.total
+                    ? `${progress.done} of ${progress.total} done${progress.active.length > 1 ? ` - ${progress.active.length} at once` : ""}`
                     : `All ${progress.total} items done`}
                 </span>
                 {progress.failed > 0 && (
@@ -145,16 +143,14 @@ export default function PublishBomModal({
               <div className="publish-progress-track">
                 <div
                   className="publish-progress-bar"
-                  style={{
-                    width: `${Math.round(
-                      ((progress.current ? progress.itemNumber - 1 : progress.total) / Math.max(progress.total, 1)) * 100
-                    )}%`,
-                  }}
+                  style={{ width: `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%` }}
                 />
               </div>
-              <div className="publish-progress-step">
-                {progress.current ? `${progress.current}: ${progress.step}` : progress.step}
-              </div>
+              {progress.active.map((item, i) => (
+                <div key={i} className="publish-progress-step">
+                  {item.name}: {item.step}
+                </div>
+              ))}
             </div>
           )}
 
