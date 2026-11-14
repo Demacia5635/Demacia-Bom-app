@@ -32,7 +32,22 @@ const ID_COLUMN_KEYS = new Set(["documentID", "wvmType", "wvmID", "elementID", "
 
 export default function buildAssemblyBomColumns(options: BuildColumnsOptions): ColumnConfig[] {
   const columns = buildAllColumns(options);
-  return isChromeExtension() ? columns.filter((c) => !ID_COLUMN_KEYS.has(c.key)) : columns;
+  if (!isChromeExtension()) return columns;
+
+  // Chrome extension: edits stay local until Publish BOM, so every row except
+  // Standard Content is editable, edited cells are marked, and the per-row
+  // "Add to DB" column is replaced by Publish BOM.
+  return columns
+    .filter((c) => !ID_COLUMN_KEYS.has(c.key) && c.key !== "dbAction")
+    .map((c) =>
+      c.type === "string" || (c.type === "number" && c.key === "price")
+        ? {
+            ...c,
+            isDisabled: (row: AssemblyBomRow) => row.vendor !== "",
+            isModified: (row: AssemblyBomRow) => !!row.modified?.includes(c.key),
+          }
+        : c
+    );
 }
 
 function buildAllColumns({ onAddToDb, rootIsPublished }: BuildColumnsOptions): ColumnConfig[] {

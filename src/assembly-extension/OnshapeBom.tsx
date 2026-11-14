@@ -96,8 +96,64 @@ export interface OnshapeBomTable {
   }
 }
 
+/**
+ * Row fields that only some BOM templates have as a column. When the
+ * document's BOM has the column, its value comes from Onshape; otherwise the
+ * page falls back to the database.
+ */
+export type OptionalBomField =
+  | "description"
+  | "partNumber"
+  | "revision"
+  | "material"
+  | "vendor"
+  | "engineer"
+  | "price"
+  | "comments"
+  | "mass";
+
+/** Onshape property IDs of the custom/standard properties without a fixed propertyName. */
+const OPTIONAL_FIELD_PROPERTY_IDS: Partial<Record<OptionalBomField, string>> = {
+  engineer: "57f3fb8efa3416c06701d619",
+  price: "6617a03ef812b159a51a8786",
+  comments: "66154a7f56997c7041994212",
+};
+
+/** Which optional fields this BOM has a column for, and the item key each value is stored under. */
+export function bomFieldColumns(table: OnshapeBomTable): Map<OptionalBomField, string> {
+  const columns = new Map<OptionalBomField, string>();
+  const headers = Array.isArray(table?.headers) ? table.headers : [];
+  for (const field of ["description", "partNumber", "revision", "material", "vendor"] as const) {
+    const h = headers.find((x) => x.propertyName === field);
+    if (h) columns.set(field, h.propertyName);
+  }
+  for (const [field, id] of Object.entries(OPTIONAL_FIELD_PROPERTY_IDS) as [OptionalBomField, string][]) {
+    const h = headers.find((x) => x.propertyId === id || x.propertyName === field);
+    if (h) columns.set(field, h.propertyName);
+  }
+  const massHeader = headers.find((x) => /mass/i.test(x.propertyName || "") || /mass/i.test(x.name || ""));
+  if (massHeader) columns.set("mass", massHeader.propertyName);
+  return columns;
+}
+
+/** Plain value of a BOM cell: unwraps {value}/{displayName} objects and numeric text. */
+function cellValue(raw: unknown, asNumber: boolean): string | number {
+  let v: unknown = raw;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    v = o.value ?? o.displayName ?? o.name ?? "";
+  }
+  if (asNumber) {
+    const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return v == null ? "" : String(v);
+}
+
 /** Normalized, easy-to-consume row pulled out of one raw Onshape BOM item. */
 export interface ParsedOnshapeBomRow {
+  /** Values of the optional fields this BOM has columns for (absent key = no column). */
+  onshapeFields: Partial<Record<OptionalBomField, string | number>>;
   itemSource: OnshapeBomItemSource;
   /** The raw indented item number, e.g. "1", "1.1", "2". Kept around so
    *  nested children can be matched back to their parent row. */
@@ -118,12 +174,25 @@ function materialToString(material: OnshapeBomItem["material"]): string {
   return material.displayName || material.id || "";
 }
 
-function toParsedRow(item: OnshapeBomItem, isSubassembly: boolean): ParsedOnshapeBomRow {
+function toParsedRow(
+  item: OnshapeBomItem,
+  isSubassembly: boolean,
+  columns: Map<OptionalBomField, string>
+): ParsedOnshapeBomRow {
   const quantityRaw = item.quantity;
   const quantity =
     typeof quantityRaw === "number" ? quantityRaw : quantityRaw ? Number(quantityRaw) || 1 : 1;
 
+  const onshapeFields: ParsedOnshapeBomRow["onshapeFields"] = {};
+  for (const [field, itemKey] of columns) {
+    onshapeFields[field] =
+      field === "material"
+        ? materialToString(item[itemKey] as OnshapeBomItem["material"])
+        : cellValue(item[itemKey], field === "price" || field === "mass");
+  }
+
   return {
+    onshapeFields,
     itemSource: item.itemSource,
     itemNumber: item.item || "",
     isSubassembly,
@@ -160,5 +229,6 @@ export function parseOnshapeBomTable(table: OnshapeBomTable): ParsedOnshapeBomRo
   const hasChildren = (itemNumber: string) =>
     items.some((it) => it.item && it.item.startsWith(`${itemNumber}.`));
 
-  return topLevel.map((item) => toParsedRow(item, hasChildren(item.item)));
+  const columns = bomFieldColumns(table);
+  return topLevel.map((item) => toParsedRow(item, hasChildren(item.item), columns));
 }

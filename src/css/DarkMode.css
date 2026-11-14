@@ -296,6 +296,16 @@ body.dark-theme-active .table-page-container,
   background-color: var(--bg-surface-disabled);
 }
 
+/* Edited, not published yet (BOM extension). */
+.cell-modified {
+  background-color: rgba(245, 158, 11, 0.14);
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.cell-modified .cell-input {
+  color: #fcd34d;
+}
+
 .cell-input:disabled {
   color: var(--text-disabled);
   cursor: not-allowed;

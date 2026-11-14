@@ -13,7 +13,11 @@ import type { BomModel } from "../util/Models";
 import type { OnshapeKey } from "./BomApi";
 
 /** Bump when the stored shape changes, so old copies are ignored. */
-const VERSION = 1;
+// 2: saved-image addresses gained the /api prefix.
+// 3: rows from Onshape (+ pending edits, saved file IDs); root keeps description/part number.
+// 4: assembly images are live renders instead of Onshape's stored thumbnails.
+// 5: rows track baseline/loaded values for change marking.
+const VERSION = 5;
 const PREFIX = "demacia-bom-tree:";
 const INDEX_KEY = "demacia-bom-tree-index";
 const MAX_ENTRIES = 20;
@@ -23,8 +27,8 @@ export interface CachedTree {
   savedAt: number;
   rows: AssemblyBomRow[];
   rootBomDB: BomModel | null;
-  /** Just what the page reads from the root Onshape BOM (id + name). */
-  rootBom: { id: string; name: string } | null;
+  /** Just what the page reads from the root Onshape BOM. */
+  rootBom: { id: string; name: string; description?: string; partNumber?: string } | null;
 }
 
 export function treeCacheKey(k: OnshapeKey): string {
@@ -67,8 +71,9 @@ export function readTreeCache(key: string): CachedTree | null {
   }
 }
 
-export function writeTreeCache(key: string, data: Omit<CachedTree, "v" | "savedAt">): void {
-  const entry: CachedTree = { v: VERSION, savedAt: Date.now(), ...data };
+/** `savedAt`: when the tree was loaded from Onshape (defaults to now). */
+export function writeTreeCache(key: string, data: Omit<CachedTree, "v" | "savedAt">, savedAt: number = Date.now()): void {
+  const entry: CachedTree = { v: VERSION, savedAt, ...data };
   const json = JSON.stringify(entry);
   const index = readIndex();
 

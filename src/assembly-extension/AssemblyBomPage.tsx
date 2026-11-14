@@ -17,10 +17,11 @@ import {
   syncPartFilesToDrive,
   syncBomThumbnailToDrive,
   postToApi,
-  getOnshapeThumbnailSrc
+  getOnshapeThumbnailSrc,
+  deleteDriveFile
 } from "./BomApi";
 import type AssemblyBomRow from "./AssemblyBomRow";
-import { parseOnshapeBomTable, type OnshapeBomTable, type ParsedOnshapeBomRow } from "./OnshapeBom";
+import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import PublishBomModal, { type PublishBomFormValues, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache } from "./treeCache";
@@ -36,14 +37,50 @@ function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string 
   return `${base}/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
 }
 
-/** "thumbnail, STL and Parasolid" from the kinds of files being exported. */
-function describeFileKinds(kinds: readonly ("thumbnail" | "stl" | "parasolid")[]): string {
-  const labels = kinds.map((k) => (k === "stl" ? "STL" : k === "parasolid" ? "Parasolid" : "thumbnail"));
-  return labels.length <= 1 ? labels.join("") : `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+/** What the saved copy of a tree keeps of the root Onshape BOM. */
+function rootBomSummary(bom: OnshapeBomTable | null | undefined) {
+  return bom ? { id: bom.id, name: bom.name, description: bom.description || "", partNumber: bom.partNumber || "" } : null;
 }
 
-/** Placeholder name the server gives a part saved without one. */
-const UNNAMED_PART = "Unnamed Part";
+/** Cells the user may edit (written to Onshape and the database on Publish BOM). */
+const EDITABLE_FIELDS = ["name", "description", "catalogNumber", "revision", "engineer", "material", "price", "comments"];
+
+type FieldValues = Record<string, string | number>;
+
+/** The editable cells of a row. */
+function editableValues(row: AssemblyBomRow): FieldValues {
+  const r = row as unknown as Record<string, unknown>;
+  return Object.fromEntries(EDITABLE_FIELDS.map((k) => [k, (r[k] ?? "") as string | number]));
+}
+
+/** Equal for display purposes: trimmed text; for price, 0 and empty are the same. */
+function sameValue(field: string, a: unknown, b: unknown): boolean {
+  if (field === "price") return (Number(a) || 0) === (Number(b) || 0);
+  return String(a ?? "").trim() === String(b ?? "").trim();
+}
+
+/** Editable cells of `row` that differ from `against` (none for Standard Content, which isn't editable). */
+function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): string[] {
+  if (!against || row.vendor !== "") return [];
+  const r = row as unknown as Record<string, unknown>;
+  return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
+}
+
+/** Sets baseline/loaded/modified on a freshly loaded row. `saved` = its database values, if saved. */
+function withChangeTracking(row: AssemblyBomRow, saved: FieldValues | null): AssemblyBomRow {
+  const loaded = editableValues(row);
+  // Fields the database doesn't keep for this item compare against what was loaded.
+  const baseline = saved ? { ...loaded, ...saved } : loaded;
+  const tracked = { ...row, loaded, baseline };
+  return { ...tracked, modified: changedFields(tracked, baseline) };
+}
+
+/** A resolved assembly tree: the rows plus the root's database and Onshape records. */
+interface LoadedTree {
+  rows: AssemblyBomRow[];
+  rootBomDB: BomModel | null;
+  rootOnshapeBom: OnshapeBomTable | null;
+}
 
 /** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
 type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
@@ -74,8 +111,11 @@ export default function AssemblyBomPage() {
   const [loadProgress, setLoadProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   /** When the rows on screen come from the saved copy: when it was saved. */
   const [cachedAt, setCachedAt] = useState<number | null>(null);
-  /** The saved copy is only shown on the first load; later reloads keep the current rows. */
-  const triedCacheRef = useRef(false);
+  /** When the tree on screen was loaded from Onshape (kept when edits update the saved copy). */
+  const treeSavedAtRef = useRef<number>(Date.now());
+  /** The tree on screen, for handlePublish when it isn't handed a freshly loaded one. */
+  const currentTreeRef = useRef<LoadedTree>({ rows: [], rootBomDB: null, rootOnshapeBom: null });
+  currentTreeRef.current = { rows, rootBomDB, rootOnshapeBom };
 
   const [publishOpen, setPublishOpen] = useState(false);
   /** Progress of a running Publish / Update BOM; null when idle. */
@@ -150,7 +190,9 @@ export default function AssemblyBomPage() {
       key: OnshapeKey,
       parentRowId: string | null,
       rootBom: BomModel | null | 'root',
-      getParentBom: ParentBomLoader
+      getParentBom: ParentBomLoader,
+      /** The parent BOM's line for this sub-assembly (its part number etc.); absent for the root. */
+      parentItem?: ParsedOnshapeBomRow
     ): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
       const onshapeBom = await getOnshapeBom(key);
       const bomID = onshapeBom.id || key.elementID;
@@ -170,6 +212,10 @@ export default function AssemblyBomPage() {
           Boolean(rootBom.subAssemblies.find((c) => c.bomID === rowId))
       );
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
+      // Onshape where its BOM has the value, the database for the rest.
+      const fromOnshape = parentItem?.onshapeFields ?? {};
+      const pick = (field: OptionalBomField, dbValue: string | undefined, fallback = "") =>
+        field in fromOnshape ? String(fromOnshape[field] ?? "") : dbValue || fallback;
 
       const row: AssemblyBomRow = {
         id: rowId,
@@ -177,17 +223,19 @@ export default function AssemblyBomPage() {
         isExpanded: true,
         source: isPublished ? "db" : "onshape-only",
         isAssembly: true,
-        avatar: dbBom?.avatarID ? `/drive/file/id/${dbBom.avatarID}` : getOnshapeThumbnailSrc(key),
-        name: dbBom?.name || onshapeBom.name.slice(6) || key.elementID,
-        catalogNumber: dbBom?.catalogNumber || "",
+        // Always Onshape's current thumbnail; the saved one is replaced on Publish BOM.
+        avatar: getOnshapeThumbnailSrc(key),
+        name: parentItem?.name || onshapeBom.name.slice(6) || dbBom?.name || key.elementID,
+        catalogNumber: pick("partNumber", dbBom?.catalogNumber, onshapeBom.partNumber || ""),
         revision: "-",
-        description: dbBom?.description || onshapeBom.description || "",
-        engineer: dbBom?.engineer || "",
+        description: onshapeBom.description || pick("description", dbBom?.description),
+        engineer: pick("engineer", dbBom?.engineer),
         material: "-",
         mass: 0,
         price: 0,
-        quantity: 1,
-        comments: dbBom?.comments || "",
+        quantity: parentItem?.quantity || 1,
+        comments: pick("comments", dbBom?.comments),
+        saved: { avatarID: dbBom?.avatarID || undefined },
         documentID: key.documentID,
         wvmType: key.wvmType,
         wvmID: key.wvmID,
@@ -200,7 +248,19 @@ export default function AssemblyBomPage() {
         vendor: dbBom?.vendor || onshapeBom.bomSource?.element?.vendor || "",
       };
 
-      return { node: { row, key, bomID, onshapeBom }, dbBom };
+      const tracked = withChangeTracking(
+        row,
+        dbBom
+          ? {
+              name: dbBom.name ?? "",
+              description: dbBom.description ?? "",
+              catalogNumber: dbBom.catalogNumber ?? "",
+              engineer: dbBom.engineer ?? "",
+              comments: dbBom.comments ?? "",
+            }
+          : null
+      );
+      return { node: { row: tracked, key, bomID, onshapeBom }, dbBom };
     },
     [context.server, fetchWithUserKeys]
   );
@@ -235,28 +295,49 @@ export default function AssemblyBomPage() {
           Boolean(rootBom.parts.find((c) => c.partID === rowId))
       );
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
-      // A saved name of "Unnamed Part" is a placeholder the server filled in;
-      // show Onshape's name and let Update BOM save it.
-      const savedNameIsPlaceholder = dbPart?.name === UNNAMED_PART && !!parsedItem.name;
+      // Onshape where its BOM has the value, the database for the rest.
+      const fromOnshape = parsedItem.onshapeFields;
+      const pickText = (field: OptionalBomField, dbValue: string | undefined) =>
+        field in fromOnshape ? String(fromOnshape[field] ?? "") : dbValue || "";
+      const pickNumber = (field: OptionalBomField, dbValue: number | undefined) =>
+        field in fromOnshape ? Number(fromOnshape[field]) || 0 : dbValue || 0;
 
-      return {
+      const savedValues: FieldValues | null = dbPart
+        ? {
+            name: dbPart.name ?? "",
+            description: dbPart.description ?? "",
+            catalogNumber: dbPart.catalogNumber ?? "",
+            revision: dbPart.revision ?? "",
+            engineer: dbPart.engineer ?? "",
+            material: dbPart.material ?? "",
+            price: dbPart.price ?? 0,
+            comments: dbPart.comments ?? "",
+          }
+        : null;
+
+      return withChangeTracking({
         id: rowId,
         parentId: parentRowId,
         isExpanded: false,
         source: isPublished ? "db" : "onshape-only",
         isAssembly: false,
-        avatar: dbPart?.avatarID ? `/drive/file/id/${dbPart.avatarID}` : getOnshapeThumbnailSrc(key, partID, parsedItem.itemSource),
-        name: (savedNameIsPlaceholder ? parsedItem.name : dbPart?.name) || parsedItem.name || partID,
-        repairName: savedNameIsPlaceholder ? parsedItem.name : undefined,
-        catalogNumber: dbPart?.catalogNumber || parsedItem.partNumber || "",
-        revision: dbPart?.revision || parsedItem.revision || "",
-        description: dbPart?.description || parsedItem.description || "",
-        engineer: dbPart?.engineer || "",
-        material: dbPart?.material || parsedItem.material || "",
-        mass: dbPart?.mass || 0,
-        price: dbPart?.price || 0,
+        // Always Onshape's current image; the saved one is replaced on Publish BOM.
+        avatar: getOnshapeThumbnailSrc(key, partID, parsedItem.itemSource),
+        name: parsedItem.name || dbPart?.name || partID,
+        catalogNumber: pickText("partNumber", dbPart?.catalogNumber),
+        revision: pickText("revision", dbPart?.revision),
+        description: pickText("description", dbPart?.description),
+        engineer: pickText("engineer", dbPart?.engineer),
+        material: pickText("material", dbPart?.material),
+        mass: pickNumber("mass", dbPart?.mass),
+        price: pickNumber("price", dbPart?.price),
         quantity: parsedItem.quantity || 1,
-        comments: dbPart?.comments || "",
+        comments: pickText("comments", dbPart?.comments),
+        saved: {
+          avatarID: dbPart?.avatarID || undefined,
+          stlLink: dbPart?.stlLink || undefined,
+          parasolidLink: dbPart?.parasolidLink || undefined,
+        },
         documentID: key.documentID,
         wvmType: key.wvmType,
         wvmID: key.wvmID,
@@ -268,22 +349,26 @@ export default function AssemblyBomPage() {
         dbAction: isExist ? "" : "add",
         vendor: dbPart?.vendor || parsedItem.vendor || "",
         configuration: parsedItem.itemSource.configuration || "",
-      };
+      }, savedValues);
     },
     [context.server, fetchWithUserKeys]
   );
 
-  const loadTree = useCallback(async () => {
-    if (!rootKey) return;
+  /**
+   * Loads the assembly tree from Onshape + the database and returns it (null
+   * on failure). With `preferCache`, a saved copy is shown instead when there
+   * is one, without contacting Onshape: opening an assembly doesn't reload it;
+   * the Refresh button does.
+   */
+  const loadTree = useCallback(async (options: { preferCache?: boolean } = {}): Promise<LoadedTree | null> => {
+    if (!rootKey) return null;
 
     setLoading(true);
     setError(null);
     setLoadProgress(null);
 
-    // First load: show the saved copy (if any) while the fresh tree loads.
     const cacheKey = treeCacheKey(rootKey);
-    if (!triedCacheRef.current) {
-      triedCacheRef.current = true;
+    if (options.preferCache) {
       const cached = readTreeCache(cacheKey);
       if (cached) {
         setRows(cached.rows);
@@ -293,6 +378,9 @@ export default function AssemblyBomPage() {
           cached.rootBom ? ({ ...cached.rootBom, headers: [], items: [] } as OnshapeBomTable) : null
         );
         setCachedAt(cached.savedAt);
+        treeSavedAtRef.current = cached.savedAt;
+        setLoading(false);
+        return null;
       }
     }
 
@@ -341,7 +429,7 @@ export default function AssemblyBomPage() {
             if (visitedBomIds.has(subKeyId)) continue;
             visitedBomIds.add(subKeyId);
 
-            const { node: subNode } = await resolveBomNode(subKey, childParentId, dbBom, getParentBom);
+            const { node: subNode } = await resolveBomNode(subKey, childParentId, dbBom, getParentBom, item);
             allRows.push(subNode.row);
             await expand(subNode, false);
           } else {
@@ -352,27 +440,33 @@ export default function AssemblyBomPage() {
       }
 
       await expand(rootNode, true);
-      setRows(allRows);
+      // A refresh discards unpublished edits (handleRefresh asks first).
+      const freshRows = allRows;
+      setRows(freshRows);
       setCachedAt(null);
+      treeSavedAtRef.current = Date.now();
       writeTreeCache(cacheKey, {
-        rows: allRows,
+        rows: freshRows,
         rootBomDB: dbBom,
-        rootBom: rootNode.onshapeBom ? { id: rootNode.onshapeBom.id, name: rootNode.onshapeBom.name } : null,
+        rootBom: rootBomSummary(rootNode.onshapeBom),
       });
+      return { rows: freshRows, rootBomDB: dbBom, rootOnshapeBom: rootNode.onshapeBom ?? null };
     } catch (err: any) {
       if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
         navigate(`/signin${location.search}`, { replace: true });
-        return;
+        return null;
       }
       setError(err as ApiError);
+      return null;
     } finally {
       setLoading(false);
     }
   }, [rootKey, resolveBomNode, resolvePartRow, fetchWithUserKeys, navigate, location.search]);
 
+  // Opening an assembly: show its saved copy if there is one; otherwise load it.
   useEffect(() => {
     if (!isVerifyingApi && rootKey) {
-      loadTree();
+      loadTree({ preferCache: true });
     }
   }, [isVerifyingApi, rootKey, loadTree]);
 
@@ -381,8 +475,8 @@ export default function AssemblyBomPage() {
       buildAssemblyBomColumns({
         rootIsPublished,
         onAddToDb: (row) => {
-          if (loading) {
-            client.showMessageBubble("Wait until the assembly tree has finished refreshing.");
+          if (loading || publishing) {
+            client.showMessageBubble("Wait until the refresh has finished.");
             return;
           }
           if (!rootIsPublished) {
@@ -394,7 +488,7 @@ export default function AssemblyBomPage() {
           return handlePublishItem(row);
         },
       }),
-    [client, rootIsPublished, loading]
+    [client, rootIsPublished, loading, publishing]
   );
 
   const handlePublishItem = useCallback(
@@ -516,132 +610,61 @@ export default function AssemblyBomPage() {
     [rows, client, loadTree, rootBomDB, rootKey, rootOnshapeBom?.id, fetchWithUserKeys, navigate, location.search]
   );
 
+  /**
+   * Table edits stay in this browser until Publish BOM: cells that differ
+   * from the database (or, for items not saved yet, from what was loaded) are
+   * marked, and kept in the saved copy of the tree so they survive closing the
+   * panel. A Refresh BOM discards them. Nothing is written to Onshape or the
+   * database here.
+   */
   const handleTableEdit = useCallback(
     (newData: AssemblyBomRow[]) => {
       const previousById = new Map(rows.map((r) => [r.id, r]));
-      const changed = newData.find((r) => {
-        const prev = previousById.get(r.id);
-        if (!prev) return false;
-        return (Object.keys(r) as (keyof AssemblyBomRow)[]).some((k) => r[k] !== prev[k]);
+      let blocked = false;
+
+      const nextRows = newData.map((row) => {
+        const prev = previousById.get(row.id);
+        if (!prev) return row;
+        const editedKeys = EDITABLE_FIELDS.filter(
+          (k) => (row as unknown as Record<string, unknown>)[k] !== (prev as unknown as Record<string, unknown>)[k]
+        );
+        if (editedKeys.length === 0) return row; // e.g. expanding/collapsing a row
+        if (prev.vendor !== "" || loading || publishing) {
+          blocked = true; // Standard Content isn't editable; mid-refresh edits would be lost
+          return { ...row, ...Object.fromEntries(editedKeys.map((k) => [k, (prev as unknown as Record<string, unknown>)[k]])) } as AssemblyBomRow;
+        }
+        // Marked only while it differs from the saved (or loaded) value: typing
+        // something and then removing it leaves the cell unmarked.
+        return { ...row, modified: changedFields(row, row.baseline ?? row.loaded) };
       });
 
-      if (!changed) return;
-      if (changed.vendor !== "") return;
-      if (loading) {
-        // The rows may be the saved copy; editing them could save stale data.
-        client.showMessageBubble("Wait until the assembly tree has finished refreshing, then edit again.");
-        return;
+      if (blocked && (loading || publishing)) {
+        client.showMessageBubble("Wait until the refresh or publish has finished, then edit again.");
       }
 
-      setRows(newData);
-
-      if (!rootIsPublished) {
-        const key: OnshapeKey = {
-          documentID: changed.documentID,
-          wvmType: changed.wvmType,
-          wvmID: changed.wvmID,
-          elementID: changed.elementID,
-        };
-
-        const persistToOnshape = async () => {
-          try {
-            if (changed.isAssembly) {
-              await updateOnshapeBomMetadata(key, {
-                name: changed.name,
-                description: changed.description,
-                partNumber: changed.catalogNumber,
-              });
-            } else {
-              await updateOnshapePartMetadata(key, changed.entityID, {
-                name: changed.name,
-                description: changed.description,
-                catalogNumber: changed.catalogNumber,
-                revision: changed.revision,
-                engineer: changed.engineer,
-                price: changed.price,
-                comments: changed.comments,
-              });
-            }
-            client.showMessageBubble(`"${changed.name}" was updated in the database.`);
-          } catch (err: any) {
-            if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-              navigate(`/signin${location.search}`, { replace: true });
-              return;
-            }
-            const apiErr = err as ApiError;
-            client.showMessageBubble(`Failed to save "${changed.name}": ${apiErr.message}`);
-            setError(apiErr);
-          }
-        };
-
-        persistToOnshape();
-        return;
+      setRows(nextRows);
+      // Keep the saved copy in step, so edits survive closing the panel.
+      if (rootKey) {
+        writeTreeCache(
+          treeCacheKey(rootKey),
+          { rows: nextRows, rootBomDB, rootBom: rootBomSummary(rootOnshapeBom) },
+          treeSavedAtRef.current
+        );
       }
-
-      if (changed.source !== "db") return;
-
-      const key: OnshapeKey = {
-        documentID: changed.documentID,
-        wvmType: changed.wvmType,
-        wvmID: changed.wvmID,
-        elementID: changed.elementID,
-      };
-
-      const persist = async () => {
-        try {
-          if (changed.isAssembly) {
-            await upsertBomById(changed.id, {
-              name: changed.name,
-              description: changed.description,
-              catalogNumber: changed.catalogNumber,
-              engineer: changed.engineer,
-              comments: changed.comments,
-            });
-          } else {
-            await upsertPartById(changed.id, {
-              name: changed.name,
-              description: changed.description,
-              catalogNumber: changed.catalogNumber,
-              revision: changed.revision,
-              engineer: changed.engineer,
-              material: changed.material,
-              mass: changed.mass,
-              price: changed.price,
-              comments: changed.comments,
-            });
-            try {
-              await updateOnshapePartMetadata(key, changed.entityID, {
-                name: changed.name,
-                description: changed.description,
-                catalogNumber: changed.catalogNumber,
-                revision: changed.revision,
-                engineer: changed.engineer,
-                price: changed.price,
-                comments: changed.comments
-              });
-            } catch {
-              // Onshape metadata push is best-effort only.
-            }
-          }
-          client.showMessageBubble(`"${changed.name}" was updated in the database.`);
-        } catch (err: any) {
-          if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
-            navigate(`/signin${location.search}`, { replace: true });
-            return;
-          }
-          const apiErr = err as ApiError;
-          client.showMessageBubble(`Failed to save "${changed.name}": ${apiErr.message}`);
-          setError(apiErr);
-        }
-      };
-
-      persist();
     },
-    [rows, client, rootIsPublished, loading, navigate, location.search]
+    [rows, client, loading, publishing, rootKey, rootBomDB, rootOnshapeBom]
   );
 
+  /**
+   * Publish BOM: writes the tree on screen to the database, replacing what is
+   * saved there. Every assembly and part is written in full with a fresh
+   * thumbnail, STL and Parasolid; the Drive files they replace are deleted.
+   * Cells edited in the table are written to Onshape first, so Onshape stays
+   * the source. It does not reload from Onshape: the table is updated in place.
+   */
   const handlePublish = useCallback(
     async (values: PublishBomFormValues) => {
+      const { rows, rootBomDB, rootOnshapeBom } = currentTreeRef.current;
       if (!rootKey || !rootOnshapeBom) return;
       setPublishing(true);
       setPublishError(null);
@@ -673,21 +696,38 @@ export default function AssemblyBomPage() {
       // Progress: the top assembly, each sub-assembly and each distinct part is one item.
       const total = 1 + rows.filter((r) => r.isAssembly).length + new Set(rows.filter((r) => !r.isAssembly).map((r) => r.id)).size;
       let started = 0;
-      let failedCount = 0;
+      // Problems don't stop the publish; they're reported at the end.
+      const problems: string[] = [];
       const report = (current: string, step: string) =>
-        setPublishProgress({ itemNumber: started, total, current, step, failed: failedCount });
+        setPublishProgress({ itemNumber: started, total, current, step, failed: problems.length });
       const startItem = (current: string, step: string) => {
         started += 1;
         report(current, step);
       };
 
+      /** New Drive file if one was made, else the saved one; remembers the replaced file. */
+      const replaceFile = (oldId: string | undefined, newId: string | null, toDelete: string[]) => {
+        if (newId && oldId && oldId !== newId) toDelete.push(oldId);
+        return newId || oldId || "";
+      };
+      /** Deletes replaced files once the record pointing at the new ones is saved. */
+      const deleteReplaced = async (ids: string[]) => {
+        for (const id of ids) {
+          if (!(await deleteDriveFile(id))) console.warn(`[publish] could not delete replaced Drive file ${id}`);
+        }
+      };
+
+      const onshapeUrlOf = (k: OnshapeKey) =>
+        `https://cad.onshape.com/documents/${k.documentID}/${k.wvmType}/${k.wvmID}/e/${k.elementID}`;
+
       try {
         const isUpdate = Boolean(rootBomDB);
-        startItem(values.name, isUpdate ? "Updating the assembly" : "Saving the assembly");
+        startItem(values.name, isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
         const rootLinks = buildLinkArrays(rootRowId);
-        // On an update, keep the saved thumbnail instead of uploading a new copy to Drive.
-        const rootBomAvatarID = rootBomDB?.avatarID || (await syncBomThumbnailToDrive(rootKey, values.name));
-        await upsertBomById(rootID, {
+        const rootToDelete: string[] = [];
+        const rootAvatar = await syncBomThumbnailToDrive(rootKey, values.name);
+        if (!rootAvatar) problems.push(`Thumbnail of "${values.name}"`);
+        const savedRoot = await upsertBomById(rootID, {
           id: rootID,
           name: values.name,
           description: values.description,
@@ -696,17 +736,20 @@ export default function AssemblyBomPage() {
           engineer: rootBomDB?.engineer || values.defaultEngineer,
           parts: rootLinks.parts,
           subAssemblies: rootLinks.subAssemblies,
-          avatarID: rootBomAvatarID || "",
+          avatarID: replaceFile(rootBomDB?.avatarID, rootAvatar, rootToDelete),
           onshapeID: {
             ...rootKey,
             bomID: rootOnshapeBom.id
           },
-          onshapeURL: `https://cad.onshape.com/documents/${rootKey.documentID}/${rootKey.wvmType}/${rootKey.wvmID}/e/${rootKey.elementID}`,
+          onshapeURL: onshapeUrlOf(rootKey),
         });
+        await deleteReplaced(rootToDelete);
 
-        // Export problems don't stop the publish; they're reported at the end.
-        const fileFailures: string[] = [];
-        // A part used in several places is exported once.
+        // What changed per row, applied to the table at the end.
+        const rowUpdates = new Map<string, Partial<AssemblyBomRow>>();
+        // Rows whose edits could not be written to Onshape stay marked.
+        const unsavedEdits = new Set<string>();
+        // A part used in several places is published once.
         const handledPartIds = new Set<string>();
 
         for (const row of rows) {
@@ -722,83 +765,68 @@ export default function AssemblyBomPage() {
             handledPartIds.add(row.id);
           }
 
-          failedCount = fileFailures.length;
-          startItem(row.name, row.source === "db" ? "Checking" : "Saving");
+          startItem(row.name, "Saving");
 
-          if (row.source === "db") {
-            // Already saved: keep its data and files, but make its item lists
-            // match the current Onshape structure (items added or removed since).
-            // Rows with a saved image show it from Drive; anything else has none saved.
-            const hasSavedImage = typeof row.avatar === "string" && row.avatar.startsWith("/drive/file/id/");
-            if (row.isAssembly) {
-              const links = buildLinkArrays(row.id);
-              const patch: Partial<BomModel> = { parts: links.parts, subAssemblies: links.subAssemblies };
-              if (!hasSavedImage) {
-                report(row.name, "Saving thumbnail");
-                const avatarID = await syncBomThumbnailToDrive(key, row.name);
-                if (avatarID) patch.avatarID = avatarID;
-                else fileFailures.push(`Thumbnail of "${row.name}"`);
+          // 1. Cells changed from what was loaded from Onshape go to Onshape first.
+          const edited = changedFields(row, row.loaded);
+          if (edited.length > 0 && row.vendor === "") {
+            report(row.name, "Writing edits to Onshape");
+            const values_ = row as unknown as Record<string, unknown>;
+            try {
+              if (row.isAssembly) {
+                const data: Record<string, unknown> = {};
+                if (edited.includes("name")) data.name = row.name;
+                if (edited.includes("description")) data.description = row.description;
+                if (edited.includes("catalogNumber")) data["part number"] = row.catalogNumber;
+                if (Object.keys(data).length > 0) await updateOnshapeBomMetadata(key, data);
+              } else {
+                // Material is a library reference in Onshape; it's saved to the database only.
+                const data = Object.fromEntries(edited.filter((k) => k !== "material").map((k) => [k, values_[k]]));
+                if (Object.keys(data).length > 0) await updateOnshapePartMetadata(key, row.entityID, data);
               }
-              await upsertBomById(row.id, patch);
-            } else {
-              const patch: Partial<PartModel> = {};
-              // Restore a name the server replaced with "Unnamed Part".
-              if (row.repairName) patch.name = row.repairName;
-
-              // Saved part without its thumbnail, STL or Parasolid: export just what's missing.
-              const missing = [
-                ...(!hasSavedImage ? (["thumbnail"] as const) : []),
-                ...(!row.exportSTL ? (["stl"] as const) : []),
-                ...(!row.exportParasolid ? (["parasolid"] as const) : []),
-              ];
-              if (missing.length > 0) {
-                report(row.name, `Exporting ${describeFileKinds(missing)}`);
-                const files = await syncPartFilesToDrive(key, row.entityID, row.name, {
-                  configuration: row.configuration,
-                  only: missing,
-                });
-                fileFailures.push(...files.failures);
-                if (files.avatarID) patch.avatarID = files.avatarID;
-                if (files.stlLink) patch.stlLink = files.stlLink;
-                if (files.parasolidLink) patch.parasolidLink = files.parasolidLink;
-              }
-
-              if (Object.keys(patch).length > 0) await upsertPartById(row.id, patch);
+            } catch (err: any) {
+              unsavedEdits.add(row.id);
+              problems.push(`Onshape properties of "${row.name}": ${err?.message || err}`);
             }
-            continue;
           }
 
-          const engineer = row.engineer || values.defaultEngineer;
+          // 2. The full record, with fresh files.
+          const engineer = row.vendor !== "" ? row.vendor : row.engineer || values.defaultEngineer;
+          const toDelete: string[] = [];
           if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
-            report(row.name, "Saving with thumbnail");
-            const bomAvatarId = await syncBomThumbnailToDrive(key, row.name);
+            report(row.name, "Saving thumbnail");
+            const avatar = await syncBomThumbnailToDrive(key, row.name);
+            if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
+            const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
             await upsertBomById(row.id, {
               id: row.id,
               name: row.name,
               description: row.description,
               catalogNumber: row.catalogNumber,
               comments: row.comments,
-              engineer: row.vendor === "" ? engineer : row.vendor,
+              engineer,
               parts: links.parts,
               subAssemblies: links.subAssemblies,
-              onshapeURL: `https://cad.onshape.com/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`,
-              avatarID: bomAvatarId || "",
+              onshapeURL: onshapeUrlOf(key),
+              avatarID,
               onshapeID: {
                 ...key,
                 bomID: row.entityID,
               },
               vendor: row.vendor
             });
+            rowUpdates.set(row.id, { saved: { avatarID } });
           } else {
             report(row.name, "Exporting thumbnail, STL and Parasolid");
-            const { avatarID, stlLink, parasolidLink, failures } = await syncPartFilesToDrive(
-              key,
-              row.entityID,
-              row.name,
-              { configuration: row.configuration }
-            );
-            fileFailures.push(...failures);
+            const files = await syncPartFilesToDrive(key, row.entityID, row.name, { configuration: row.configuration });
+            problems.push(...files.failures);
+            const saved = {
+              avatarID: replaceFile(row.saved?.avatarID, files.avatarID, toDelete),
+              stlLink: replaceFile(row.saved?.stlLink, files.stlLink, toDelete),
+              parasolidLink: replaceFile(row.saved?.parasolidLink, files.parasolidLink, toDelete),
+            };
+            report(row.name, "Saving");
             await upsertPartById(row.id, {
               id: row.id,
               name: row.name,
@@ -809,37 +837,56 @@ export default function AssemblyBomPage() {
               mass: row.mass,
               price: row.price,
               comments: row.comments,
-              engineer: row.vendor === "" ? engineer : row.vendor,
-              ...(avatarID ? { avatarID } : {}),
-              ...(stlLink ? { stlLink } : {}),
-              ...(parasolidLink ? { parasolidLink } : {}),
-              onshapeURL: `https://cad.onshape.com/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`,
+              engineer,
+              avatarID: saved.avatarID,
+              stlLink: saved.stlLink,
+              parasolidLink: saved.parasolidLink,
+              onshapeURL: onshapeUrlOf(key),
               onshapeID: {
                 ...key,
                 partID: row.entityID,
               },
               vendor: row.vendor
             });
+            rowUpdates.set(row.id, { saved, exportSTL: saved.stlLink, exportParasolid: saved.parasolidLink });
           }
+
+          // 3. The record now points at the new files; remove the ones it replaced.
+          await deleteReplaced(toDelete);
         }
 
-        failedCount = fileFailures.length;
-        report("", "Reloading the tree");
+        report("", "Finishing");
 
-        client.showMessageBubble(
-          isUpdate
-            ? `"${values.name}" was updated in the database.`
-            : `"${values.name}" and its contents were published to the database.`
+        // Everything shown is now saved: update the table in place (no reload).
+        const nextRows = rows.map((r) => ({
+          ...r,
+          ...(rowUpdates.get(r.id) ?? {}),
+          source: "db" as const,
+          dbAction: "",
+          // The database now holds what's shown. Onshape too, unless writing the
+          // edits failed: then the next publish retries them.
+          baseline: editableValues(r),
+          loaded: unsavedEdits.has(r.id) ? r.loaded : editableValues(r),
+          modified: [],
+        }));
+        setRows(nextRows);
+        setRootBomDB(savedRoot);
+        setRootIsPublished(true);
+        writeTreeCache(
+          treeCacheKey(rootKey),
+          { rows: nextRows, rootBomDB: savedRoot, rootBom: rootBomSummary(rootOnshapeBom) },
+          treeSavedAtRef.current
         );
-        if (fileFailures.length > 0) {
-          console.warn("[publish] files not saved:", fileFailures);
+
+        client.showMessageBubble(`"${values.name}" was published to the database.`);
+        if (problems.length > 0) {
+          console.warn("[publish] problems:", problems);
           client.showMessageBubble(
-            `${fileFailures.length} file${fileFailures.length === 1 ? "" : "s"} could not be saved to Drive ` +
-              `(first: ${fileFailures[0]}). Run Update BOM again to retry the missing ones.`
+            `${problems.length} item${problems.length === 1 ? "" : "s"} could not be fully saved ` +
+              `(first: ${problems[0]}). Publish BOM again to retry.`
           );
         }
         setPublishOpen(false);
-        await loadTree();
       } catch (err: any) {
         if (err?.statusCode === 401 || err?.statusCode === 403 || err?.statusCode === 429) {
           navigate(`/signin${location.search}`, { replace: true });
@@ -853,8 +900,27 @@ export default function AssemblyBomPage() {
         setPublishProgress(null);
       }
     },
-    [rootKey, rootOnshapeBom, rootBomDB, rows, client, loadTree, navigate, location.search]
+    [rootKey, client, navigate, location.search]
   );
+
+  /**
+   * Refresh BOM: reload everything from Onshape (database only for fields
+   * Onshape lacks). Saves nothing, and discards edits not published yet -
+   * after asking, when there are any.
+   */
+  const handleRefresh = useCallback(() => {
+    const editedItems = currentTreeRef.current.rows.filter((r) => changedFields(r, r.loaded).length > 0);
+    if (editedItems.length > 0) {
+      const names = editedItems.slice(0, 5).map((r) => `• ${r.name}`).join("\n");
+      const more = editedItems.length > 5 ? `\n…and ${editedItems.length - 5} more` : "";
+      const ok = window.confirm(
+        `Refresh BOM will discard your unpublished edits to ${editedItems.length} item${editedItems.length === 1 ? "" : "s"}:\n\n` +
+          `${names}${more}\n\nPublish BOM first to keep them. Discard and refresh?`
+      );
+      if (!ok) return;
+    }
+    loadTree();
+  }, [loadTree]);
 
   if (isVerifyingApi) {
     return (
@@ -872,7 +938,9 @@ export default function AssemblyBomPage() {
     );
   }
 
-  const displayName = rootBomDB?.name || rootOnshapeBom?.name.slice(6) || "Assembly";
+  // Onshape first; the database only for what Onshape doesn't have.
+  const displayName = rootOnshapeBom?.name.slice(6) || rootBomDB?.name || "Assembly";
+  const pendingEditCount = rows.reduce((n, r) => n + (r.modified?.length ?? 0), 0);
 
   return (
     <div className="assembly-bom-page p-8 flex gap-6">
@@ -880,7 +948,9 @@ export default function AssemblyBomPage() {
         <div className="assembly-bom-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
           <div>
             <h1 className="assembly-bom-title text-2xl font-bold">{displayName}</h1>
-            {rootBomDB?.description && <p className="assembly-bom-subtitle text-zinc-500 text-sm mt-1">{rootBomDB.description}</p>}
+            {(rootOnshapeBom?.description || rootBomDB?.description) && (
+              <p className="assembly-bom-subtitle text-zinc-500 text-sm mt-1">{rootOnshapeBom?.description || rootBomDB?.description}</p>
+            )}
             {!rootIsPublished && (
               <p className="assembly-bom-unpublished-hint text-xs text-blue-500 mt-1 italic">
                 This assembly isn't in the database yet - it's showing live Onshape data.
@@ -904,11 +974,21 @@ export default function AssemblyBomPage() {
             <button
               type="button"
               className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
-              onClick={() => setPublishOpen(true)}
-              disabled={loading}
-              title={rootIsPublished ? "Add new items and refresh the assembly structure in the database" : undefined}
+              onClick={handleRefresh}
+              disabled={loading || publishing}
+              title="Reload everything from Onshape (the database only for fields Onshape doesn't have). Saves nothing; discards edits not published yet."
             >
-              {rootIsPublished ? "Update BOM" : "Publish to database"}
+              {loading ? "Refreshing..." : "Refresh BOM"}
+            </button>
+
+            <button
+              type="button"
+              className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
+              onClick={() => setPublishOpen(true)}
+              disabled={loading || publishing || rows.length === 0}
+              title="Save everything shown to the database, replacing the saved data and files, and write edited cells to Onshape"
+            >
+              {publishing ? "Publishing..." : pendingEditCount > 0 ? `Publish BOM (${pendingEditCount} changes)` : "Publish BOM"}
             </button>
           </div>
         </div>
@@ -946,9 +1026,7 @@ export default function AssemblyBomPage() {
           {loading && (
             <div className="assembly-bom-refreshing mb-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate">
-                  {cachedAt !== null ? `Saved copy from ${describeAge(cachedAt)} - refreshing...` : "Refreshing..."}
-                </span>
+                <span className="truncate">Refreshing from Onshape...</span>
                 {loadProgress && loadProgress.total > 0 && (
                   <span className="shrink-0">
                     {Math.min(loadProgress.done, loadProgress.total)} / {loadProgress.total}
@@ -965,9 +1043,38 @@ export default function AssemblyBomPage() {
               )}
             </div>
           )}
-          {!loading && cachedAt !== null && (
-            <div className="assembly-bom-refreshing mb-2 text-xs text-amber-400">
-              Showing the saved copy from {describeAge(cachedAt)}; refreshing failed.
+          {publishing && publishProgress && !publishOpen && (
+            <div className="assembly-bom-refreshing mb-2 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-400">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">
+                  {publishProgress.current
+                    ? `Saving to database - ${publishProgress.current}: ${publishProgress.step}`
+                    : publishProgress.step}
+                </span>
+                <span className="shrink-0">
+                  {publishProgress.failed > 0 && (
+                    <span className="text-amber-400 mr-2">{publishProgress.failed} failed</span>
+                  )}
+                  {publishProgress.itemNumber} / {publishProgress.total}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 transition-all duration-200"
+                  style={{
+                    width: `${Math.round(
+                      ((publishProgress.current ? publishProgress.itemNumber - 1 : publishProgress.total) /
+                        Math.max(publishProgress.total, 1)) *
+                        100
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          {!loading && !publishing && cachedAt !== null && (
+            <div className="assembly-bom-refreshing mb-2 text-xs text-zinc-500">
+              Saved copy from {describeAge(cachedAt)}. Press Refresh BOM to reload from Onshape.
             </div>
           )}
           <Table
@@ -984,16 +1091,13 @@ export default function AssemblyBomPage() {
           <PublishBomModal
             open
             mode={rootIsPublished ? "update" : "publish"}
-            initialValues={
-              rootBomDB
-                ? {
-                    name: rootBomDB.name || displayName,
-                    catalogNumber: rootBomDB.catalogNumber || "",
-                    description: rootBomDB.description || "",
-                    comments: rootBomDB.comments || "",
-                  }
-                : { name: displayName }
-            }
+            initialValues={{
+              // Onshape first; the database for what Onshape doesn't have.
+              name: displayName,
+              catalogNumber: rootOnshapeBom?.partNumber || rootBomDB?.catalogNumber || "",
+              description: rootOnshapeBom?.description || rootBomDB?.description || "",
+              comments: rootBomDB?.comments || "",
+            }}
             onCancel={() => (publishing ? undefined : setPublishOpen(false))}
             onSubmit={handlePublish}
             submitting={publishing}

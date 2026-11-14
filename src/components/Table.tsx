@@ -21,6 +21,61 @@ interface RowContextMenuState {
     rowId: string | null;
 }
 
+interface DraftInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> {
+    value: string | number | undefined | null;
+    /** Called once with the final text when the edit ends (blur, Enter, Tab, arrow out), only if it changed. */
+    onCommit: (text: string) => void;
+}
+
+/**
+ * Text cell that keeps its own draft while focused and hands the value to the
+ * table only when the edit ends. Committing on every keystroke re-sorted and
+ * re-rendered the whole table per key, which moved rows mid-edit, dropped
+ * focus (and the select-on-focus then replaced the text) and made typing lag.
+ * Escape cancels the edit.
+ */
+function DraftInput({ value, onCommit, onKeyDown, onFocus, ...rest }: DraftInputProps) {
+    const external = value == null ? '' : String(value);
+    const [draft, setDraft] = useState(external);
+    const editingRef = useRef(false);
+    const cancelledRef = useRef(false);
+
+    // Follow outside changes (refresh, publish, sort) unless the user is typing.
+    useEffect(() => {
+        if (!editingRef.current) setDraft(external);
+    }, [external]);
+
+    return (
+        <input
+            {...rest}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onFocus={(e) => {
+                editingRef.current = true;
+                cancelledRef.current = false;
+                onFocus?.(e);
+            }}
+            onBlur={() => {
+                editingRef.current = false;
+                if (cancelledRef.current) {
+                    setDraft(external);
+                    return;
+                }
+                if (draft !== external) onCommit(draft);
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                    cancelledRef.current = true;
+                    setDraft(external);
+                    e.currentTarget.blur();
+                    return;
+                }
+                onKeyDown?.(e);
+            }}
+        />
+    );
+}
+
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortConfig {
@@ -36,6 +91,8 @@ export interface ColumnConfig {
     onButtonClick?: (row: RowData & any) => void;
     options?: string[];
     isDisabled?: (row: RowData & any) => boolean;
+    /** Highlights the cell (class "cell-modified"), e.g. for an edit not saved yet. */
+    isModified?: (row: RowData & any) => boolean;
     apiPath?: string | ((value: any) => string);
 }
 
@@ -529,7 +586,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                         let displayValue: string | number = row[col.key] as string | number;
 
                                         return (
-                                            <td key={col.key} className={`table-td ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''}`}>
+                                            <td key={col.key} className={`table-td ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''}`}>
                                                 <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
                                                     {colIndex === 0 && isRowParent && (
                                                         <button className="expand-toggle" onClick={(e) => toggleExpand(row.id, e)}>{row.isExpanded ? '▼' : '▶'}</button>
@@ -583,14 +640,13 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                             disabled={isCellDisabled}
                                                         />
                                                     ) : col.type === 'number' ? (
-                                                        <input
+                                                        <DraftInput
                                                             data-row={rowIndex}
                                                             data-col={colIndex}
                                                             type="text"
                                                             inputMode={col.key === 'quantity' || col.key === 'revision' ? 'numeric' : 'decimal'}
                                                             value={displayValue}
-                                                            onChange={(e) => handleCellChange(row.id, col, e.target.value)}
-                                                            onBlur={(e) => handleNumberBlur(row.id, col, e.target.value)}
+                                                            onCommit={(text) => handleNumberBlur(row.id, col, text)}
                                                             onFocus={(e) => e.target.select()}
                                                             onKeyDown={(e) => {
                                                                 if (e.key === 'Enter') {
@@ -604,12 +660,12 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                             disabled={isCellDisabled}
                                                         />
                                                     ) : (
-                                                        <input
+                                                        <DraftInput
                                                             data-row={rowIndex}
                                                             data-col={colIndex}
                                                             type="text"
                                                             value={displayValue}
-                                                            onChange={(e) => handleCellChange(row.id, col, e.target.value)}
+                                                            onCommit={(text) => handleCellChange(row.id, col, text)}
                                                             onFocus={(e) => e.target.select()}
                                                             onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
                                                             onClick={(e) => e.stopPropagation()}

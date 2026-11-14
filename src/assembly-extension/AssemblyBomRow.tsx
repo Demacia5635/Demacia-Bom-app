@@ -28,8 +28,15 @@ export default interface AssemblyBomRow extends BomTableRow {
   /** Onshape configuration of a part row (empty for the default); exports use it. */
   configuration?: string;
   /**
-   * Set when the saved part's name is the server's "Unnamed Part" placeholder:
-   * the name from Onshape, which Update BOM writes back to the database.
+   * Keys of editable cells whose value differs from `baseline`: what Publish
+   * BOM would change. Edits stay local (and in the saved copy of the tree)
+   * until Publish BOM, which writes them to Onshape and the database.
    */
-  repairName?: string;
+  modified?: string[];
+  /** Editable values as saved in the database, or as loaded when the item isn't saved yet. */
+  baseline?: Record<string, string | number>;
+  /** Editable values as loaded by the last Refresh BOM; cells changed from these are written to Onshape. */
+  loaded?: Record<string, string | number>;
+  /** Drive file IDs currently saved for this item, replaced (then deleted) by Publish BOM. */
+  saved?: { avatarID?: string; stlLink?: string; parasolidLink?: string };
 }

@@ -216,7 +216,9 @@ export function getOnshapePartParasolid(key: OnshapeKey, partID: string, configu
 /**
  * Image src for a row that isn't saved in the database yet, in the Chrome
  * extension (the web app has no Onshape session, so nothing there).
- * - Assemblies: Onshape's stored thumbnail of the element.
+ * - Assemblies: a rendered view of the assembly as it is now. Onshape's
+ *   stored element thumbnail can be out of date (e.g. still showing a feature
+ *   that was removed).
  * - Parts: a rendered view of just that part (in its configuration). Onshape
  *   stores thumbnails per Part Studio, not per part, so the thumbnail of a
  *   part in a multi-part Part Studio shows the whole studio; Standard Content
@@ -229,7 +231,7 @@ export function getOnshapeThumbnailSrc(
 ): string {
   if (!isChromeExtension()) return "";
   if (partID) return onshapeDirect.shadedViewUrl(key, partID, source?.configuration);
-  return onshapeDirect.thumbnailUrl(key);
+  return onshapeDirect.assemblyShadedViewUrl(key);
 }
 
 export function getOnshapeBomThumbnail(key: OnshapeKey): Promise<Blob> {
@@ -291,6 +293,23 @@ export interface PartFilesResult {
  * `only` limits which files are made (e.g. just the missing ones); by default
  * all three. Failures don't throw: they're listed in `failures`.
  */
+/**
+ * Deletes a file from Google Drive (used after Publish BOM replaced it).
+ * Best-effort: returns false instead of throwing, so a leftover file never
+ * fails a publish.
+ */
+export async function deleteDriveFile(fileId: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${BASE_URL}/drive/file/id/${encodeURIComponent(fileId)}`, {
+      method: "DELETE",
+      headers: getBomApiHeaders(""),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function syncPartFilesToDrive(
   key: OnshapeKey,
   partID: string,

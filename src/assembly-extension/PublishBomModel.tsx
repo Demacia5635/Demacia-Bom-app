@@ -20,7 +20,7 @@ export interface PublishProgress {
   current: string;
   /** What's happening to it, e.g. "Exporting STL and Parasolid". */
   step: string;
-  /** Files that could not be saved so far. */
+  /** Problems so far (files not saved, edits not written to Onshape). */
   failed: number;
 }
 
@@ -66,11 +66,11 @@ export default function PublishBomModal({
     <div className="publish-modal-overlay" onClick={submitting ? undefined : onCancel}>
       <div className="publish-modal" onClick={(e) => e.stopPropagation()}>
         <div className="publish-modal-header">
-          <h2>{isUpdate ? "Update assembly in the database" : "Publish assembly to the database"}</h2>
+          <h2>Publish BOM</h2>
           <p>
             {isUpdate
-              ? "This will save the details below, add every part or sub-assembly that isn't in the database yet, and update which items each assembly contains to match Onshape. Items already saved keep their data and files."
-              : "This will save the assembly and every part or sub-assembly beneath it that isn't already in the database."}
+              ? "Saves the assembly and everything in it as shown, replacing the saved data. Thumbnails, STL and Parasolid files are exported again and the old copies are deleted from Drive. Edited cells are also written to Onshape."
+              : "Saves the assembly and everything in it to the database, with thumbnails, STL and Parasolid files. Edited cells are also written to Onshape."}
           </p>
         </div>
 
@@ -119,11 +119,11 @@ export default function PublishBomModal({
           </label>
 
           <label className="publish-field">
-            <span>{isUpdate ? "Engineer for new items" : "Default engineer"}</span>
+            <span>Default engineer</span>
             <input
               value={defaultEngineer}
               onChange={(e) => setDefaultEngineer(e.target.value)}
-              placeholder={isUpdate ? "Applied to new items without one set" : "Applied to any part without one set"}
+              placeholder="Applied to any item without one set"
               disabled={submitting}
             />
           </label>
@@ -138,7 +138,7 @@ export default function PublishBomModal({
                 </span>
                 {progress.failed > 0 && (
                   <span className="publish-progress-failed">
-                    {progress.failed} file{progress.failed === 1 ? "" : "s"} failed
+                    {progress.failed} problem{progress.failed === 1 ? "" : "s"}
                   </span>
                 )}
               </div>
@@ -163,7 +163,7 @@ export default function PublishBomModal({
               Cancel
             </button>
             <button type="submit" className="publish-btn-primary" disabled={!canSubmit || submitting}>
-              {submitting ? (isUpdate ? "Updating..." : "Publishing...") : isUpdate ? "Update" : "Publish"}
+              {submitting ? "Publishing..." : "Publish"}
             </button>
           </div>
         </form>

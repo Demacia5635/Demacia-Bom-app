@@ -264,8 +264,35 @@ export function shadedViewUrl(key: OnshapeElementKey, partID: string, configurat
   return `${onshapeServer}/api/v9/parts/${seg(key)}/partid/${pid(partID)}/shadedviews?${q}`;
 }
 
-export function getElementThumbnail(key: OnshapeElementKey, size = "300x300"): Promise<Blob> {
-  return onshapeBlob(`/thumbnails/${seg(key)}/s/${size}`, "image/png");
+/**
+ * Rendered isometric view of an assembly as it is now. Used instead of the
+ * stored element thumbnail, which Onshape refreshes on its own schedule and
+ * can show an older state of the model. Responds with JSON
+ * `{ images: [base64Png] }`, which AuthenticatedImage understands.
+ */
+export function assemblyShadedViewUrl(key: OnshapeElementKey, px = 120): string {
+  const q = new URLSearchParams({
+    outputHeight: String(px),
+    outputWidth: String(px),
+    pixelSize: "0",
+    viewMatrix: "isometric",
+  });
+  return `${onshapeServer}/api/v9/assemblies/${seg(key)}/shadedviews?${q}`;
+}
+
+/** PNG of an assembly as it is now (rendered, not the stored thumbnail), for saving to Drive. */
+export function getElementThumbnail(key: OnshapeElementKey, px = 300): Promise<Blob> {
+  return renderedPng(assemblyShadedViewUrl(key, px), "assembly");
+}
+
+/** Fetches a shaded-view URL and returns its first image as a PNG blob. */
+async function renderedPng(url: string, what: string): Promise<Blob> {
+  const res = await onshapeFetch(url.slice(`${onshapeServer}/api`.length));
+  const json = (await res.json()) as { images?: string[] };
+  const base64 = json.images?.[0];
+  if (!base64) throw onshapeError(404, `Onshape returned no rendered image for this ${what}`);
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  return new Blob([bytes], { type: "image/png" });
 }
 
 /**
@@ -279,13 +306,7 @@ export async function getPartThumbnail(
   configuration?: string,
   px = 300
 ): Promise<Blob> {
-  const url = shadedViewUrl(key, partID, configuration, px);
-  const res = await onshapeFetch(url.slice(`${onshapeServer}/api`.length));
-  const json = (await res.json()) as { images?: string[] };
-  const base64 = json.images?.[0];
-  if (!base64) throw onshapeError(404, "Onshape returned no rendered image for this part");
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  return new Blob([bytes], { type: "image/png" });
+  return renderedPng(shadedViewUrl(key, partID, configuration, px), "part");
 }
 
 /** `?configuration=...` (or "") so exports match the configuration used in the assembly. */
