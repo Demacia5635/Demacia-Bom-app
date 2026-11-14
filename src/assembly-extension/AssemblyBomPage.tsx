@@ -714,6 +714,12 @@ export default function AssemblyBomPage() {
     [rows, client, loading, publishing, rootKey, rootBomDB, rootOnshapeBom]
   );
 
+  /** Expand all / Collapse all (kept in the saved copy like any other expand). */
+  const setAllExpanded = useCallback(
+    (expanded: boolean) => handleTableEdit(rows.map((r) => (r.isExpanded === expanded ? r : { ...r, isExpanded: expanded }))),
+    [rows, handleTableEdit]
+  );
+
   /**
    * Publish BOM: writes the tree on screen to the database, replacing what is
    * saved there. Every assembly and part is written in full with a fresh
@@ -1210,6 +1216,24 @@ export default function AssemblyBomPage() {
               Saved copy from {describeAge(cachedAt)}. Press Refresh BOM to reload from Onshape.
             </div>
           )}
+          <div className="assembly-bom-toolbar mb-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="bom-toolbar-btn"
+              onClick={() => setAllExpanded(true)}
+              title="Show every sub-assembly's contents"
+            >
+              Expand all
+            </button>
+            <button
+              type="button"
+              className="bom-toolbar-btn"
+              onClick={() => setAllExpanded(false)}
+              title="Show only the top level"
+            >
+              Collapse all
+            </button>
+          </div>
           <Table
             data={rows}
             columnsData={columns}

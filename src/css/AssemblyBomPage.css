@@ -36,6 +36,32 @@
   font-size: 0.85rem;
 }
 
+/* ---- Toolbar above the table (expand/collapse, search, problems) -------- */
+
+.bom-toolbar-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid #3f3f46;
+  background: transparent;
+  color: #d4d4d8;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.bom-toolbar-btn:hover:not(:disabled) {
+  background: #27272a;
+}
+
+body.light-theme-active .bom-toolbar-btn {
+  border-color: #d4d4d8;
+  color: #3f3f46;
+}
+
+body.light-theme-active .bom-toolbar-btn:hover:not(:disabled) {
+  background: #f4f4f5;
+}
+
 /* ---- Publish modal ---------------------------------------------------- */
 
 .publish-modal-overlay {
