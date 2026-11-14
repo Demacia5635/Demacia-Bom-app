@@ -5,6 +5,9 @@ import type WorkOrderTableRow from "./WorkOrderTableRow";
 /** Vendor parts and Onshape Standard Content: their name isn't edited here. */
 const isBoughtPart = (row: WorkOrderTableRow) => row.vendor !== "" || !!row.isStandardContent;
 
+export const MANUFACTURING_METHODS = ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased'];
+export const PRIORITIES = ['High', 'Medium', 'Low', 'Untracked', 'Finished'];
+
 // Avatar and name come first: the table freezes the first two columns.
 const WorkOrderColumns: ColumnConfig[] = [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: isBoughtPart },
@@ -26,7 +29,7 @@ const WorkOrderColumns: ColumnConfig[] = [
         key: "manufacturingMethod",
         label: "Manufacturing Method",
         type: "select",
-        options: ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased'],
+        options: MANUFACTURING_METHODS,
         // Standard Content is always "Purchased".
         isDisabled: (row: WorkOrderTableRow) => !!row.isStandardContent,
     },
@@ -35,7 +38,7 @@ const WorkOrderColumns: ColumnConfig[] = [
         key: "Priority", 
         label: "Priority", 
         type: "select", 
-        options: ['High', 'Medium', 'Low', 'Untracked', 'Finished'] 
+        options: PRIORITIES,
     },
     { key: "comments", label: "Comments", type: "string", isDisabled: () => true }, // Read-only
     { key: "links", label: "Links", type: "string" },

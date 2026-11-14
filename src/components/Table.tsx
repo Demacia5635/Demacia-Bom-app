@@ -663,7 +663,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                             const isRowParent = isParent(row.id);
 
                             return (
-                                <tr key={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row.id)}>
+                                <tr key={row.id} data-row-id={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row.id)}>
                                     {columns.map((col, colIndex) => {
                                         let isCellDisabled = col.isDisabled ? col.isDisabled(row) : false;
                                         let displayValue: string | number = row[col.key] as string | number;

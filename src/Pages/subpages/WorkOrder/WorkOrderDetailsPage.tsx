@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef, useCallback, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
 import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import Table from "../../../components/Table";
-import WorkOrderColumns from "./WorkOrderColumns";
+import WorkOrderColumns, { MANUFACTURING_METHODS, PRIORITIES } from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
@@ -44,6 +44,31 @@ const getCleanPartName = (record: any, entityID: string) => {
 
     return rawName || entityID;
 };
+
+/** Bought, not made: Onshape Standard Content, a vendor part, or set to "Purchased". */
+const isPurchasedRow = (row: WorkOrderTableRow) =>
+    !!row.isStandardContent || (row.vendor ?? "").trim() !== "" || row.manufacturingMethod === "Purchased";
+
+// The work-order filters are remembered in this browser (the same for every work order).
+const FILTER_STORAGE_PREFIX = "workOrderFilter:";
+function readFilter(name: string): string[] {
+    try {
+        const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_PREFIX + name) || "[]");
+        return Array.isArray(saved) ? saved.filter((v) => typeof v === "string") : [];
+    } catch {
+        return [];
+    }
+}
+function writeFilter(name: string, values: string[]) {
+    try {
+        localStorage.setItem(FILTER_STORAGE_PREFIX + name, JSON.stringify(values));
+    } catch {
+        // Storage unavailable (private window): filters just aren't remembered.
+    }
+}
+
+const toggleIn = (list: string[], value: string) =>
+    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
 export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
@@ -284,6 +309,31 @@ export default function WorkOrderDetailsPage() {
         debouncedSaveToDb(processedData);
     };
 
+    /** The row a table <tr> shows (the Table tags each one with its row ID). */
+    const rowFromElement = (tr: Element): WorkOrderTableRow | undefined => {
+        const id = tr.getAttribute("data-row-id");
+        return id ? rows.find((r) => r.id === id) : undefined;
+    };
+
+    // ---- Filters for the people making the parts (remembered in this browser) ----
+    const [methodFilter, setMethodFilter] = useState<string[]>(() => readFilter("methods"));
+    const [priorityFilter, setPriorityFilter] = useState<string[]>(() => readFilter("priorities"));
+    const [hidePurchased, setHidePurchased] = useState<boolean>(() => readFilter("hidePurchased").length > 0);
+    useEffect(() => {
+        writeFilter("methods", methodFilter);
+        writeFilter("priorities", priorityFilter);
+        writeFilter("hidePurchased", hidePurchased ? ["1"] : []);
+    }, [methodFilter, priorityFilter, hidePurchased]);
+
+    const rowFilter = useMemo(() => {
+        if (methodFilter.length === 0 && priorityFilter.length === 0 && !hidePurchased) return undefined;
+        return (row: WorkOrderTableRow) =>
+            (methodFilter.length === 0 || methodFilter.includes(row.manufacturingMethod)) &&
+            (priorityFilter.length === 0 || priorityFilter.includes(row.Priority)) &&
+            !(hidePurchased && isPurchasedRow(row));
+    }, [methodFilter, priorityFilter, hidePurchased]);
+    const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
+
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const cellEl = target.closest(".table-td, td");
@@ -292,14 +342,9 @@ export default function WorkOrderDetailsPage() {
         const trEl = cellEl.closest(".table-tr, tr");
         if (!trEl) return;
 
-        const tbody = trEl.closest("tbody") || trEl.parentElement;
-        if (!tbody) return;
-
-        const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
-        const rowIndex = trs.indexOf(trEl);
-
-        if (rowIndex !== -1 && rows[rowIndex]) {
-            const clickedRow = rows[rowIndex];
+        // By ID: with sorting or filters the on-screen order isn't the order of `rows`.
+        const clickedRow = rowFromElement(trEl);
+        if (clickedRow) {
             const cellsInRow = Array.from(trEl.querySelectorAll(".table-td, td"));
             const cellIndex = cellsInRow.indexOf(cellEl);
 
@@ -317,17 +362,12 @@ export default function WorkOrderDetailsPage() {
         e.preventDefault();
         e.stopPropagation();
 
-        const tbody = rowEl.closest("tbody") || rowEl.parentElement;
-        if (!tbody) return;
-
-        const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
-        const rowIndex = trs.indexOf(rowEl);
-
-        if (rowIndex !== -1 && rows[rowIndex]) {
+        const row = rowFromElement(rowEl);
+        if (row) {
             setContextMenu({
                 x: e.clientX,
                 y: e.clientY,
-                row: rows[rowIndex],
+                row,
             });
         }
     };
@@ -352,6 +392,12 @@ export default function WorkOrderDetailsPage() {
 
     const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
     const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
+    const filterCard = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
+    const filterLabel = isLight ? "text-zinc-600" : "text-zinc-400";
+    const chipOn = "bg-blue-600 border-blue-600 text-white";
+    const chipOff = isLight
+        ? "border-zinc-300 text-zinc-700 hover:bg-zinc-100"
+        : "border-zinc-700 text-zinc-300 hover:bg-zinc-800";
 
     return (
         <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
@@ -376,7 +422,74 @@ export default function WorkOrderDetailsPage() {
             {loading ? (
                 <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
             ) : (
-                <div 
+                <>
+                {rows.length > 0 && (
+                    <div className={`mb-3 rounded-xl border p-3 space-y-2 text-xs ${filterCard}`}>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`w-36 shrink-0 font-semibold ${filterLabel}`}>Manufacturing method</span>
+                            {MANUFACTURING_METHODS.map((m) => {
+                                const count = rows.filter((r) => r.manufacturingMethod === m).length;
+                                return (
+                                    <button
+                                        key={m}
+                                        type="button"
+                                        onClick={() => setMethodFilter((list) => toggleIn(list, m))}
+                                        aria-pressed={methodFilter.includes(m)}
+                                        className={`rounded-full border px-2.5 py-0.5 transition-colors ${methodFilter.includes(m) ? chipOn : chipOff} ${count === 0 ? "opacity-50" : ""}`}
+                                    >
+                                        {m} <span className="opacity-70">{count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`w-36 shrink-0 font-semibold ${filterLabel}`}>Priority</span>
+                            {PRIORITIES.map((p) => {
+                                const count = rows.filter((r) => r.Priority === p).length;
+                                return (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => setPriorityFilter((list) => toggleIn(list, p))}
+                                        aria-pressed={priorityFilter.includes(p)}
+                                        className={`rounded-full border px-2.5 py-0.5 transition-colors ${priorityFilter.includes(p) ? chipOn : chipOff} ${count === 0 ? "opacity-50" : ""}`}
+                                    >
+                                        {p} <span className="opacity-70">{count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
+                                <input
+                                    type="checkbox"
+                                    checked={hidePurchased}
+                                    onChange={(e) => setHidePurchased(e.target.checked)}
+                                />
+                                Hide purchased & standard parts ({rows.filter(isPurchasedRow).length})
+                            </label>
+                            <div className="flex items-center gap-3">
+                                <span className={filterLabel}>
+                                    Showing {shownCount} of {rows.length} parts
+                                </span>
+                                {rowFilter && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMethodFilter([]);
+                                            setPriorityFilter([]);
+                                            setHidePurchased(false);
+                                        }}
+                                        className="font-semibold text-blue-500 hover:underline"
+                                    >
+                                        Clear filters
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <div
                     onClick={handleTableClick}
                     onContextMenuCapture={handleTableContextMenuCapture} 
                     className="relative cursor-pointer"
@@ -389,6 +502,7 @@ export default function WorkOrderDetailsPage() {
                         // Like Excel's freeze panes: header row + avatar and name stay visible.
                         stickyHeader
                         frozenColumns={2}
+                        rowFilter={rowFilter}
                     />
 
                     {contextMenu && (
@@ -406,6 +520,7 @@ export default function WorkOrderDetailsPage() {
                         </div>
                     )}
                 </div>
+                </>
             )}
 
             {isPartPortalOpen && selectedPart && (
