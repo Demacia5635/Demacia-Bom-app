@@ -17,7 +17,8 @@ import type { OnshapeKey } from "./BomApi";
 // 3: rows from Onshape (+ pending edits, saved file IDs); root keeps description/part number.
 // 4: assembly images are live renders instead of Onshape's stored thumbnails.
 // 5: rows track baseline/loaded values for change marking.
-const VERSION = 5;
+// 6: rows carry isStandardContent.
+const VERSION = 6;
 const PREFIX = "demacia-bom-tree:";
 const INDEX_KEY = "demacia-bom-tree-index";
 const MAX_ENTRIES = 20;

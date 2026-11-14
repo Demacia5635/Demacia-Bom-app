@@ -27,6 +27,8 @@ export default interface AssemblyBomRow extends BomTableRow {
   dbAction: string;
   /** Onshape configuration of a part row (empty for the default); exports use it. */
   configuration?: string;
+  /** Onshape Standard Content (screws, nuts, washers...): bought, not made, and not editable. */
+  isStandardContent?: boolean;
   /**
    * Keys of editable cells whose value differs from `baseline`: what Publish
    * BOM would change. Edits stay local (and in the saved copy of the tree)

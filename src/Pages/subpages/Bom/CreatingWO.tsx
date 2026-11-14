@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { fetchFromApi } from "../../../util/ApiService";
-import type { BomModel, PartModel, WorkorderModel, WorkorderPartModel } from "../../../util/Models";
+import { isPurchasedPart, type BomModel, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
 
 export interface WorkOrderFormData {
     name: string;
@@ -64,8 +64,9 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             const material = partRecord?.material?.trim() || "";
             const engineer = partRecord?.engineer?.trim() || "";
             
-            // Check if it's an externally purchased part (has a vendor specified)
-            const isPurchased = Boolean(partRecord?.vendor && partRecord.vendor.trim() !== "");
+            // Bought, not made (Onshape Standard Content such as screws, or a part
+            // with a vendor): no catalog number, material or engineer needed.
+            const isPurchased = isPurchasedPart(partRecord);
 
             if (!isPurchased) {
                 // 1. Verify format AABB-CCDD (e.g., 2603-1001)
@@ -93,7 +94,9 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
                 partID: p.partID,
                 quantityTotal: p.quantity,
                 quantityMade: 0,
-                statusCode: 0,
+                // Purchased parts aren't manufactured, so their progress isn't tracked.
+                statusCode: isPurchased ? "Untracked" : 0,
+                ...(isPurchased ? { manufacturingMethod: "Purchased" } : {}),
                 productionGCOwner: "",
                 productionMakingOwner: "",
                 updatedAt: new Date(),

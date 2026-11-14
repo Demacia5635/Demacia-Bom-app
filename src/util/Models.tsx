@@ -39,15 +39,25 @@ export interface PartModel {
   parasolidLink?: string;
   onshapeID?: OnshapeID & { partID: string};
   vendor?: string;
+  /** Onshape Standard Content (screws, nuts, washers...): bought, not made. */
+  isStandardContent?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+/** Bought rather than made: has a vendor, or is Onshape Standard Content. */
+export function isPurchasedPart(part: Pick<PartModel, "vendor" | "isStandardContent"> | null | undefined): boolean {
+  return Boolean(part?.isStandardContent || (part?.vendor && part.vendor.trim() !== ""));
 }
 
 export interface WorkorderPartModel {
   partID: string;
   quantityTotal?: number;
   quantityMade?: number;
-  statusCode?: number;
+  /** A number (older work orders) or a status name such as "In Planning" / "Untracked". */
+  statusCode?: number | string;
+  /** e.g. "Manual", "CNC", "Purchased". */
+  manufacturingMethod?: string;
   productionGCOwner?: string;
   productionMakingOwner?: string;
   updatedAt?: Date;

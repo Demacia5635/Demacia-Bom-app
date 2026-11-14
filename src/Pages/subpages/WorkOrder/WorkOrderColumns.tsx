@@ -20,7 +20,7 @@ const WorkOrderColumns: ColumnConfig[] = [
         key: "manufacturingMethod", 
         label: "Manufacturing Method", 
         type: "select", 
-        options: ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced'] 
+        options: ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased']
     },
     { key: "material", label: "Material", type: "string", isDisabled: () => true }, // Read-only
     { 

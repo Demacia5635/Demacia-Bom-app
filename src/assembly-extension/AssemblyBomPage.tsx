@@ -57,9 +57,14 @@ function sameValue(field: string, a: unknown, b: unknown): boolean {
   return String(a ?? "").trim() === String(b ?? "").trim();
 }
 
+/** Standard Content and vendor parts come from outside Onshape documents you own: not editable. */
+function isLockedRow(row: AssemblyBomRow): boolean {
+  return row.vendor !== "" || !!row.isStandardContent;
+}
+
 /** Editable cells of `row` that differ from `against` (none for Standard Content, which isn't editable). */
 function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): string[] {
-  if (!against || row.vendor !== "") return [];
+  if (!against || isLockedRow(row)) return [];
   const r = row as unknown as Record<string, unknown>;
   return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
 }
@@ -291,6 +296,7 @@ export default function AssemblyBomPage() {
         dbAction: isExist ? "" : "add",
         vendor: dbPart?.vendor || parsedItem.vendor || "",
         configuration: parsedItem.itemSource.configuration || "",
+        isStandardContent: !!parsedItem.itemSource.isStandardContent,
       }, savedValues);
     },
     [context.server]
@@ -430,7 +436,7 @@ export default function AssemblyBomPage() {
           (k) => (row as unknown as Record<string, unknown>)[k] !== (prev as unknown as Record<string, unknown>)[k]
         );
         if (editedKeys.length === 0) return row; // e.g. expanding/collapsing a row
-        if (prev.vendor !== "" || loading || publishing) {
+        if (isLockedRow(prev) || loading || publishing) {
           blocked = true; // Standard Content isn't editable; mid-refresh edits would be lost
           return { ...row, ...Object.fromEntries(editedKeys.map((k) => [k, (prev as unknown as Record<string, unknown>)[k]])) } as AssemblyBomRow;
         }
@@ -647,7 +653,9 @@ export default function AssemblyBomPage() {
                 ...key,
                 partID: row.entityID,
               },
-              vendor: row.vendor
+              vendor: row.vendor,
+              // Work orders treat these as purchased (no catalog number needed).
+              isStandardContent: !!row.isStandardContent,
             });
             rowUpdates.set(row.id, { saved, exportSTL: saved.stlLink, exportParasolid: saved.parasolidLink });
           }

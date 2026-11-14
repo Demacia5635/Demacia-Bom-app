@@ -262,7 +262,8 @@ export default function WorkOrderDetailsPage() {
             const updated = { ...newRow };
 
             if (oldRow) {
-                if (oldRow.manufacturingMethod !== updated.manufacturingMethod && updated.manufacturingMethod === 'Externally produced') {
+                // Parts made elsewhere or bought aren't tracked through manufacturing.
+                if (oldRow.manufacturingMethod !== updated.manufacturingMethod && (updated.manufacturingMethod === 'Externally produced' || updated.manufacturingMethod === 'Purchased')) {
                     updated.statusCode = 'Untracked';
                 }
 

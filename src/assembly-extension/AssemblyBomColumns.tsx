@@ -2,8 +2,8 @@ import type { ColumnConfig } from "../components/Table";
 import { downloadFile } from "../util/ApiService";
 import type AssemblyBomRow from "./AssemblyBomRow";
 
-/** Standard Content (bolts, nuts...) comes from Onshape's library and isn't editable. */
-const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "";
+/** Standard Content (bolts, nuts...) and vendor parts come from outside and aren't editable. */
+const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent;
 
 /** Editable column: disabled for Standard Content, marked while it has an unpublished change. */
 function editable(key: string, label: string, type: "string" | "number"): ColumnConfig {
