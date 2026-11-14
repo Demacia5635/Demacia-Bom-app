@@ -9,6 +9,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:extension": "vite build --config vite.extension.config.ts",
+    "build:extension:firefox": "vite build --config vite.extension.firefox.config.ts",
+    "package:extension": "node scripts/package-extension.mjs",
     "watch:extension": "vite build --config vite.extension.config.ts --watch --mode development",
     "lint": "oxlint",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",

@@ -93,8 +93,15 @@ export function useOwnOnshapeTab(): ActiveTabState {
       if (tabId === ownTabId && (info.url || info.status === "complete")) apply(tab);
     };
 
-    // The tab this panel was opened for is the active one at that moment.
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+    // Firefox gives each tab its own panel document, panel.html?tab=<id>
+    // (background.firefox.ts). Otherwise (Chrome, or Firefox's default panel)
+    // the tab this panel was opened for is the active one at that moment.
+    const tabParam = Number(new URLSearchParams(window.location.search).get("tab"));
+    const ownTab: Promise<chrome.tabs.Tab | undefined> =
+      Number.isInteger(tabParam) && tabParam > 0
+        ? chrome.tabs.get(tabParam).catch(() => undefined)
+        : chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab);
+    void ownTab.then((tab) => {
       if (cancelled) return;
       ownTabId = tab?.id ?? null;
       apply(tab);
