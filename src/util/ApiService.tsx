@@ -133,6 +133,19 @@ export function setOnshapeImageListener(listener: ((url: string, ok: boolean) =>
   onshapeImageListener = listener;
 }
 
+/**
+ * Optional store for Onshape images (the Chrome extension keeps them until the
+ * model changes; the website doesn't use Onshape images).
+ */
+export interface OnshapeImageCache {
+  get(url: string): Promise<Blob | null>;
+  put(url: string, blob: Blob): Promise<void>;
+}
+let onshapeImageCache: OnshapeImageCache | null = null;
+export function setOnshapeImageCache(cache: OnshapeImageCache | null): void {
+  onshapeImageCache = cache;
+}
+
 interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
 }
@@ -205,6 +218,19 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
         // Onshape API images (Chrome extension only) use the browser's Onshape
         // session; never send our client secret to Onshape.
         const isOnshapeApiUrl = /^https:\/\/[^/]+\.onshape\.com\/api\//.test(targetUrl);
+
+        // An Onshape image stored earlier is reused while its model is unchanged.
+        if (isOnshapeApiUrl && onshapeImageCache) {
+          const stored = await onshapeImageCache.get(targetUrl);
+          if (stored) {
+            if (!isMounted) return;
+            objectUrl = URL.createObjectURL(stored);
+            setImageSrc(objectUrl);
+            setError(false);
+            return;
+          }
+        }
+
         const res = await fetch(
           targetUrl,
           isOnshapeApiUrl
@@ -236,6 +262,7 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
           blob = new Blob([arrayBuffer], { type: mime });
         }
 
+        if (isOnshapeApiUrl && onshapeImageCache) void onshapeImageCache.put(targetUrl, blob);
         if (!isMounted) return;
         objectUrl = URL.createObjectURL(blob);
         setImageSrc(objectUrl);

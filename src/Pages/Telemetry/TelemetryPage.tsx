@@ -34,6 +34,7 @@ const KINDS: { key: string; label: string }[] = [
   { key: "stl", label: "STL" },
   { key: "parasolid", label: "Parasolid" },
   { key: "session", label: "Sign-in checks" },
+  { key: "modelCheck", label: "Model-change checks" },
   { key: "other", label: "Other" },
 ];
 

@@ -16,6 +16,7 @@ export type OnshapeCallKind =
   | "stl"
   | "parasolid"
   | "session"
+  | "modelCheck"
   | "other";
 
 /** What one Onshape request is, from its method and path. */
@@ -27,6 +28,7 @@ export function classifyOnshapeCall(method: string, pathOrUrl: string): OnshapeC
   if (/\/bom(\?|$)/.test(path)) return "bom";
   if (/\/metadata\//.test(path)) return method.toUpperCase() === "GET" ? "metadataRead" : "metadataWrite";
   if (/\/users\/sessioninfo/.test(path)) return "session";
+  if (/\/documents\/d\/[^/]+\/w\/[^/]+\/elements(\?|$)/.test(path)) return "modelCheck";
   return "other";
 }
 

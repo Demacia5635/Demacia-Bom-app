@@ -225,6 +225,18 @@ export async function updateElementMetadata(
   return onshapeJson(`/metadata/${seg(key)}`, { method: "POST", body: { properties } });
 }
 
+/**
+ * Change marker (microversion) of every tab (Part Studio, Assembly...) in a
+ * document workspace, by element ID. One request per document. A tab's marker
+ * changes whenever its model changes; versions and microversions never change.
+ */
+export async function getElementMicroversions(documentID: string, workspaceID: string): Promise<Map<string, string>> {
+  const elements = await onshapeJson<{ id: string; microversionId?: string }[]>(
+    `/v9/documents/d/${documentID}/w/${workspaceID}/elements`
+  );
+  return new Map((elements ?? []).filter((e) => e.microversionId).map((e) => [e.id, e.microversionId as string]));
+}
+
 /* ---------------------------------------------------------------------- */
 /* Binary files                                                            */
 /* ---------------------------------------------------------------------- */

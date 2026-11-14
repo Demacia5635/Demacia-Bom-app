@@ -11,11 +11,14 @@ import { setOnshapeServer } from "../onshapeDirect";
 import { useOwnOnshapeTab, type OnshapeLocation } from "../onshapeTab";
 import OnshapeSignInCheck from "./OnshapeSignInCheck";
 import { Toasts } from "./toast";
-import { setOnshapeImageListener } from "../../util/ApiService";
+import { setOnshapeImageCache, setOnshapeImageListener } from "../../util/ApiService";
 import { recordOnshapeCall } from "../telemetry";
+import { getCachedImage, putCachedImage } from "../imageCache";
 
 // Table images load straight from Onshape; count them for the footprint page (/tele).
 setOnshapeImageListener((url, ok) => recordOnshapeCall("GET", url, ok));
+// ...and are kept until their model changes, so reopening doesn't render them again.
+setOnshapeImageCache({ get: getCachedImage, put: putCachedImage });
 
 function Message({ children }: { children: ReactNode }) {
   return (

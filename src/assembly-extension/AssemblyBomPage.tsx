@@ -18,6 +18,8 @@ import {
   getOnshapeThumbnailSrc,
   deleteDriveFile
 } from "./BomApi";
+import { getElementMicroversions } from "../extension/onshapeDirect";
+import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
@@ -191,6 +193,51 @@ const REFRESH_CONCURRENCY = 6;
  * problems and retried by the next Publish BOM.
  */
 const PUBLISH_CONCURRENCY = 5;
+
+/** Short, stable fingerprint of a string (FNV-1a), for version keys. */
+function fingerprint(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+/**
+ * The current model version of every row image, for the image store
+ * (imageCache.ts): one request per document workspace in the tree for its
+ * tabs' change markers. Parts use their Part Studio's marker (versions never
+ * change); assembly pictures show parts from across the tree, so they use a
+ * fingerprint of every marker in it. Images with an unknown version aren't
+ * stored.
+ */
+async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter): Promise<Map<string, string>> {
+  const workspaces = new Map<string, Promise<Map<string, string> | null>>();
+  for (const r of rows) {
+    const key = `${r.documentID}/${r.wvmID}`;
+    if (r.wvmType === "w" && !workspaces.has(key)) {
+      workspaces.set(key, limit(() => getElementMicroversions(r.documentID, r.wvmID)).catch(() => null));
+    }
+  }
+  const markers = new Map<string, Map<string, string> | null>();
+  for (const [key, request] of workspaces) markers.set(key, await request);
+
+  const modelVersion = (r: AssemblyBomRow): string | null =>
+    r.wvmType !== "w"
+      ? `${r.wvmType}:${r.wvmID}` // versions/microversions never change
+      : markers.get(`${r.documentID}/${r.wvmID}`)?.get(r.elementID) ?? null;
+
+  const all = rows.map(modelVersion);
+  const treeVersion = all.every(Boolean) ? `tree:${fingerprint([...new Set(all)].sort().join(","))}` : null;
+
+  const versions = new Map<string, string>();
+  rows.forEach((r, i) => {
+    const version = r.isAssembly ? treeVersion : all[i];
+    if (r.avatar && version) versions.set(r.avatar, version);
+  });
+  return versions;
+}
 
 /** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
 type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
@@ -428,6 +475,8 @@ export default function AssemblyBomPage() {
     setLoading(true);
     setError(null);
     setLoadProgress(null);
+    // Row images wait for the model-change check before rendering (imageCache.ts).
+    beginImageVersionCheck();
 
     const cacheKey = treeCacheKey(rootKey);
     if (options.preferCache) {
@@ -443,6 +492,10 @@ export default function AssemblyBomPage() {
         setTelemetryAssembly(cached.rootBom?.name?.slice(6) || cached.rootBomDB?.name || "", rootKey.documentID, rootKey.elementID);
         treeSavedAtRef.current = cached.savedAt;
         setLoading(false);
+        // Images of unchanged models come from the image store; only changed ones render.
+        void withOperation("Check for model changes", () =>
+          computeImageVersions(cached.rows, createLimiter(REFRESH_CONCURRENCY))
+        ).then(setImageVersions, cancelImageVersionCheck);
         return null;
       }
     }
@@ -515,6 +568,8 @@ export default function AssemblyBomPage() {
       await expand(rootNode, true);
       // A refresh discards unpublished edits (handleRefresh asks first).
       const freshRows = allRows;
+      // Which row images changed since they were stored (one request per document).
+      setImageVersions(await computeImageVersions(freshRows, limit).catch(() => new Map<string, string>()));
       setRows(freshRows);
       setCachedAt(null);
       treeSavedAtRef.current = Date.now();
@@ -526,6 +581,7 @@ export default function AssemblyBomPage() {
       return { rows: freshRows, rootBomDB: dbBom, rootOnshapeBom: rootNode.onshapeBom ?? null };
     } catch (err: any) {
       setError(err as ApiError);
+      cancelImageVersionCheck(); // don't keep images waiting for a check that won't come
       return null;
     } finally {
       setLoading(false);
