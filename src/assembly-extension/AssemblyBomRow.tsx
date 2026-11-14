@@ -27,4 +27,9 @@ export default interface AssemblyBomRow extends BomTableRow {
   dbAction: string;
   /** Onshape configuration of a part row (empty for the default); exports use it. */
   configuration?: string;
+  /**
+   * Set when the saved part's name is the server's "Unnamed Part" placeholder:
+   * the name from Onshape, which Update BOM writes back to the database.
+   */
+  repairName?: string;
 }

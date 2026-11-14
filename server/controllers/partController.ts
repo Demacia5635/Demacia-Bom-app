@@ -271,10 +271,13 @@ export async function upsertPartByID(
 
     const updateData: any = { ...req.body, id: id };
 
-    // Ensure we never save a raw compound key string or ID into the name field
-    if (!updateData.name || updateData.name.includes('_') || updateData.name === id) {
-      // Try extracting a cleaner name from title, metadata, or catalog number if available
+    // Fill in a name only when creating a part without a usable one. A partial
+    // update (e.g. just file links) leaves the saved name alone.
+    if (!existing && (!updateData.name || updateData.name === id)) {
       updateData.name = updateData.title || updateData.catalogNumber || (updateData.onshapeID?.partID ? `Part ${updateData.onshapeID.partID}` : "Unnamed Part");
+    } else if ("name" in updateData && (!updateData.name || updateData.name === id)) {
+      // Never overwrite a saved name with an empty one or the raw ID.
+      delete updateData.name;
     }
 
     const part = await Part.findOneAndUpdate(

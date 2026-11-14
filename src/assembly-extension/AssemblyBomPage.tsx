@@ -36,6 +36,9 @@ function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string 
   return `${base}/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
 }
 
+/** Placeholder name the server gives a part saved without one. */
+const UNNAMED_PART = "Unnamed Part";
+
 /** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
 type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
 
@@ -224,6 +227,9 @@ export default function AssemblyBomPage() {
           Boolean(rootBom.parts.find((c) => c.partID === rowId))
       );
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
+      // A saved name of "Unnamed Part" is a placeholder the server filled in;
+      // show Onshape's name and let Update BOM save it.
+      const savedNameIsPlaceholder = dbPart?.name === UNNAMED_PART && !!parsedItem.name;
 
       return {
         id: rowId,
@@ -232,7 +238,8 @@ export default function AssemblyBomPage() {
         source: isPublished ? "db" : "onshape-only",
         isAssembly: false,
         avatar: dbPart?.avatarID ? `/drive/file/id/${dbPart.avatarID}` : getOnshapeThumbnailSrc(key, partID, parsedItem.itemSource),
-        name: dbPart?.name || parsedItem.name || partID,
+        name: (savedNameIsPlaceholder ? parsedItem.name : dbPart?.name) || parsedItem.name || partID,
+        repairName: savedNameIsPlaceholder ? parsedItem.name : undefined,
         catalogNumber: dbPart?.catalogNumber || parsedItem.partNumber || "",
         revision: dbPart?.revision || parsedItem.revision || "",
         description: dbPart?.description || parsedItem.description || "",
@@ -702,6 +709,10 @@ export default function AssemblyBomPage() {
               const links = buildLinkArrays(row.id);
               await upsertBomById(row.id, { parts: links.parts, subAssemblies: links.subAssemblies });
             } else {
+              const patch: Partial<PartModel> = {};
+              // Restore a name the server replaced with "Unnamed Part".
+              if (row.repairName) patch.name = row.repairName;
+
               // Saved part without its STL or Parasolid: export just what's missing.
               const missing = [
                 ...(!row.exportSTL ? (["stl"] as const) : []),
@@ -713,13 +724,11 @@ export default function AssemblyBomPage() {
                   only: missing,
                 });
                 fileFailures.push(...files.failures);
-                if (files.stlLink || files.parasolidLink) {
-                  await upsertPartById(row.id, {
-                    ...(files.stlLink ? { stlLink: files.stlLink } : {}),
-                    ...(files.parasolidLink ? { parasolidLink: files.parasolidLink } : {}),
-                  });
-                }
+                if (files.stlLink) patch.stlLink = files.stlLink;
+                if (files.parasolidLink) patch.parasolidLink = files.parasolidLink;
               }
+
+              if (Object.keys(patch).length > 0) await upsertPartById(row.id, patch);
             }
             continue;
           }
