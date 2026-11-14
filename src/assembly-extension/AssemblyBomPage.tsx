@@ -23,7 +23,7 @@ import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } fro
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
-import PublishBomModal, { type PublishBomFormValues, type PublishProgress } from "./PublishBomModel";
+import PublishBomModal, { type PublishBomFormValues, type PublishPreview, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 
@@ -724,6 +724,38 @@ export default function AssemblyBomPage() {
   }, [search]);
   const searchMatchCount = useMemo(() => (searchFilter ? rows.filter(searchFilter).length : 0), [rows, searchFilter]);
 
+  /**
+   * Publish preview: counts what Publish BOM will do with the tree on screen.
+   * Same item rules as handlePublish (a part used in several places once;
+   * Standard Content gets no STL / Parasolid).
+   */
+  const publishPreview = useMemo((): PublishPreview | null => {
+    if (!publishOpen) return null;
+    const seen = new Set<string>();
+    const items = rows.filter((r) => r.isAssembly || (!seen.has(r.id) && !!seen.add(r.id)));
+    const preview: PublishPreview = {
+      items: 1 + items.length,
+      newItems: (rootIsPublished ? 0 : 1) + items.filter((r) => r.source !== "db").length,
+      editedCells: rows.reduce((n, r) => n + (r.modified?.length ?? 0), 0),
+      stl: 0,
+      parasolid: 0,
+      newFiles: 0,
+      filesToDelete: 0,
+    };
+    for (const r of items) {
+      if (r.isAssembly) continue;
+      const wantStl = !r.isStandardContent && !!r.wantStl;
+      const wantParasolid = !r.isStandardContent && !!r.wantParasolid;
+      if (wantStl) preview.stl++;
+      if (wantParasolid) preview.parasolid++;
+      if (wantStl && !r.saved?.stlLink) preview.newFiles++;
+      if (wantParasolid && !r.saved?.parasolidLink) preview.newFiles++;
+      if (!wantStl && r.saved?.stlLink) preview.filesToDelete++;
+      if (!wantParasolid && r.saved?.parasolidLink) preview.filesToDelete++;
+    }
+    return preview;
+  }, [publishOpen, rows, rootIsPublished]);
+
   /** Expand all / Collapse all (kept in the saved copy like any other expand). */
   const setAllExpanded = useCallback(
     (expanded: boolean) => handleTableEdit(rows.map((r) => (r.isExpanded === expanded ? r : { ...r, isExpanded: expanded }))),
@@ -1292,6 +1324,7 @@ export default function AssemblyBomPage() {
             onSubmit={handlePublish}
             submitting={publishing}
             progress={publishProgress}
+            preview={publishPreview}
           />
         )}
 

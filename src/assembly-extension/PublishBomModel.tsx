@@ -22,8 +22,27 @@ export interface PublishProgress {
   failed: number;
 }
 
+/** What a publish of the tree on screen will do, shown before it starts. */
+export interface PublishPreview {
+  /** The assembly plus each sub-assembly and distinct part. */
+  items: number;
+  /** Items not in the database yet. */
+  newItems: number;
+  /** Edited cells (written to Onshape and the database). */
+  editedCells: number;
+  /** Parts that will keep an STL / Parasolid. */
+  stl: number;
+  parasolid: number;
+  /** Of those, files not exported yet (always exported). */
+  newFiles: number;
+  /** Saved files whose box was unticked: deleted from Drive. */
+  filesToDelete: number;
+}
+
 interface PublishBomModalProps {
   progress?: PublishProgress | null;
+  /** Summary shown above the buttons until the publish starts. */
+  preview?: PublishPreview | null;
   open: boolean;
   /** "update" when the assembly is already in the database. */
   mode?: "publish" | "update";
@@ -42,6 +61,7 @@ export default function PublishBomModal({
   onSubmit,
   submitting = false,
   progress = null,
+  preview = null,
 }: PublishBomModalProps) {
   const [name, setName] = useState(initialValues.name ?? "");
   const [description, setDescription] = useState(initialValues.description ?? "");
@@ -125,6 +145,27 @@ export default function PublishBomModal({
               disabled={submitting}
             />
           </label>
+
+          {!submitting && preview && (
+            <div className="publish-progress publish-preview" aria-label="What this publish will do">
+              <div>
+                <strong>{preview.items}</strong> item{preview.items === 1 ? "" : "s"}
+                {preview.newItems > 0 && <> ({preview.newItems} new)</>}
+                {" · "}
+                <strong>{preview.editedCells}</strong> edited cell{preview.editedCells === 1 ? "" : "s"}
+              </div>
+              <div>
+                Files: {preview.stl} STL, {preview.parasolid} Parasolid, plus thumbnails
+                {preview.newFiles > 0 && <> - {preview.newFiles} not exported yet</>}
+              </div>
+              {preview.filesToDelete > 0 && (
+                <div className="publish-progress-failed">
+                  {preview.filesToDelete} unticked file{preview.filesToDelete === 1 ? "" : "s"} will be deleted from Drive
+                </div>
+              )}
+              <div className="publish-preview-note">Files of models that haven't changed since the last publish are kept, not exported again.</div>
+            </div>
+          )}
 
           {submitting && progress && (
             <div className="publish-progress" role="status" aria-live="polite">

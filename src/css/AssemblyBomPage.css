@@ -234,6 +234,11 @@ body.light-theme-active .bom-toolbar-btn:hover:not(:disabled) {
   white-space: nowrap;
 }
 
+.publish-preview-note {
+  color: #a1a1aa;
+  font-size: 0.75rem;
+}
+
 .publish-modal-actions {
   display: flex;
   justify-content: flex-end;
