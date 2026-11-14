@@ -79,6 +79,10 @@ const SAVED_PART_FIELDS = [
     "approxArrivalDate",
 ] as const satisfies readonly (keyof WorkOrderTableRow)[];
 
+/** Made already: status "Finished Manufacturing" or priority "Finished" (the table keeps them in step). */
+const isFinishedRow = (row: WorkOrderTableRow) =>
+    row.statusCode === "Finished Manufacturing" || row.Priority === "Finished";
+
 /** Bought, not made: Onshape Standard Content, a vendor part, or set to "Purchased". */
 const isPurchasedRow = (row: WorkOrderTableRow) =>
     !!row.isStandardContent || (row.vendor ?? "").trim() !== "" || row.manufacturingMethod === "Purchased";
@@ -328,19 +332,22 @@ export default function WorkOrderDetailsPage() {
     const [methodFilter, setMethodFilter] = useState<string[]>(() => readFilter("methods"));
     const [priorityFilter, setPriorityFilter] = useState<string[]>(() => readFilter("priorities"));
     const [hidePurchased, setHidePurchased] = useState<boolean>(() => readFilter("hidePurchased").length > 0);
+    const [hideFinished, setHideFinished] = useState<boolean>(() => readFilter("hideFinished").length > 0);
     useEffect(() => {
         writeFilter("methods", methodFilter);
         writeFilter("priorities", priorityFilter);
         writeFilter("hidePurchased", hidePurchased ? ["1"] : []);
-    }, [methodFilter, priorityFilter, hidePurchased]);
+        writeFilter("hideFinished", hideFinished ? ["1"] : []);
+    }, [methodFilter, priorityFilter, hidePurchased, hideFinished]);
 
     const rowFilter = useMemo(() => {
-        if (methodFilter.length === 0 && priorityFilter.length === 0 && !hidePurchased) return undefined;
+        if (methodFilter.length === 0 && priorityFilter.length === 0 && !hidePurchased && !hideFinished) return undefined;
         return (row: WorkOrderTableRow) =>
             (methodFilter.length === 0 || methodFilter.includes(row.manufacturingMethod)) &&
             (priorityFilter.length === 0 || priorityFilter.includes(row.Priority)) &&
-            !(hidePurchased && isPurchasedRow(row));
-    }, [methodFilter, priorityFilter, hidePurchased]);
+            !(hidePurchased && isPurchasedRow(row)) &&
+            !(hideFinished && isFinishedRow(row));
+    }, [methodFilter, priorityFilter, hidePurchased, hideFinished]);
     const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
 
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -478,14 +485,24 @@ export default function WorkOrderDetailsPage() {
                             })}
                         </div>
                         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                            <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={hidePurchased}
-                                    onChange={(e) => setHidePurchased(e.target.checked)}
-                                />
-                                Hide purchased & standard parts ({rows.filter(isPurchasedRow).length})
-                            </label>
+                            <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+                                <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={hidePurchased}
+                                        onChange={(e) => setHidePurchased(e.target.checked)}
+                                    />
+                                    Hide purchased & standard parts ({rows.filter(isPurchasedRow).length})
+                                </label>
+                                <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={hideFinished}
+                                        onChange={(e) => setHideFinished(e.target.checked)}
+                                    />
+                                    Hide finished parts ({rows.filter(isFinishedRow).length})
+                                </label>
+                            </div>
                             <div className="flex items-center gap-3">
                                 <span className={filterLabel}>
                                     Showing {shownCount} of {rows.length} parts
@@ -497,6 +514,7 @@ export default function WorkOrderDetailsPage() {
                                             setMethodFilter([]);
                                             setPriorityFilter([]);
                                             setHidePurchased(false);
+                                            setHideFinished(false);
                                         }}
                                         className="font-semibold text-blue-500 hover:underline"
                                     >
