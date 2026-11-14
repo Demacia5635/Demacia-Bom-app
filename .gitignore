@@ -28,3 +28,4 @@ dist-extension
 *.env.local
 important.txt
 
+publish/
