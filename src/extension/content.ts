@@ -66,7 +66,8 @@ const BUTTON_ID = "demacia-bom-open";
   });
   document.body.appendChild(btn);
 
-  // Onshape is a single-page app: poll the URL to catch tab switches.
+  // Onshape is a single-page app: tab switches change the URL without a page
+  // load. Re-check whenever the URL changes.
   let lastHref = "";
   async function refresh() {
     if (location.href === lastHref) return;
@@ -85,5 +86,17 @@ const BUTTON_ID = "demacia-bom-open";
     }
   }
   refresh();
-  setInterval(refresh, 1000);
+
+  // The Navigation API reports every same-document URL change (pushState,
+  // replaceState, back/forward) - including ones made by the page's own
+  // scripts, which a content script can't hook directly.
+  const nav = (window as Window & { navigation?: EventTarget }).navigation;
+  if (nav) {
+    nav.addEventListener("currententrychange", () => refresh());
+  } else {
+    // Older browsers without the Navigation API: fall back to polling.
+    setInterval(refresh, 1000);
+  }
+  window.addEventListener("popstate", () => refresh());
+  window.addEventListener("hashchange", () => refresh());
 })();
