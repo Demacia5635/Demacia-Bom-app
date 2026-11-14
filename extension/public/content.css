@@ -6,8 +6,8 @@
   z-index: 2147483000;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 7px 14px 7px 12px;
   border: 0;
   border-radius: 6px;
   background: #7c3aed;
@@ -22,8 +22,8 @@
 /* The Demacia logo (logo.svg), filled with the text color via a mask. */
 #demacia-bom-open .demacia-bom-logo {
   display: inline-block;
-  width: 20px;
-  height: 16px; /* the logo is 377 x 299 */
+  width: 28px;
+  height: 25px; /* the logo is 377 x 299 */
   background-color: currentColor;
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
