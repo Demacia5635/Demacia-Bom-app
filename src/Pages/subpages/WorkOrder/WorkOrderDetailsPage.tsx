@@ -45,6 +45,17 @@ const getCleanPartName = (record: any, entityID: string) => {
     return rawName || entityID;
 };
 
+/** Columns saved to the work order's part entry (the rest come from the part / BOM). */
+const SAVED_PART_FIELDS = [
+    "statusCode",
+    "Priority",
+    "manufacturingMethod",
+    "productionMakingOwner",
+    "comments",
+    "links",
+    "approxArrivalDate",
+] as const satisfies readonly (keyof WorkOrderTableRow)[];
+
 /** Bought, not made: Onshape Standard Content, a vendor part, or set to "Purchased". */
 const isPurchasedRow = (row: WorkOrderTableRow) =>
     !!row.isStandardContent || (row.vendor ?? "").trim() !== "" || row.manufacturingMethod === "Purchased";
@@ -90,7 +101,9 @@ export default function WorkOrderDetailsPage() {
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
     const rowPartMapRef = useRef<Map<string, string>>(new Map());
-    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /** Edits waiting to be saved, per row (merged until the save goes out). */
+    const pendingSavesRef = useRef<Map<string, { changes: Record<string, unknown>; timer?: ReturnType<typeof setTimeout> }>>(new Map());
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'In Planning') return 'In Planning';
@@ -246,43 +259,35 @@ export default function WorkOrderDetailsPage() {
             .finally(() => setLoading(false));
     }, [workOrderID, workOrderData]);
 
-    // Debounced background sync to Work Order collection in DB
-    const debouncedSaveToDb = useCallback((currentRows: WorkOrderTableRow[]) => {
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    /**
+     * Saves edits to the database like the BOM page: shortly after the last
+     * change, but per part and only the fields that changed, so people editing
+     * different parts of the same work order don't overwrite each other.
+     */
+    const queueSave = useCallback((rowId: string, changes: Record<string, unknown>) => {
+        const partID = rowPartMapRef.current.get(rowId);
+        if (!workOrderID || !partID) return;
 
-        saveTimeoutRef.current = setTimeout(async () => {
-            if (!workOrderID) return;
-
+        const pending = pendingSavesRef.current.get(rowId) ?? { changes: {}, timer: undefined };
+        Object.assign(pending.changes, changes);
+        if (pending.timer) clearTimeout(pending.timer);
+        pending.timer = setTimeout(async () => {
+            pendingSavesRef.current.delete(rowId);
             try {
-                const partsPayload = currentRows.map((row) => {
-                    const partId = rowPartMapRef.current.get(row.id);
-                    return {
-                        partID: partId,
-                        quantityTotal: row.quantityTotal,
-                        statusCode: row.statusCode,
-                        Priority: row.Priority,
-                        manufacturingMethod: row.manufacturingMethod,
-                        productionMakingOwner: row.productionMakingOwner,
-                        comments: row.comments,
-                        links: row.links,
-                        approxArrivalDate: row.approxArrivalDate,
-                        updatedAt: new Date(),
-                    };
-                });
-
-                await fetch(`/api/db/workOrder/id/${workOrderID}`, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "x-client-secret": import.meta.env.VITE_CLIENT_SECRET || "",
-                    },
-                    body: JSON.stringify({ parts: partsPayload }),
-                });
-            } catch (err) {
-                console.error("Failed to sync work order changes to database:", err);
+                const saved = await fetchFromApi<{ updatedAt?: string } | null>(
+                    `/db/workOrder/id/${encodeURIComponent(workOrderID)}/part`,
+                    { method: "POST", body: JSON.stringify({ partID, changes: pending.changes }) }
+                );
+                if (saved?.updatedAt) {
+                    setRows((current) => current.map((r) => (r.id === rowId ? { ...r, lastUpadte: saved.updatedAt! } : r)));
+                }
+            } catch (err: any) {
+                console.error("Failed to save work order changes:", err);
+                setSaveError(`Couldn't save the change to "${rows.find((r) => r.id === rowId)?.name ?? partID}": ${err?.message || err}`);
             }
         }, 600);
-    }, [workOrderID]);
+        pendingSavesRef.current.set(rowId, pending);
+    }, [workOrderID, rows]);
 
     const handleTableDataChange = (newData: WorkOrderTableRow[]) => {
         const processedData = newData.map((newRow) => {
@@ -306,7 +311,18 @@ export default function WorkOrderDetailsPage() {
         });
 
         setRows(processedData);
-        debouncedSaveToDb(processedData);
+
+        // Save what changed, part by part (expanding a row etc. saves nothing).
+        const oldById = new Map(rows.map((r) => [r.id, r]));
+        for (const row of processedData) {
+            const old = oldById.get(row.id);
+            if (!old) continue;
+            const changes: Record<string, unknown> = {};
+            for (const field of SAVED_PART_FIELDS) {
+                if (row[field] !== old[field]) changes[field] = row[field];
+            }
+            if (Object.keys(changes).length > 0) queueSave(row.id, changes);
+        }
     };
 
     /** The row a table <tr> shows (the Table tags each one with its row ID). */
@@ -416,6 +432,15 @@ export default function WorkOrderDetailsPage() {
                     <p className="font-semibold">Error Loading Work Order Data</p>
                     <p>{error.message}</p>
                     {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
+                </div>
+            )}
+
+            {saveError && (
+                <div className="mb-4 flex items-start justify-between gap-3 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
+                    <span>{saveError}</span>
+                    <button type="button" onClick={() => setSaveError(null)} className="shrink-0 text-xs font-semibold hover:underline">
+                        Dismiss
+                    </button>
                 </div>
             )}
 
