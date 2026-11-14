@@ -31,10 +31,8 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkorderSummary[] }> = ({ w
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
                     {workOrders.map((wo) => {
-                        const rawWO = wo as any;
-                        const imageSrc = rawWO?.driveFileId || !rawWO?.bomDriveFileId
-                            ? recordImageSrc(rawWO)
-                            : `/api/drive/file/id/${rawWO.bomDriveFileId}`;
+                        // The page puts the assembly's image on the row when it has one.
+                        const imageSrc = recordImageSrc(wo);
 
                         return (
                             <tr

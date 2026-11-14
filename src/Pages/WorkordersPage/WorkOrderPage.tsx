@@ -3,6 +3,8 @@ import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import WorkOrderTable from "./WorkOrderTable";
 import type { WorkorderModel } from "../../util/Models";
+import { fetchBomsByIds } from "../../util/records";
+import { recordImageSrc } from "../../util/recordImage";
 
 // Define and EXPORT the WorkorderSummary type directly here
 export type WorkorderSummary = Omit<
@@ -24,7 +26,27 @@ export function WorkOrdersPage() {
                 const response = await fetchFromApi<WorkorderSummary[]>(`/db/workOrder/all`).catch(
                     () => fetchFromApi<WorkorderSummary[]>(`/db/workorder/all`)
                 );
-                setWorkOrders(response || []);
+                const list = response || [];
+                setWorkOrders(list);
+
+                // Each work order is made from an assembly: show that assembly's
+                // image, name and catalog number (one request for all of them).
+                const bomIds = list.map((wo) => (wo as WorkorderModel).bomID || "").filter(Boolean);
+                const boms = await fetchBomsByIds(bomIds).catch(() => null);
+                if (boms && boms.size > 0) {
+                    setWorkOrders(list.map((wo) => {
+                        const bom = boms.get((wo as WorkorderModel).bomID || "");
+                        if (!bom) return wo;
+                        const bomImage = recordImageSrc(bom);
+                        return {
+                            ...wo,
+                            bomName: wo.bomName || bom.name,
+                            catalogNumber: wo.catalogNumber || bom.catalogNumber,
+                            // The assembly's current picture; the work order's own only as a fallback.
+                            ...(bomImage ? { avatarID: bomImage, driveFileId: undefined, thumbnailURL: undefined } : {}),
+                        } as WorkorderSummary;
+                    }));
+                }
             } catch (err: any) {
                 console.error("Failed to fetch work orders:", err);
                 setError(err?.message || "Failed to load work orders");
