@@ -216,6 +216,60 @@ function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/** Full URL of an image src: paths without a host go to our backend. */
+function imageTargetUrl(src: string): string {
+  if (src.startsWith("/api")) {
+    const cleanEndpoint = src.replace("/api", "");
+    return `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
+  }
+  if (!src.startsWith("http")) return `${BACKEND_HOST}${src.startsWith("/") ? src : `/${src}`}`;
+  return src;
+}
+
+/** Onshape API images use the browser's Onshape session; never send our client secret there. */
+const isOnshapeApiUrl = (url: string) => /^https:\/\/[^/]+\.onshape\.com\/api\//.test(url);
+
+/**
+ * The image in a response: raw image bytes, a serialized Node Buffer
+ * ({ type: "Buffer", data }), or an Onshape render ({ images: [base64Png] }).
+ */
+async function imageBlobFromResponse(res: Response): Promise<Blob> {
+  const arrayBuffer = await res.arrayBuffer();
+  const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
+  const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
+
+  if (looksLikeJson) {
+    const json = JSON.parse(new TextDecoder().decode(arrayBuffer));
+    if (json.type === "Buffer" && Array.isArray(json.data)) {
+      return new Blob([new Uint8Array(json.data)], { type: "image/png" });
+    }
+    if (Array.isArray(json.images) && typeof json.images[0] === "string") {
+      return new Blob([base64ToBytes(json.images[0])], { type: "image/png" });
+    }
+    throw new Error(json.message || "Invalid image format");
+  }
+  const responseContentType = res.headers.get("content-type");
+  const mime = responseContentType && responseContentType.includes("image") ? responseContentType : "image/png";
+  return new Blob([arrayBuffer], { type: mime });
+}
+
+/**
+ * Loads a saved image (a record's image src: Drive through our server, a full
+ * URL, or a data: URL) as a Blob, e.g. to put it in an export. Not for
+ * Onshape API images, which only the Chrome extension shows.
+ */
+export async function fetchImageBlob(src: string): Promise<Blob> {
+  if (src.startsWith("data:")) return (await fetch(src)).blob();
+  const publicUrl = publicDriveImageUrl(src);
+  const targetUrl = publicUrl ?? imageTargetUrl(src);
+  if (isOnshapeApiUrl(targetUrl)) throw new Error("Onshape images can't be exported from the website");
+  const secret = import.meta.env.VITE_CLIENT_SECRET;
+  // Saved Drive images are public to read; the secret goes only where it's needed.
+  const res = await fetch(targetUrl, { headers: !publicUrl && secret ? { "x-client-secret": secret } : {} });
+  if (!res.ok) throw new Error(`Failed to load image: ${res.status} ${res.statusText}`);
+  return imageBlobFromResponse(res);
+}
+
 /**
  * Loads an image that needs our client secret or the Onshape session, and shows
  * it through an in-memory object URL (URL.createObjectURL). That avoids
@@ -247,21 +301,14 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
     const getPicture = async () => {
       try {
-        let targetUrl = src;
-
-        if (src.startsWith("/api")) {
-          const cleanEndpoint = src.replace("/api", "");
-          targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
-        } else if (!src.startsWith("http")) {
-          targetUrl = `${BACKEND_HOST}${src.startsWith("/") ? src : `/${src}`}`;
-        }
+        const targetUrl = imageTargetUrl(src);
 
         // Onshape API images (Chrome extension only) use the browser's Onshape
         // session; never send our client secret to Onshape.
-        const isOnshapeApiUrl = /^https:\/\/[^/]+\.onshape\.com\/api\//.test(targetUrl);
+        const isOnshape = isOnshapeApiUrl(targetUrl);
 
         // An Onshape image stored earlier is reused while its model is unchanged.
-        if (isOnshapeApiUrl && onshapeImageCache) {
+        if (isOnshape && onshapeImageCache) {
           const stored = await onshapeImageCache.get(targetUrl);
           if (stored) {
             if (!isMounted) return;
@@ -272,35 +319,16 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
           }
         }
 
-        const res = isOnshapeApiUrl
+        const res = isOnshape
           ? await fetchOnshapeImage(targetUrl, () => isMounted)
           : await fetch(targetUrl, { headers: secret ? { "x-client-secret": secret } : {} });
         if (!res) return; // went away while waiting its turn
 
         if (!res.ok) throw new Error(`Failed to load image: ${res.statusText}`);
 
-        const arrayBuffer = await res.arrayBuffer();
-        const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
-        const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
+        const blob = await imageBlobFromResponse(res);
 
-        let blob: Blob;
-        if (looksLikeJson) {
-          const json = JSON.parse(new TextDecoder().decode(arrayBuffer));
-          if (json.type === "Buffer" && Array.isArray(json.data)) {
-            blob = new Blob([new Uint8Array(json.data)], { type: "image/png" });
-          } else if (Array.isArray(json.images) && typeof json.images[0] === "string") {
-            // Onshape shaded-view render: { images: [base64Png] }
-            blob = new Blob([base64ToBytes(json.images[0])], { type: "image/png" });
-          } else {
-            throw new Error(json.message || "Invalid image format");
-          }
-        } else {
-          const responseContentType = res.headers.get("content-type");
-          const mime = responseContentType && responseContentType.includes("image") ? responseContentType : "image/png";
-          blob = new Blob([arrayBuffer], { type: mime });
-        }
-
-        if (isOnshapeApiUrl && onshapeImageCache) void onshapeImageCache.put(targetUrl, blob);
+        if (isOnshape && onshapeImageCache) void onshapeImageCache.put(targetUrl, blob);
         if (!isMounted) return;
         objectUrl = URL.createObjectURL(blob);
         setImageSrc(objectUrl);

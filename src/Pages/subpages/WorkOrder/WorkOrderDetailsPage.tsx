@@ -11,6 +11,7 @@ import WorkOrderDataUI from "./WorkOrderDataUI";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
 import { fetchPartsByIds } from "../../../util/records";
+import { printPartsPdf } from "../../../util/exportPartsPdf";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
@@ -350,6 +351,53 @@ export default function WorkOrderDetailsPage() {
     }, [methodFilter, priorityFilter, hidePurchased, hideFinished]);
     const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
 
+    // ---- Export the shown parts (image, name, quantity) to PDF ----
+    const tableAreaRef = useRef<HTMLDivElement>(null);
+    /** null when idle; otherwise images loaded so far. */
+    const [pdfProgress, setPdfProgress] = useState<{ loaded: number; total: number } | null>(null);
+
+    const handleExportPdf = async () => {
+        // The rows as the table shows them: filtered and in its sort order.
+        const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+            .map(rowFromElement)
+            .filter((r): r is WorkOrderTableRow => !!r);
+        if (shownRows.length === 0) {
+            window.alert("No parts are shown, so there's nothing to export.");
+            return;
+        }
+
+        const filters = [
+            methodFilter.length > 0 && `Manufacturing method: ${methodFilter.join(", ")}`,
+            priorityFilter.length > 0 && `Priority: ${priorityFilter.join(", ")}`,
+            hidePurchased && "purchased & standard parts hidden",
+            hideFinished && "finished parts hidden",
+        ].filter(Boolean);
+
+        setPdfProgress({ loaded: 0, total: 0 });
+        try {
+            await printPartsPdf({
+                title: workOrderData?.name || "Work order",
+                subtitleLines: [
+                    workOrderData?.bomName ? `Assembly: ${workOrderData.bomName}` : "",
+                    filters.length > 0 ? `Filters: ${filters.join(" · ")}` : "All parts",
+                    `Exported ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Jerusalem" })}`,
+                ],
+                rows: shownRows.map((r) => ({
+                    name: r.name,
+                    catalogNumber: r.catalogNumber,
+                    quantity: r.quantityTotal,
+                    imageSrc: r.avatar,
+                })),
+                onProgress: (loaded, total) => setPdfProgress({ loaded, total }),
+            });
+        } catch (err: any) {
+            console.error("PDF export failed:", err);
+            window.alert(`Couldn't export the PDF: ${err?.message || err}`);
+        } finally {
+            setPdfProgress(null);
+        }
+    };
+
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const cellEl = target.closest(".table-td, td");
@@ -521,11 +569,25 @@ export default function WorkOrderDetailsPage() {
                                         Clear filters
                                     </button>
                                 )}
+                                <button
+                                    type="button"
+                                    onClick={handleExportPdf}
+                                    disabled={pdfProgress !== null || shownCount === 0}
+                                    title="Save the parts shown below (image, name, quantity) as a PDF"
+                                    className="rounded-lg bg-blue-600 px-3 py-1 font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-default"
+                                >
+                                    {pdfProgress === null
+                                        ? "Export PDF"
+                                        : pdfProgress.total > 0
+                                            ? `Loading images ${pdfProgress.loaded}/${pdfProgress.total}…`
+                                            : "Preparing PDF…"}
+                                </button>
                             </div>
                         </div>
                     </div>
                 )}
                 <div
+                    ref={tableAreaRef}
                     onClick={handleTableClick}
                     onContextMenuCapture={handleTableContextMenuCapture} 
                     className="relative cursor-pointer"
