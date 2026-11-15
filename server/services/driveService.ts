@@ -120,7 +120,13 @@ export class GoogleDriveService {
       { responseType: "arraybuffer" },
     );
 
-    const header = (res.headers as Record<string, unknown> | undefined)?.["content-type"];
+    // gaxios 7 returns a fetch Headers object (bracket lookup is always
+    // undefined); older versions returned a plain object.
+    const headers = res.headers as unknown as Headers | Record<string, unknown> | undefined;
+    const header =
+      headers && typeof (headers as Headers).get === "function"
+        ? (headers as Headers).get("content-type")
+        : (headers as Record<string, unknown> | undefined)?.["content-type"];
     return {
       data: Buffer.from(res.data as ArrayBuffer),
       mimeType: typeof header === "string" ? header : "",
