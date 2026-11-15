@@ -1,40 +1,71 @@
 import { useState, useMemo, useEffect } from "react";
 import { AuthenticatedImage, fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
-import type { PartModel } from "../../util/Models";
+import type { BomModel, PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import PartPortal from "./PartPortal";
 import { recordImageSrc } from "../../util/recordImage";
 
+/** A search result: a part, or a sub-assembly (an assembly some other assembly uses). */
+type SearchItem =
+    | { kind: "part"; record: PartModel }
+    | { kind: "subAssembly"; record: BomModel };
+
+/**
+ * Sub-assemblies: saved assemblies listed in another assembly's subAssemblies,
+ * so an assembly shows up here as soon as it gets a parent. One saved as a
+ * part (marked standard) is already in the parts list and isn't repeated.
+ */
+function subAssembliesOf(boms: BomModel[], parts: PartModel[]): BomModel[] {
+    const usedAsSub = new Set<string>();
+    for (const bom of boms) {
+        for (const sub of bom.subAssemblies ?? []) {
+            if (sub.bomID !== bom.id) usedAsSub.add(sub.bomID);
+        }
+    }
+    const partIds = new Set(parts.map((p) => p.id));
+    return boms.filter((bom) => usedAsSub.has(bom.id) && !partIds.has(bom.id));
+}
+
 export function PartsSearchPage() {
     const { isLight } = useThemeSync();
+    const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
-    const [parts, setParts] = useState<PartModel[]>([]);
+    const [items, setItems] = useState<SearchItem[]>([]);
     const [isOpen, setOpen] = useState<PartModel | null>(null);
 
     useEffect(() => {
-        if(parts.length !== 0) return;
+        let cancelled = false;
 
-        async function getParts() {
-            const response = await fetchFromApi<PartModel[]>(`/db/part/all`);
-            setParts(response);
+        async function getItems() {
+            const [parts, boms] = await Promise.all([
+                fetchFromApi<PartModel[]>(`/db/part/all`),
+                fetchFromApi<BomModel[]>(`/db/bom/all`),
+            ]);
+            if (cancelled) return;
+            setItems([
+                ...parts.map((record): SearchItem => ({ kind: "part", record })),
+                ...subAssembliesOf(boms, parts).map((record): SearchItem => ({ kind: "subAssembly", record })),
+            ]);
         }
 
-        getParts();
-    }, [parts.length]);
+        getItems();
+        return () => { cancelled = true; };
+    }, []);
 
-    const filteredParts = useMemo(() => {
+    const filteredItems = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
-        if (!query) return parts;
+        if (!query) return items;
 
-        return parts.filter((part) => {
-            const nameMatch = part.name?.toLowerCase().includes(query);
-            const catalogMatch = part.catalogNumber?.toLowerCase().includes(query);
-            const descriptionMatch = part.description?.toLowerCase().includes(query);
+        return items.filter(({ record }) => {
+            const nameMatch = record.name?.toLowerCase().includes(query);
+            const catalogMatch = record.catalogNumber?.toLowerCase().includes(query);
+            const descriptionMatch = record.description?.toLowerCase().includes(query);
 
             return nameMatch || catalogMatch || descriptionMatch;
         });
-    }, [searchQuery, parts]);
+    }, [searchQuery, items]);
 
     // Theme Styles Mapping
     const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
@@ -53,11 +84,11 @@ export function PartsSearchPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 className={`text-2xl font-bold tracking-tight ${textHeading}`}>Parts Catalog</h1>
-                        <p className={`text-xs ${textMuted}`}>Search parts by name, catalog number, or description.</p>
+                        <p className={`text-xs ${textMuted}`}>Search parts and sub-assemblies by name, catalog number, or description.</p>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className={`text-xs ${textMuted} font-mono`}>
-                            Results: <span className={`${textValue} font-bold`}>{filteredParts.length}</span>
+                            Results: <span className={`${textValue} font-bold`}>{filteredItems.length}</span>
                         </div>
                         
                     </div>
@@ -90,16 +121,17 @@ export function PartsSearchPage() {
 
             {/* Results Grid */}
             <div className="max-w-6xl mx-auto">
-                {filteredParts.length > 0 ? (
+                {filteredItems.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredParts.map((part) => {
-                            const rawPart = part as any;
-                            const imageSrc = recordImageSrc(rawPart);
+                        {filteredItems.map((item) => {
+                            const part = item.record;
+                            const isSub = item.kind === "subAssembly";
+                            const imageSrc = recordImageSrc(part as any);
 
                             return (
                                 <div
-                                    key={part.id}
-                                    onClick={() => setOpen(part)}
+                                    key={`${item.kind}:${part.id}`}
+                                    onClick={() => (item.kind === "part" ? setOpen(item.record) : navigate(`/bom/${part.id}`))}
                                     className={`${cardBg} border rounded-xl p-4 shadow-md transition-all cursor-pointer flex gap-4 items-start group`}
                                 >
                                     {/* Thumbnail */}
@@ -121,6 +153,11 @@ export function PartsSearchPage() {
                                             <h3 className={`text-sm font-semibold ${textHeading} truncate group-hover:text-blue-500 transition-colors`}>
                                                 {part.name || part.id}
                                             </h3>
+                                            {isSub && (
+                                                <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-blue-500/15 text-blue-500">
+                                                    Sub-assembly
+                                                </span>
+                                            )}
                                         </div>
 
                                         <p className={`text-xs font-mono ${textMuted}`}>
@@ -139,7 +176,7 @@ export function PartsSearchPage() {
                     </div>
                 ) : (
                     <div className={`${cardBg} border rounded-xl p-12 text-center space-y-2`}>
-                        <p className={`${textMuted} text-sm font-medium`}>No parts found matching "{searchQuery}"</p>
+                        <p className={`${textMuted} text-sm font-medium`}>Nothing found matching "{searchQuery}"</p>
                         <p className={`${textSubdued} text-xs`}>Try searching with a different term or clearing filters.</p>
                     </div>
                 )}
