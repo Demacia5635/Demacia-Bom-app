@@ -952,6 +952,9 @@ export default function AssemblyBomPage() {
             const current = currentTreeRef.current.rows;
             // Still unmarked (and still there)? Then add its insides.
             if (!current.some((r) => r.id === row.id && !r.markedStandard)) return;
+            // Already has them (e.g. a Refresh reloaded the tree meanwhile):
+            // adding them again would duplicate the rows.
+            if (current.some((r) => r.parentId === row.id)) return;
             saveRows([...current, ...children]);
           })
           .catch((err: any) => {
@@ -1497,7 +1500,7 @@ export default function AssemblyBomPage() {
               type="button"
               className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
               onClick={handleRefresh}
-              disabled={loading || publishing}
+              disabled={loading || publishing || subtreeLoads > 0}
               title="Reload everything from Onshape (the database only for fields Onshape doesn't have). Saves nothing; discards edits not published yet."
             >
               {loading ? "Refreshing..." : "Refresh BOM"}
