@@ -25,6 +25,7 @@ import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } fro
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
+import { childrenByParent, distinctRows, linkArrays, publishPhases, ROOT_PARENT } from "./publishPlan";
 import PublishBomModal, { type PublishBomFormValues, type PublishPreview, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
@@ -286,6 +287,10 @@ function createCachedSources(limit: Limiter): TreeSources {
     dbPart: (key, partID) => once(`dbPart:${keyString(key)}/${partID}`, () => getPartByOnshapeKey(key, partID)),
   };
 }
+
+/** Identifies an assembly in the tree walk (visited / cycle checks). */
+const assemblyKeyId = (k: Pick<OnshapeKey, "documentID" | "wvmType" | "wvmID" | "elementID">) =>
+  `${k.documentID}_${k.wvmType}_${k.wvmID}_${k.elementID}`;
 
 const itemKey = (item: ParsedOnshapeBomRow): OnshapeKey => ({
   documentID: item.itemSource.documentId,
@@ -728,12 +733,15 @@ export default function AssemblyBomPage() {
 
   /**
    * Adds the rows under `node` (its parts and sub-assemblies, all the way down)
-   * to `ctx.out`, in Onshape's order. A sub-assembly already in the tree is
-   * listed once; one marked as a standard part is one bought item, so its
-   * insides aren't loaded.
+   * to `ctx.out`, in Onshape's order. A sub-assembly used in several places
+   * gets a row under each parent (so each parent's saved BOM lists it), but its
+   * contents are listed once: rows share the sub-assembly's id, and the table
+   * shows those contents under every row with that id. `ancestors` (the
+   * sub-assemblies above `node`) stops an assembly that contains itself. One
+   * marked as a standard part is one bought item, so its insides aren't loaded.
    */
   const expandTree = useCallback(
-    async (node: ResolvedNode, isRoot: boolean, ctx: ExpandContext): Promise<void> => {
+    async (node: ResolvedNode, isRoot: boolean, ctx: ExpandContext, ancestors: ReadonlySet<string>): Promise<void> => {
       const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
       const childParentId = isRoot ? null : node.row.id;
 
@@ -741,13 +749,15 @@ export default function AssemblyBomPage() {
         ctx.onItem?.(item.name);
         if (item.isSubassembly) {
           const subKey = itemKey(item);
-          const subKeyId = `${subKey.documentID}_${subKey.wvmType}_${subKey.wvmID}_${subKey.elementID}`;
-          if (ctx.visited.has(subKeyId)) continue;
-          ctx.visited.add(subKeyId);
+          const subKeyId = assemblyKeyId(subKey);
+          if (ancestors.has(subKeyId)) continue; // contains itself
 
+          // Another use of an already-loaded sub-assembly is served from the per-load cache.
           const { node: subNode } = await resolveBomNode(subKey, childParentId, ctx.rootBomDB, ctx.getParentBom, item, ctx.src);
           ctx.out.push(subNode.row);
-          if (!subNode.row.markedStandard) await expandTree(subNode, false, ctx);
+          if (ctx.visited.has(subKeyId)) continue; // its contents are already listed
+          ctx.visited.add(subKeyId);
+          if (!subNode.row.markedStandard) await expandTree(subNode, false, ctx, new Set([...ancestors, subKeyId]));
         } else {
           ctx.out.push(await resolvePartRow(item, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src));
         }
@@ -767,20 +777,28 @@ export default function AssemblyBomPage() {
       const src = createCachedSources(limit);
       const key: OnshapeKey = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
       const onshapeBom = await src.onshapeBom(key);
+      // Sub-assemblies whose contents the tree already lists (not marked standard).
       const visited = new Set(
-        existing.filter((r) => r.isAssembly).map((r) => `${r.documentID}_${r.wvmType}_${r.wvmID}_${r.elementID}`)
+        existing.filter((r) => r.isAssembly && !r.markedStandard).map((r) => assemblyKeyId(r))
       );
+      visited.add(assemblyKeyId(key));
+      // This row and the assemblies above it (by parentId), for the cycle guard.
+      const byId = new Map(existing.map((r) => [r.id, r]));
+      const ancestors = new Set<string>();
+      for (let r: AssemblyBomRow | undefined = row; r && !ancestors.has(assemblyKeyId(r)); r = r.parentId ? byId.get(r.parentId) : undefined) {
+        ancestors.add(assemblyKeyId(r));
+      }
+      ancestors.add(assemblyKeyId(rootKey ?? key));
       const out: AssemblyBomRow[] = [];
-      await expandTree({ row, key, bomID: row.entityID, onshapeBom }, false, {
-        src,
-        getParentBom: createParentBomLoader(limit),
-        rootBomDB: currentTreeRef.current.rootBomDB,
-        visited,
-        out,
-      });
+      await expandTree(
+        { row, key, bomID: row.entityID, onshapeBom },
+        false,
+        { src, getParentBom: createParentBomLoader(limit), rootBomDB: currentTreeRef.current.rootBomDB, visited, out },
+        ancestors
+      );
       return out;
     },
-    [expandTree]
+    [expandTree, rootKey]
   );
 
   /**
@@ -850,7 +868,7 @@ export default function AssemblyBomPage() {
       setRootIsPublished(Boolean(dbBom));
       setRootOnshapeBom(rootNode.onshapeBom ?? null);
       setTelemetryAssembly(rootNode.onshapeBom?.name?.slice(6) || dbBom?.name || "", rootKey.documentID, rootKey.elementID);
-      visitedBomIds.add(rootNode.bomID!);
+      visitedBomIds.add(assemblyKeyId(rootKey));
 
       // The root BOM is multi-level, so its item count covers the whole tree
       // (an estimate: repeated sub-assemblies are resolved only once).
@@ -864,7 +882,7 @@ export default function AssemblyBomPage() {
         visited: visitedBomIds,
         out: allRows,
         onItem: (name) => setLoadProgress({ done: allRows.length, total, current: name }),
-      });
+      }, new Set([assemblyKeyId(rootKey)]));
       // A refresh discards unpublished edits (handleRefresh asks first).
       const freshRows = allRows;
       // Which row images changed since they were stored (one request per document).
@@ -978,8 +996,11 @@ export default function AssemblyBomPage() {
           blocked = true;
           row = { ...row, ...Object.fromEntries(refused.map((k) => [k, (prev as unknown as Record<string, unknown>)[k]])) } as AssemblyBomRow;
         }
+        // (Table writes an edit to every row with this id, i.e. every use of the
+        // item; each sub-assembly is listed once here.)
         if (row.isAssembly && !!row.markedStandard !== !!prev.markedStandard) {
-          (row.markedStandard ? markedNow : unmarkedNow).push(row);
+          const list = row.markedStandard ? markedNow : unmarkedNow;
+          if (!list.some((r) => r.id === row.id)) list.push(row);
         }
         // Marked only while it differs from the saved (or loaded) value: typing
         // something and then removing it leaves the cell unmarked.
@@ -1053,8 +1074,7 @@ export default function AssemblyBomPage() {
    */
   const publishPreview = useMemo((): PublishPreview | null => {
     if (!publishOpen) return null;
-    const seen = new Set<string>();
-    const items = rows.filter((r) => r.isAssembly || (!seen.has(r.id) && !!seen.add(r.id)));
+    const items = distinctRows(rows);
     const preview: PublishPreview = {
       items: 1 + items.length,
       newItems: (rootIsPublished ? 0 : 1) + items.filter((r) => r.source !== "db").length,
@@ -1116,35 +1136,15 @@ export default function AssemblyBomPage() {
 
       const rootID = rootBomDB?.id || `${rootKey.documentID}_${rootKey.wvmType}_${rootKey.wvmID}_${rootKey.elementID}_${rootOnshapeBom?.id}` || "wrong id";
 
-      const ROOT_SENTINEL = "__root__";
-      const rootRowId = ROOT_SENTINEL;
+      const rootRowId = ROOT_PARENT;
 
-      const childrenByParentRowId = new Map<string, AssemblyBomRow[]>();
-      for (const row of rows) {
-        const parentKey = row.parentId ?? ROOT_SENTINEL;
-        const list = childrenByParentRowId.get(parentKey) ?? [];
-        list.push(row);
-        childrenByParentRowId.set(parentKey, list);
-      }
+      // Every use of every item, by parent: links come from all uses, each with its own quantity.
+      const childrenByParentRowId = childrenByParent(rows);
+      const buildLinkArrays = (parentRowId: string) => linkArrays(childrenByParentRowId.get(parentRowId) ?? []);
 
-      // A sub-assembly marked standard is listed as a part: one bought item
-      // (saved as a part record with the same id).
-      const isLinkedAsPart = (c: AssemblyBomRow) => !c.isAssembly || !!c.markedStandard;
-      const buildLinkArrays = (parentRowId: string) => {
-        const children = childrenByParentRowId.get(parentRowId) ?? [];
-        const parts = children
-          .filter(isLinkedAsPart)
-          .map((c) => ({ partID: c.id, quantity: c.quantity || 1 }));
-        const subAssemblies = children
-          .filter((c) => !isLinkedAsPart(c))
-          .map((c) => ({ bomID: c.id, quantity: c.quantity || 1 }));
-        return { parts, subAssemblies };
-      };
-
-      // The top assembly, each sub-assembly and each distinct part is one item.
-      // A part used in several places is published once.
-      const seenParts = new Set<string>();
-      const rowsToPublish = rows.filter((r) => r.isAssembly || (!seenParts.has(r.id) && !!seenParts.add(r.id)));
+      // The top assembly, each distinct sub-assembly and each distinct part is
+      // one item: one used in several places is saved once.
+      const rowsToPublish = distinctRows(rows);
       const total = 1 + rowsToPublish.length;
 
       // Progress: items done, and what each item being worked on is doing.
@@ -1495,22 +1495,9 @@ export default function AssemblyBomPage() {
           );
         };
 
-        // 1. Parts, and sub-assemblies marked standard (one bought item, nothing inside).
-        await publishAll(rowsToPublish.filter(isLinkedAsPart));
-        // 2. Sub-assemblies, deepest first: each level's children are all done before it.
-        const rowById = new Map(rows.map((r) => [r.id, r]));
-        const depthOf = (r: AssemblyBomRow): number => {
-          let depth = 1;
-          for (let p = r.parentId; p !== null && depth <= rows.length; p = rowById.get(p)?.parentId ?? null) depth++;
-          return depth;
-        };
-        const byDepth = new Map<number, AssemblyBomRow[]>();
-        for (const r of rowsToPublish) {
-          if (isLinkedAsPart(r)) continue;
-          const d = depthOf(r);
-          byDepth.set(d, [...(byDepth.get(d) ?? []), r]);
-        }
-        for (const d of [...byDepth.keys()].sort((a, b) => b - a)) await publishAll(byDepth.get(d)!);
+        // 1. Parts and sub-assemblies marked standard, then 2. the other
+        // sub-assemblies, each after everything inside it (publishPlan.ts).
+        for (const phase of publishPhases(rows)) await publishAll(phase);
 
         // What was published is now saved: update those rows in place (no reload).
         const nextRows = rows.map((r) =>
