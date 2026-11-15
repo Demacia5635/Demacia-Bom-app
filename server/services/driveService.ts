@@ -1,11 +1,11 @@
 import { google, drive_v3 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { Readable } from "stream";
-import "dotenv/config";
+import { google as googleConfig } from "../config";
 
-const IMAGE_FOLDER_ID = process.env.GOOGLE_DRIVE_IMAGE_FOLDER_ID as string;
-const STL_FOLDER_ID = process.env.GOOGLE_DRIVE_STL_FOLDER_ID as string;
-const PARASOLID_FOLDER_ID = process.env.GOOGLE_DRIVE_PARASOLID_FOLDER_ID as string;
+const IMAGE_FOLDER_ID = googleConfig.imageFolderId;
+const STL_FOLDER_ID = googleConfig.stlFolderId;
+const PARASOLID_FOLDER_ID = googleConfig.parasolidFolderId;
 
 for (const [name, value] of [
   ["GOOGLE_DRIVE_IMAGE_FOLDER_ID", IMAGE_FOLDER_ID],

@@ -1,17 +1,17 @@
 import express from "express";
 import * as driveController from "../controllers/driveController";
 import { createGoogleDriveService } from "../services/driveService";
-import "dotenv/config";
 import { google } from "googleapis";
+import { google as googleConfig } from "../config";
 
 const router = express.Router();
 const auth = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI,
+  googleConfig.clientId,
+  googleConfig.clientSecret,
+  googleConfig.redirectUri,
 );
 auth.setCredentials({
-  refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+  refresh_token: googleConfig.refreshToken,
 });
 
 const drive = createGoogleDriveService(auth);

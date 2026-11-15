@@ -1,7 +1,5 @@
 import mongoose from 'mongoose';
-import 'dotenv/config';
-
-const mongoUri = process.env.MONGODB_URI;
+import { MONGODB_URI as mongoUri } from '../config';
 
 export async function connect() {
     if (!mongoUri) throw new Error('Failed to connect to .env');

@@ -1,12 +1,9 @@
-import dotenv from 'dotenv';
 import dns from 'node:dns';
+import { PORT } from './config';
 import app from './app';
 import { connect } from './db/connection';
 
-dotenv.config();
 dns.setDefaultResultOrder("ipv4first");
-
-const PORT = process.env.PORT || 5050;
 
 async function startServer(): Promise<void> {
   try {

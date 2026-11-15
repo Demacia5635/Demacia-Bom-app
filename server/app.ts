@@ -3,21 +3,9 @@ import cors from "cors";
 import apiRoutes from './routes';
 import { checkAuth } from "./controllers/healthController";
 import morgan from "morgan";
+import { allowedOrigins } from "./config";
 
 const app: Express = express();
-
-const envOrigins = (process.env.ALLOWED_ORIGINS || '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-const defaultOrigins = [
-    "http://localhost:5173",
-    "http://localhost:5050",
-    "http://127.0.0.1:5173",
-];
-
-export const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
 
 app.use(cors({
     origin: (origin, callback) => {
