@@ -45,7 +45,6 @@ export interface UploadFileParams {
   mimeType: string;
   buffer: Buffer;
   folderId?: string;
-  partID?: string; // Optional unique key for deduplication locking
 }
 
 /** The team's Drive folders (images, STL, Parasolid) that the API may touch. */
@@ -55,9 +54,6 @@ export function isTeamFolder(folderId: string): boolean {
 
 /** Most file IDs remembered by isInTeamFolders. */
 const TEAM_FILE_CACHE_MAX = 5000;
-
-// Global cross-controller lock map to prevent parallel duplicate uploads
-const globalUploadLocks = new Map<string, Promise<DriveFile>>();
 
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
@@ -89,26 +85,6 @@ export class GoogleDriveService {
     } while (pageToken);
 
     return files;
-  }
-
-  async findFileByPartID(partID: string, folderId: string = IMAGE_FOLDER_ID): Promise<DriveFile | null> {
-    this.assertImageFolderConfigured();
-    try {
-      const res = await this.drive.files.list({
-        q: `'${folderId}' in parents and name contains 'part_${partID}_' and trashed = false`,
-        fields: "files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)",
-        pageSize: 1,
-      });
-
-      const files = res.data.files;
-      if (files && files.length > 0) {
-        return this.mapFile(files[0]);
-      }
-      return null;
-    } catch (err) {
-      console.error(`>>> [DRIVE ERROR] Failed to search for file with partID ${partID}:`, err);
-      return null;
-    }
   }
 
   /** fileId -> whether it's directly inside one of the team folders. */
@@ -173,61 +149,16 @@ export class GoogleDriveService {
   }
 
   /**
-   * Upload a file with built-in atomic deduplication locking.
+   * Uploads a new file. Every call creates a file: clients replace a file by
+   * uploading the new one and then deleting the old one.
    */
   async uploadFile(params: UploadFileParams): Promise<DriveFile> {
     this.assertImageFolderConfigured();
-    const { fileName, mimeType, buffer, folderId, partID } = params;
+    const { fileName, mimeType, buffer, folderId } = params;
 
     // Convert input to a clean Node.js Buffer if necessary
     const safeBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
 
-    // If a partID is provided, enforce a global mutex lock
-    if (partID) {
-      if (globalUploadLocks.has(partID)) {
-        console.log(`>>> [GLOBAL LOCK] Intercepted duplicate upload attempt for partID: ${partID}. Awaiting active upload...`);
-        return globalUploadLocks.get(partID)!;
-      }
-
-      const uploadPromise = (async (): Promise<DriveFile> => {
-        try {
-          // Pre-flight check inside lock
-          const existing = await this.findFileByPartID(partID, folderId ?? IMAGE_FOLDER_ID);
-          if (existing) {
-            console.log(`>>> [GLOBAL LOCK] Found existing file in Drive during lock for partID: ${partID}`);
-            return existing;
-          }
-
-          console.log(`>>> [DRIVE API CREATE] Creating Google Drive file for partID: ${partID} (${safeBuffer.length} bytes)...`);
-
-          const res = await this.drive.files.create({
-            requestBody: {
-              name: fileName,
-              parents: [folderId ?? IMAGE_FOLDER_ID],
-            },
-            media: {
-              mimeType,
-              body: Readable.from(safeBuffer), // Uses readable stream initialized directly from safeBuffer
-            },
-            fields:
-              "id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents",
-          });
-
-          console.log(`>>> [DRIVE UPLOAD SUCCESS] Successfully created Google Drive file ${res.data.id}`);
-          return this.mapFile(res.data);
-        } catch (err: any) {
-          console.error(`>>> [DRIVE API ERROR] Failed to upload partID ${partID}:`, err?.response?.data || err?.message || err);
-          throw err;
-        } finally {
-          globalUploadLocks.delete(partID);
-        }
-      })();
-
-      globalUploadLocks.set(partID, uploadPromise);
-      return uploadPromise;
-    }
-
-    // Default upload if no partID lock key is present
     const res = await this.drive.files.create({
       requestBody: {
         name: fileName,
