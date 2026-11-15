@@ -443,6 +443,27 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [childrenByParent, sortConfig, filterSets, hideRow]);
 
+    /**
+     * React key of each shown row. Row ids aren't always unique: in the BOM
+     * extension a part used in several sub-assemblies (or listed twice by
+     * Onshape) has the same id each time. Duplicate React keys make React
+     * leave stale rows on screen and multiply rows on every re-render (hidden
+     * standard parts stayed visible; 2 sensors became 5). So the key is the
+     * parent + id, plus a counter for repeats under the same parent. The row
+     * id itself (data-row-id, edits) is unchanged.
+     */
+    const rowKeys = useMemo(() => {
+        const keys = new Map<RenderRow, string>();
+        const seen = new Map<string, number>();
+        for (const row of visibleData) {
+            const base = `${row.parentId ?? ''}>${row.id}`;
+            const n = seen.get(base) ?? 0;
+            seen.set(base, n + 1);
+            keys.set(row, n === 0 ? base : `${base}#${n}`);
+        }
+        return keys;
+    }, [visibleData]);
+
     const handleAddRow = (parentId: string | null = null) => {
         const newId = Date.now().toString();
         if (!newRowFunction) return;
@@ -679,7 +700,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                             const isRowParent = isParent(row.id);
 
                             return (
-                                <tr key={row.id} data-row-id={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row.id)}>
+                                <tr key={rowKeys.get(row) ?? row.id} data-row-id={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row.id)}>
                                     {columns.map((col, colIndex) => {
                                         let isCellDisabled = col.isDisabled ? col.isDisabled(row) : false;
                                         let displayValue: string | number = row[col.key] as string | number;
