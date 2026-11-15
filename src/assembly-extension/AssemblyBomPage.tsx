@@ -1115,8 +1115,8 @@ export default function AssemblyBomPage() {
         }
       };
 
-      const onshapeUrlOf = (k: OnshapeKey) =>
-        `https://cad.onshape.com/documents/${k.documentID}/${k.wvmType}/${k.wvmID}/e/${k.elementID}`;
+      // The Onshape host this tab is on (enterprise users aren't on cad.onshape.com).
+      const onshapeUrlOf = (k: OnshapeKey) => buildOnshapeElementURL(context.server, k);
 
       try {
         const isUpdate = Boolean(rootBomDB);
@@ -1440,7 +1440,7 @@ export default function AssemblyBomPage() {
         setPublishProgress(null);
       }
     }),
-    [rootKey, client]
+    [rootKey, client, context.server]
   );
 
   /**
