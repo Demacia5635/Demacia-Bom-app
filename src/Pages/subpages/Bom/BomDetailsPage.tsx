@@ -40,6 +40,12 @@ const getCleanPartName = (record: any, entityID: string) => {
     return rawName || entityID;
 };
 
+/** Part fields the table edits and saves (only the changed ones are sent). */
+const SAVED_PART_FIELDS = [
+  "name", "catalogNumber", "revision", "description", "engineer",
+  "material", "mass", "price", "comments", "vendor",
+] as const satisfies readonly (keyof BomTableRow)[];
+
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
@@ -50,8 +56,8 @@ export default function BomDetailsPage() {
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<ApiError | null>(null);
-  /** The last failed cell save (cleared by the next one that succeeds). */
-  const [saveError, setSaveError] = useState<string | null>(null);
+  /** Failed cell saves by part id (each cleared when that part saves). */
+  const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
 
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
@@ -65,6 +71,9 @@ export default function BomDetailsPage() {
 
   // Ref to hold debounced save timeouts per part ID
   const saveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Fields changed since that part's last save (an edit restarts the timer, so
+  // earlier edits must still go out with the later one).
+  const pendingFieldsRef = useRef<Record<string, Partial<BomTableRow>>>({});
 
   useEffect(() => {
     if (!bomId) return;
@@ -183,19 +192,15 @@ export default function BomDetailsPage() {
       const newRow = newData[i];
       const oldRow = rows.find(r => r.id === newRow.id);
 
-      if (oldRow && !newRow.isSubAssembly && newRow.entityID && (
-        oldRow.name !== newRow.name ||
-        oldRow.catalogNumber !== newRow.catalogNumber ||
-        oldRow.revision !== newRow.revision ||
-        oldRow.description !== newRow.description ||
-        oldRow.engineer !== newRow.engineer ||
-        oldRow.material !== newRow.material ||
-        oldRow.mass !== newRow.mass ||
-        oldRow.price !== newRow.price ||
-        oldRow.comments !== newRow.comments ||
-        oldRow.vendor !== newRow.vendor
-      )) {
+      const changed = oldRow && !newRow.isSubAssembly && newRow.entityID
+        ? SAVED_PART_FIELDS.filter((k) => oldRow[k] !== newRow[k])
+        : [];
+      if (changed.length > 0) {
         const partId = newRow.entityID;
+        pendingFieldsRef.current[partId] = {
+          ...pendingFieldsRef.current[partId],
+          ...Object.fromEntries(changed.map((k) => [k, newRow[k]])),
+        };
 
         // Clear previous pending timeout for this specific part while typing
         if (saveTimeoutsRef.current[partId]) {
@@ -204,19 +209,11 @@ export default function BomDetailsPage() {
 
         // Set a new timeout to send request 600ms after typing stops
         saveTimeoutsRef.current[partId] = setTimeout(async () => {
+          // Only the changed fields: the rest of the record (e.g. a newer publish
+          // from the extension) is left as it is.
+          const payload = pendingFieldsRef.current[partId] ?? {};
+          delete pendingFieldsRef.current[partId];
           try {
-            const payload = {
-              name: newRow.name,
-              catalogNumber: newRow.catalogNumber,
-              revision: newRow.revision,
-              description: newRow.description,
-              engineer: newRow.engineer,
-              material: newRow.material,
-              mass: newRow.mass,
-              price: newRow.price,
-              comments: newRow.comments,
-              vendor: newRow.vendor
-            };
 
             // Same server as every other request (localhost:5050 when run locally);
             // throws on an HTTP error too, so a failed save is shown.
@@ -224,10 +221,12 @@ export default function BomDetailsPage() {
               method: "POST",
               body: JSON.stringify(payload),
             });
-            setSaveError(null);
+            setSaveErrors(({ [partId]: _done, ...rest }) => rest);
           } catch (err: any) {
             console.error("Failed to sync grid updates to part database:", err);
-            setSaveError(`"${newRow.name || partId}" wasn't saved: ${err?.message || err}`);
+            // Kept for the next edit of this part, so a retry sends them again.
+            pendingFieldsRef.current[partId] = { ...payload, ...pendingFieldsRef.current[partId] };
+            setSaveErrors((prev) => ({ ...prev, [partId]: `"${newRow.name || partId}" wasn't saved: ${err?.message || err}` }));
           }
         }, 600);
       }
@@ -320,10 +319,10 @@ export default function BomDetailsPage() {
       {mainBomData && (
         <MainBomDataUI bom={mainBomData} />
       )}
-      {saveError && (
+      {Object.keys(saveErrors).length > 0 && (
         <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-          <p className="font-semibold">Change not saved</p>
-          <p>{saveError}</p>
+          <p className="font-semibold">Changes not saved</p>
+          {Object.entries(saveErrors).map(([id, message]) => <p key={id}>{message}</p>)}
         </div>
       )}
       {error && (
