@@ -410,17 +410,29 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const isParent = (id: string) => childrenByParent.has(id);
 
     // With a row filter: the matching rows, and every row above one (kept open).
+    // An id can sit under several parents (the BOM extension lists a shared
+    // sub-assembly under each parent that uses it), so follow every parent.
     const filterSets = useMemo(() => {
         if (!rowFilter) return null;
-        const byId = new Map(data.map(row => [row.id, row]));
+        const parentsOf = new Map<string, (string | null)[]>();
+        for (const row of data) {
+            const list = parentsOf.get(row.id);
+            if (list) list.push(row.parentId);
+            else parentsOf.set(row.id, [row.parentId]);
+        }
         const matches = new Set<string>();
         const ancestors = new Set<string>();
+        const addAncestors = (id: string) => {
+            for (const p of parentsOf.get(id) ?? []) {
+                if (p === null || ancestors.has(p)) continue;
+                ancestors.add(p);
+                addAncestors(p);
+            }
+        };
         for (const row of data) {
             if (!rowFilter(row)) continue;
             matches.add(row.id);
-            for (let p = row.parentId; p !== null && !ancestors.has(p); p = byId.get(p)?.parentId ?? null) {
-                ancestors.add(p);
-            }
+            addAncestors(row.id);
         }
         return { matches, ancestors };
     }, [data, rowFilter]);
