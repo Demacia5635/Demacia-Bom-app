@@ -9,28 +9,6 @@ interface OnshapeID {
   partID: string;
 }
 
-interface PartBody {
-  name?: string;
-  catalogNumber?: string;
-  revision?: string;
-  description?: string;
-  engineer?: string;
-  material?: string;
-  mass?: number;
-  price?: number;
-  productionType?: number;
-  onshapeURL?: string;
-  stlLink?: string;
-  parasolidLink?: string;
-  comments?: string;
-  onshapeID?: OnshapeID;
-  driveFileId?: string;
-  imageUrl?: string;
-  statusCode?: string;
-  Priority?: string;
-  manufacturingMethod?: string;
-}
-
 function formID(OnshapeID: OnshapeID): string {
   return `${OnshapeID.documentID}_${OnshapeID.wvmType}_${OnshapeID.wvmID}_${OnshapeID.elementID}_${OnshapeID.partID}`;
 }
@@ -144,21 +122,6 @@ export async function findPartByOnshapeKey(req: Request<OnshapeID>, res: Respons
   } catch (err) {
     return next(err);
   }
-}
-
-export async function getPartByOnshapeKey(req: Request<OnshapeID>, res: Response, next: NextFunction) {
-  const id = formID(req.params);
-  const delegateReq = req as unknown as Request<{ id: string }>;
-  delegateReq.params = { id: id };
-  return getPartByID(delegateReq, res, next);
-}
-
-export async function upsertPartByOnshapeKey(req: Request<OnshapeID, unknown, PartBody>, res: Response, next: NextFunction) {
-  const id = formID(req.params);
-  const delegateReq = req as unknown as Request<{ id: string }, unknown, PartBody>;
-  delegateReq.params = { id: id };
-  delegateReq.body = { ...req.body, onshapeID: req.params };
-  return upsertPartByID(delegateReq, res, next);
 }
 
 export async function deletePartByOnshapeKey(req: Request<OnshapeID>, res: Response, next: NextFunction) {

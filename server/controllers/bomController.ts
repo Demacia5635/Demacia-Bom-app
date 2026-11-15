@@ -21,9 +21,8 @@ interface SubAssemblyBody {
 
 interface BomBody {
     name?: string;
-    catlogNumber?: string;
+    catalogNumber?: string;
     projectCatalogNumber?: string;
-    revision?: string;
     description?: string;
     engineer?: string;
 

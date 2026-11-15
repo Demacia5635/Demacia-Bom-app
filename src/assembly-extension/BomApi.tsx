@@ -139,10 +139,6 @@ export function upsertBomByOnshapeKey(key: OnshapeKey, bomID: string, data: Part
   return postToApi<BomModel>(dbBomByOnshapeKeyEndpoint(key, bomID), data);
 }
 
-export function upsertPartByOnshapeKey(key: OnshapeKey, partID: string, data: Partial<PartModel>): Promise<PartModel> {
-  return postToApi<PartModel>(dbPartByOnshapeKeyEndpoint(key, partID), data);
-}
-
 export function upsertBomById(id: string, data: Partial<BomModel>): Promise<BomModel> {
   return postToApi<BomModel>(`/db/bom/id/${encodeURIComponent(id)}`, data);
 }
