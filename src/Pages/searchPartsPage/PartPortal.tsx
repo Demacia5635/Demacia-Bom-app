@@ -5,6 +5,7 @@ import type { PartModel, BomModel } from "../../util/Models";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { recordImageSrc } from "../../util/recordImage";
+import { openExternal } from "../../util/openExternal";
 
 const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const { isLight } = useThemeSync();
@@ -270,7 +271,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         <button
                             type="button"
                             onClick={() => {
-                                if (part.onshapeURL) window.open(part.onshapeURL, "_blank");
+                                openExternal(part.onshapeURL);
                             }}
                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                         >

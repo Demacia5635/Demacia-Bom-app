@@ -1,5 +1,6 @@
 import type { ColumnConfig } from "../../../components/Table";
 import { downloadFile } from "../../../util/ApiService";
+import { openExternal } from "../../../util/openExternal";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 
 /** Vendor parts and Onshape Standard Content: their name isn't edited here. */
@@ -88,7 +89,7 @@ const WorkOrderColumns: ColumnConfig[] = [
                 const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
                 url = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
             }
-            if (url) window.open(url, "_blank");
+            openExternal(url);
         },
     },
     {

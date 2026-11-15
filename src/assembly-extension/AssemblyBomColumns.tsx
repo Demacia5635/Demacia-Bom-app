@@ -1,5 +1,6 @@
 import type { ColumnConfig } from "../components/Table";
 import type AssemblyBomRow from "./AssemblyBomRow";
+import { openExternal } from "../util/openExternal";
 
 /**
  * Not editable: Standard Content (bolts, nuts...) and vendor parts, which come
@@ -47,7 +48,7 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem): Colu
       buttonText: "Open Onshape",
       isDisabled: isStandardContent,
       onButtonClick: (row: AssemblyBomRow) => {
-        if (row.onshapeURL) window.open(row.onshapeURL, "_blank");
+        openExternal(row.onshapeURL);
       },
     },
     // Which files Publish BOM keeps for each part (unticking deletes the file on

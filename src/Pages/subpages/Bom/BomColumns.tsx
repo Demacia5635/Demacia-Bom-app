@@ -1,5 +1,6 @@
 import type { ColumnConfig } from "../../../components/Table";
 import { downloadFile } from "../../../util/ApiService";
+import { openExternal } from "../../../util/openExternal";
 import type BomTableRow from "./BomTableRow";
 import { isLockedBomRow } from "./BomTableRow";
 
@@ -30,7 +31,7 @@ const BomColumns: ColumnConfig[] = [
       if (!url && row.documentID && row.elementID) {
         url = `https://cad.onshape.com/documents/${row.documentID}/${row.wvmType || "w"}/${row.wvmID}/e/${row.elementID}`;
       }
-      if (url) window.open(url, "_blank");
+      openExternal(url);
     },
   },
   // Export STL Action (Disabled and blocked for sub-assemblies)
