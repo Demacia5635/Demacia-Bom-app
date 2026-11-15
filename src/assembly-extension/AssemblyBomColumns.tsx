@@ -8,12 +8,6 @@ import { openExternal } from "../util/openExternal";
  */
 const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent || !!row.markedStandard;
 
-/**
- * No STL / Parasolid choice: assemblies, Onshape Standard Content and parts
- * marked standard. Vendor parts keep it (their other cells are locked).
- */
-const noFileChoice = (row: AssemblyBomRow) => row.isAssembly || !!row.isStandardContent || !!row.markedStandard;
-
 /** Why a cell's value would stop a work order, if it would. */
 export type CellProblem = (row: AssemblyBomRow, key: string) => string | undefined;
 
@@ -71,25 +65,25 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
       key: "wantStl",
       label: "STL",
       type: "boolean",
-      isDisabled: noFileChoice,
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantStl"),
     },
     {
       key: "wantParasolid",
       label: "Parasolid",
       type: "boolean",
-      isDisabled: noFileChoice,
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantParasolid"),
     },
     // Bought rather than made (a bearing, a motor...): locked like Standard
     // Content, no files; a sub-assembly becomes one item (its insides drop out).
-    // Saved on Publish BOM. Onshape Standard Content already is; vendor parts
-    // (e.g. from a vendor's library) can be marked.
+    // Saved on Publish BOM. Onshape Standard Content already is; vendor parts and
+    // sub-assemblies are always marked (ticked, locked).
     {
       key: "markedStandard",
       label: "Standard part",
       type: "boolean",
-      isDisabled: (row: AssemblyBomRow) => !!row.isStandardContent,
+      isDisabled: (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent,
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("markedStandard"),
     },
   ];

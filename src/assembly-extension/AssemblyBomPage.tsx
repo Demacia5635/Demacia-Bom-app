@@ -101,20 +101,9 @@ function sameValue(field: string, a: unknown, b: unknown): boolean {
 /** Engineer written for Onshape Standard Content (screws, nuts, washers...) and parts marked standard. */
 const STANDARD_PART_ENGINEER = "Standard Part";
 
-/** Standard Content and vendor parts come from outside Onshape documents you own: their properties aren't editable. */
+/** Standard Content and vendor parts come from outside Onshape documents you own: never editable. */
 function isExternalRow(row: AssemblyBomRow): boolean {
   return row.vendor !== "" || !!row.isStandardContent;
-}
-
-/**
- * The cells of `row` that can change. Standard Content: none. Vendor parts:
- * only the database choices (STL / Parasolid / Standard part), so one can be
- * marked standard or have its files unticked; its properties stay locked.
- */
-function editableFieldsOf(row: AssemblyBomRow): readonly string[] {
-  if (row.isStandardContent) return [];
-  if (row.vendor !== "") return EDITABLE_FIELDS.filter((k) => BOOLEAN_FIELDS.has(k));
-  return EDITABLE_FIELDS;
 }
 
 /** Bought, not made: Onshape Standard Content, or marked as a standard part here. */
@@ -134,9 +123,8 @@ function isHiddenByStandardToggle(row: AssemblyBomRow): boolean {
 }
 
 /**
- * Rows whose properties are locked (and which work-order checks skip): Standard
- * Content, vendor parts (only their file and standard-part boxes can change,
- * see editableFieldsOf) and parts marked standard (only the mark, to undo it).
+ * Cells locked: everything for Standard Content and vendor parts; for parts
+ * marked standard, everything except the mark itself (so it can be undone).
  */
 function isLockedRow(row: AssemblyBomRow): boolean {
   return isExternalRow(row) || !!row.markedStandard;
@@ -144,9 +132,9 @@ function isLockedRow(row: AssemblyBomRow): boolean {
 
 /** Editable cells of `row` that differ from `against` (none for Standard Content, which isn't editable). */
 function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): string[] {
-  if (!against) return [];
+  if (!against || isExternalRow(row)) return [];
   const r = row as unknown as Record<string, unknown>;
-  return editableFieldsOf(row).filter((k) => !sameValue(k, r[k], against[k]));
+  return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
 }
 
 /**
@@ -610,8 +598,10 @@ export default function AssemblyBomPage() {
       const fromOnshape = parentItem?.onshapeFields ?? {};
       const pick = (field: OptionalBomField, dbValue: string | undefined, fallback = "") =>
         field in fromOnshape ? String(fromOnshape[field] ?? "") : dbValue || fallback;
+      const vendor = dbBom?.vendor || onshapeBom.bomSource?.element?.vendor || "";
       // Marked as a standard (bought) part: one item, its insides aren't loaded.
-      const markedStandard = !!dbBom?.markedStandard && rootBom !== "root";
+      // One from a vendor always is.
+      const markedStandard = (!!dbBom?.markedStandard || vendor !== "") && rootBom !== "root";
 
       const row: AssemblyBomRow = {
         id: rowId,
@@ -642,7 +632,7 @@ export default function AssemblyBomPage() {
         exportSTL: "",
         exportParasolid: "",
         dbAction: isExist ? "" : "add",
-        vendor: dbBom?.vendor || onshapeBom.bomSource?.element?.vendor || "",
+        vendor,
         markedStandard,
       };
 
@@ -702,8 +692,9 @@ export default function AssemblyBomPage() {
         field in fromOnshape ? Number(fromOnshape[field]) || 0 : dbValue || 0;
 
       // Standard Content (screws, nuts...) and parts marked standard here: bought,
-      // so no engineer, files or Onshape link.
-      const markedStandard = !parsedItem.itemSource.isStandardContent && !!dbPart?.markedStandard;
+      // so no engineer, files or Onshape link. Vendor parts are always marked.
+      const vendor = dbPart?.vendor || parsedItem.vendor || "";
+      const markedStandard = !parsedItem.itemSource.isStandardContent && (!!dbPart?.markedStandard || vendor !== "");
       const standard = !!parsedItem.itemSource.isStandardContent || markedStandard;
 
       // Which files Publish BOM keeps: the saved choice; for parts saved before
@@ -716,9 +707,7 @@ export default function AssemblyBomPage() {
           ? { wantStl: !!dbPart!.wantStl, wantParasolid: !!dbPart!.wantParasolid }
           : dbPart
             ? { wantStl: !!dbPart.stlLink, wantParasolid: !!dbPart.parasolidLink }
-            : parsedItem.vendor
-              ? { wantStl: false, wantParasolid: false } // a vendor part is usually bought
-              : fileDefaultsForMaterial(material);
+            : fileDefaultsForMaterial(material);
 
       const savedValues: FieldValues | null = dbPart
         ? ({
@@ -772,7 +761,7 @@ export default function AssemblyBomPage() {
         exportSTL: standard ? "" : dbPart?.stlLink || "",
         exportParasolid: standard ? "" : dbPart?.parasolidLink || "",
         dbAction: isExist ? "" : "add",
-        vendor: dbPart?.vendor || parsedItem.vendor || "",
+        vendor,
         configuration: parsedItem.itemSource.configuration || "",
         isStandardContent: !!parsedItem.itemSource.isStandardContent,
         markedStandard,
@@ -1041,13 +1030,11 @@ export default function AssemblyBomPage() {
           (k) => (row as unknown as Record<string, unknown>)[k] !== (prev as unknown as Record<string, unknown>)[k]
         );
         if (editedKeys.length === 0) return row; // e.g. expanding/collapsing a row
-        // Standard Content: nothing editable; vendor parts: only the file and
-        // standard-part choices. Marked standard: only the mark (to undo it).
-        // Mid-refresh or mid-publish edits would be lost.
-        const allowed = editableFieldsOf(prev);
+        // Standard Content / vendor parts: nothing editable. Marked standard: only
+        // the mark (to undo it). Mid-refresh or mid-publish edits would be lost.
         const refused = editedKeys.filter(
           (k) =>
-            loading || publishing || subtreeLoads > 0 || !allowed.includes(k) || (prev.markedStandard && k !== "markedStandard")
+            loading || publishing || subtreeLoads > 0 || isExternalRow(prev) || (prev.markedStandard && k !== "markedStandard")
         );
         if (refused.length > 0) {
           blocked = true;
