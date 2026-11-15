@@ -1,0 +1,16 @@
+{
+  // Type-check only: the server runs its TypeScript directly with tsx, so
+  // `npm run build` (tsc) checks types and writes no files.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}

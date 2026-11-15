@@ -2,7 +2,7 @@
   "name": "bom-app-server",
   "version": "1.0.0",
   "description": "a server for the bom app",
-  "main": "index.ts",
+  "main": "server.ts",
   "scripts": {
     "dev": "tsx watch server.ts",
     "build": "tsc",
