@@ -4,15 +4,14 @@ import { type BomModel } from "../../../util/Models";
 import { createPortal } from "react-dom";
 import { WorkOrderForm } from "./CreatingWO";
 import { recordImageSrc } from "../../../util/recordImage";
+import { useThemeSync } from "../../../util/misc/useThemeSync";
 
 const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
   const [isCreatingWO, setCreatingWO] = useState(false);
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
   
-  // 🛡️ Bulletproof theme definition
-  const isLight = typeof window !== "undefined" 
-    ? document.documentElement.classList.contains("light") || window.matchMedia("(prefers-color-scheme: light)").matches 
-    : true;
+  // The app's theme toggle (like every other page), not the OS setting.
+  const { isLight } = useThemeSync();
 
   const resolvedBomId = bom.id || (bom as any)._id;
 

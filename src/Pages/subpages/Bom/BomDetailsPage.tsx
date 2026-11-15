@@ -9,6 +9,7 @@ import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
 import { fetchBomsByIds, fetchPartsByIds } from "../../../util/records";
+import { useThemeSync } from "../../../util/misc/useThemeSync";
 
 // Comprehensive sanitizer to check all potential database fields for the real Onshape name
 const getCleanPartName = (record: any, entityID: string) => {
@@ -43,10 +44,8 @@ export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
 
-  // 🛡️️ Bulletproof theme definition
-  const isLight = typeof window !== "undefined" 
-    ? document.documentElement.classList.contains("light") || window.matchMedia("(prefers-color-scheme: light)").matches 
-    : true;
+  // The app's theme toggle (like every other page), not the OS setting.
+  const { isLight } = useThemeSync();
 
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
