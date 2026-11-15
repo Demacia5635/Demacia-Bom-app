@@ -1,5 +1,4 @@
 import express from 'express';
-import * as healthController from '../controllers/healthController';
 import dbRoutes from './dbRoutes';
 import enumRoutes from './enumRoutes';
 import driveRoutes from './driveRoutes';
@@ -7,7 +6,10 @@ import telemetryRoutes from './telemetryRoutes';
 
 const router = express.Router();
 
-router.get('/', healthController.checkAuth);
+// Public API health check (auth already ran in app.ts and lets "/" through).
+router.get('/', (req, res) => {
+    res.status(200).json({ status: 'online' });
+});
 
 router.use('/db', dbRoutes);
 router.use('/enum', enumRoutes);
