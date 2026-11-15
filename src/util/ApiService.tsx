@@ -146,6 +146,44 @@ export function setOnshapeImageCache(cache: OnshapeImageCache | null): void {
   onshapeImageCache = cache;
 }
 
+/**
+ * Onshape image requests at once. A big tree mounts hundreds of rows together;
+ * firing all their renders at once makes Onshape answer 429 (rate limited).
+ */
+const ONSHAPE_IMAGE_CONCURRENCY = 4;
+/** Waits before retrying a rate-limited (429) image, when Onshape sends no Retry-After. */
+const ONSHAPE_IMAGE_RETRY_MS = [1000, 3000, 8000];
+let onshapeImagesActive = 0;
+const onshapeImageWaiting: (() => void)[] = [];
+
+/**
+ * Fetches an Onshape image when a slot is free. `stillWanted` is checked when
+ * the turn comes, so images that went away while queued (a collapsed row, a
+ * closed assembly) cost nothing. Returns null for those.
+ */
+async function fetchOnshapeImage(url: string, stillWanted: () => boolean): Promise<Response | null> {
+  if (onshapeImagesActive >= ONSHAPE_IMAGE_CONCURRENCY) {
+    await new Promise<void>((resolve) => onshapeImageWaiting.push(resolve));
+  } else {
+    onshapeImagesActive += 1;
+  }
+  try {
+    for (let attempt = 0; ; attempt++) {
+      if (!stillWanted()) return null;
+      const res = await fetch(url, { credentials: "include" });
+      onshapeImageListener?.(url, res.ok);
+      if (res.status !== 429 || attempt >= ONSHAPE_IMAGE_RETRY_MS.length) return res;
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const wait = retryAfter > 0 ? Math.min(retryAfter * 1000, 30000) : ONSHAPE_IMAGE_RETRY_MS[attempt];
+      await new Promise((r) => setTimeout(r, wait)); // keeps its slot: backing off slows everyone
+    }
+  } finally {
+    const next = onshapeImageWaiting.shift();
+    if (next) next(); // the slot passes straight to the next image
+    else onshapeImagesActive -= 1;
+  }
+}
+
 interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
 }
@@ -231,13 +269,10 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
           }
         }
 
-        const res = await fetch(
-          targetUrl,
-          isOnshapeApiUrl
-            ? { credentials: "include" }
-            : { headers: secret ? { "x-client-secret": secret } : {} }
-        );
-        if (isOnshapeApiUrl) onshapeImageListener?.(targetUrl, res.ok);
+        const res = isOnshapeApiUrl
+          ? await fetchOnshapeImage(targetUrl, () => isMounted)
+          : await fetch(targetUrl, { headers: secret ? { "x-client-secret": secret } : {} });
+        if (!res) return; // went away while waiting its turn
 
         if (!res.ok) throw new Error(`Failed to load image: ${res.statusText}`);
 
