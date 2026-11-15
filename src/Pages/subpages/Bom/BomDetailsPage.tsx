@@ -10,35 +10,7 @@ import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
 import { fetchBomsByIds, fetchPartsByIds } from "../../../util/records";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
-
-// Comprehensive sanitizer to check all potential database fields for the real Onshape name
-const getCleanPartName = (record: any, entityID: string) => {
-    if (record?.title && typeof record.title === 'string' && !record.title.includes('_')) return record.title;
-    if (record?.partName && typeof record.partName === 'string' && !record.partName.includes('_')) return record.partName;
-    if (record?.fileName && typeof record.fileName === 'string' && !record.fileName.includes('_')) return record.fileName;
-    if (record?.properties?.name && typeof record.properties.name === 'string' && !record.properties.name.includes('_')) return record.properties.name;
-    if (record?.metadata?.name && typeof record.metadata.name === 'string' && !record.metadata.name.includes('_')) return record.metadata.name;
-
-    const rawName = record?.name;
-    
-    if (rawName && typeof rawName === 'string' && !rawName.includes('_') && rawName.length < 50) {
-        return rawName;
-    }
-
-    if (record?.catalogNumber && typeof record.catalogNumber === 'string' && record.catalogNumber.trim() !== '' && !record.catalogNumber.includes('_')) {
-        return record.catalogNumber;
-    }
-    if (record?.description && typeof record.description === 'string' && record.description.trim() !== '' && !record.description.includes('_') && record.description.length < 50) {
-        return record.description;
-    }
-
-    if (entityID && entityID.includes('_')) {
-        const segments = entityID.split('_');
-        return `Part ${segments[segments.length - 1]}`;
-    }
-
-    return rawName || entityID;
-};
+import { partDisplayName } from "../../../util/partDisplayName";
 
 /** Part fields the table edits and saves (only the changed ones are sent). */
 const SAVED_PART_FIELDS = [
@@ -117,7 +89,7 @@ export default function BomDetailsPage() {
           isSubAssembly: true,
           subBomId: sub.bomID,
           avatar: subAvatarUrl,
-          name: getCleanPartName(subBomRecord, sub.bomID),
+          name: partDisplayName(subBomRecord, sub.bomID),
           catalogNumber: subBomRecord?.catalogNumber || "",
           revision: "-",
           description: subBomRecord?.description || "",
@@ -153,7 +125,7 @@ export default function BomDetailsPage() {
           isExpanded: false,
           isSubAssembly: false,
           avatar: partAvatarUrl,
-          name: getCleanPartName(part, p.partID),
+          name: partDisplayName(part, p.partID),
           catalogNumber: part.catalogNumber || "",
           revision: part.revision || "",
           description: part.description || "",
