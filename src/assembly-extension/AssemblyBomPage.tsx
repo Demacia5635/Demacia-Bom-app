@@ -972,7 +972,8 @@ export default function AssemblyBomPage() {
     [workOrderProblems]
   );
 
-  // The Table keeps the column set it first gets, so problems are read through a ref.
+  // Problems are read through a ref, so the columns are only rebuilt when the
+  // default engineer changes, not on every edit.
   const columns = useMemo(
     () =>
       buildAssemblyBomColumns(
