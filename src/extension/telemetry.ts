@@ -62,7 +62,13 @@ const MAX_BATCH = 100;
 
 let user = "";
 let currentAssembly = { name: "", documentID: "", elementID: "" };
-let current: Operation | null = null;
+/**
+ * Operations still running, oldest first. Operations can overlap (e.g. "Check
+ * for model changes" during a Refresh) and the browser can't tell which one a
+ * request belongs to, so a request is counted into the newest one still
+ * running. A finished operation never collects more requests.
+ */
+const active: Operation[] = [];
 /** Requests outside an operation, summed until the next flush. */
 let ambient: Operation | null = null;
 const queue: TelemetryEventData[] = [];
@@ -83,6 +89,7 @@ export function setTelemetryUser(name: string): void {
 /** The assembly the panel is showing, used to label operations and image loads. */
 export function setTelemetryAssembly(name: string, documentID = "", elementID = ""): void {
   currentAssembly = { name, documentID, elementID };
+  const current = active[active.length - 1];
   if (current) {
     current.assembly = name || current.assembly;
     current.documentID = documentID || current.documentID;
@@ -106,7 +113,7 @@ function newOperation(action: string): Operation {
 export function recordOnshapeCall(method: string, pathOrUrl: string, ok = true): void {
   try {
     const kind = classifyOnshapeCall(method, pathOrUrl);
-    const op = current ?? (ambient ??= newOperation("Background"));
+    const op = active[active.length - 1] ?? (ambient ??= newOperation("Background"));
     op.counts[kind] = (op.counts[kind] ?? 0) + 1;
     if (!ok) op.failed += 1;
   } catch {
@@ -122,7 +129,7 @@ function toEvent(op: Operation, ok: boolean, error: string): TelemetryEventData 
     assembly: op.assembly,
     documentID: op.documentID,
     elementID: op.elementID,
-    counts: op.counts,
+    counts: { ...op.counts }, // a copy: the queued event must not change later
     failed: op.failed,
     durationMs: Date.now() - op.startedAt,
     ok,
@@ -136,9 +143,8 @@ function toEvent(op: Operation, ok: boolean, error: string): TelemetryEventData 
  * counted into it, and one event is queued when it ends.
  */
 export async function withOperation<T>(action: string, fn: () => Promise<T>): Promise<T> {
-  const previous = current;
   const op = newOperation(action);
-  current = op;
+  active.push(op);
   let ok = true;
   let error = "";
   try {
@@ -150,7 +156,7 @@ export async function withOperation<T>(action: string, fn: () => Promise<T>): Pr
     error = String(err?.message || err).slice(0, 500);
     throw err;
   } finally {
-    current = previous;
+    active.splice(active.indexOf(op), 1);
     if (Object.keys(op.counts).length > 0 || !ok) queue.push(toEvent(op, ok, error));
     scheduleFlush();
   }
