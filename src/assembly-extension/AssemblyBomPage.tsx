@@ -1402,6 +1402,13 @@ export default function AssemblyBomPage() {
         const published = new Set<string>();
         /** Items not saved this time: failed, or skipped because something inside failed. */
         const notSaved = new Set<string>();
+        /** Why each of those wasn't saved (`problems` also has non-fatal ones, like a failed thumbnail). */
+        const saveFailures: string[] = [];
+        const failSave = (row: AssemblyBomRow, reason: string) => {
+          notSaved.add(row.id);
+          saveFailures.push(reason);
+          problems.push(reason);
+        };
         const blockedBy = (parentRowId: string) =>
           (childrenByParentRowId.get(parentRowId) ?? []).filter((c) => notSaved.has(c.id));
 
@@ -1415,15 +1422,13 @@ export default function AssemblyBomPage() {
                 try {
                   const blocked = row.isAssembly && !row.markedStandard ? blockedBy(row.id) : [];
                   if (blocked.length > 0) {
-                    notSaved.add(row.id);
-                    problems.push(`"${row.name}" not saved: "${blocked[0].name}" inside it wasn't saved`);
+                    failSave(row, `"${row.name}" not saved: "${blocked[0].name}" inside it wasn't saved`);
                     continue;
                   }
                   await publishRow(row, progress);
                   published.add(row.id);
                 } catch (err: any) {
-                  notSaved.add(row.id);
-                  problems.push(`Saving "${row.name}": ${err?.message || err}`);
+                  failSave(row, `Saving "${row.name}": ${err?.message || err}`);
                 } finally {
                   progress.finish();
                 }
@@ -1478,9 +1483,14 @@ export default function AssemblyBomPage() {
         const rootBlocked = blockedBy(rootRowId);
         if (rootBlocked.length > 0) {
           rootTrack.finish();
+          // saveFailures is in completion order, so its first entry is a real
+          // failure (a skip is always recorded after the failure that caused it).
+          const others = problems.length - saveFailures.length;
           const message =
             `"${values.name}" was not saved: ${notSaved.size} item${notSaved.size === 1 ? "" : "s"} in it ` +
-            `could not be saved (first: ${problems[0]}). The items that were saved are kept. Publish BOM again to retry.`;
+            `could not be saved (first: ${saveFailures[0]}).` +
+            (others > 0 ? ` ${others} other problem${others === 1 ? "" : "s"} (see the console).` : "") +
+            ` The items that were saved are kept. Publish BOM again to retry.`;
           console.warn("[publish] problems:", problems);
           setPublishError(message);
           client.showMessageBubble(message);
