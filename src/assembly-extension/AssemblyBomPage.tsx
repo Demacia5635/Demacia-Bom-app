@@ -111,6 +111,17 @@ function isStandardRow(row: AssemblyBomRow): boolean {
 }
 
 /**
+ * What "Hide standard parts" hides (and counts): every bought part the table
+ * greys out - Standard Content, vendor parts (e.g. screws or bearings from a
+ * vendor library, which aren't Onshape Standard Content) and parts marked
+ * standard. Same rule as the greyed-out cells in AssemblyBomColumns.
+ * isStandardRow stays narrower: Publish uses it for files and the engineer.
+ */
+function isHiddenByStandardToggle(row: AssemblyBomRow): boolean {
+  return isStandardRow(row) || isExternalRow(row);
+}
+
+/**
  * Cells locked: everything for Standard Content and vendor parts; for parts
  * marked standard, everything except the mark itself (so it can be undone).
  */
@@ -1075,9 +1086,9 @@ export default function AssemblyBomPage() {
   const hideRow = useMemo(() => {
     if (!hideStandardParts && !hideStandardAssemblies) return undefined;
     return (row: AssemblyBomRow) =>
-      row.isAssembly ? hideStandardAssemblies && !!row.markedStandard : hideStandardParts && isStandardRow(row);
+      row.isAssembly ? hideStandardAssemblies && !!row.markedStandard : hideStandardParts && isHiddenByStandardToggle(row);
   }, [hideStandardParts, hideStandardAssemblies]);
-  const standardPartCount = useMemo(() => rows.filter((r) => !r.isAssembly && isStandardRow(r)).length, [rows]);
+  const standardPartCount = useMemo(() => rows.filter((r) => !r.isAssembly && isHiddenByStandardToggle(r)).length, [rows]);
   const standardAssemblyCount = useMemo(() => rows.filter((r) => r.isAssembly && r.markedStandard).length, [rows]);
 
   /** Expand all / Collapse all (kept in the saved copy like any other expand). */
