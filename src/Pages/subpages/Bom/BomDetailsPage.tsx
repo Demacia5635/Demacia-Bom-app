@@ -241,6 +241,17 @@ export default function BomDetailsPage() {
     }
   };
 
+  /**
+   * The row a table element belongs to, by the row id Table puts on each tr
+   * (data-row-id). Not by position: sorting, filtering and collapsing change
+   * which row is where. A part used twice has the same id on both rows; either
+   * one is fine here.
+   */
+  const rowOfElement = (el: Element): BomTableRow | undefined => {
+    const rowId = el.closest("[data-row-id]")?.getAttribute("data-row-id");
+    return rowId == null ? undefined : rows.find((r) => r.id === rowId);
+  };
+
   const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const cellEl = target.closest(".table-td, td");
@@ -249,14 +260,8 @@ export default function BomDetailsPage() {
     const trEl = cellEl.closest(".table-tr, tr");
     if (!trEl) return;
 
-    const tbody = trEl.closest("tbody") || trEl.parentElement;
-    if (!tbody) return;
-
-    const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
-    const rowIndex = trs.indexOf(trEl);
-
-    if (rowIndex !== -1 && rows[rowIndex]) {
-      const clickedRow = rows[rowIndex];
+    const clickedRow = rowOfElement(trEl);
+    if (clickedRow) {
       const cellsInRow = Array.from(trEl.querySelectorAll(".table-td, td"));
       const cellIndex = cellsInRow.indexOf(cellEl);
 
@@ -274,17 +279,12 @@ export default function BomDetailsPage() {
     e.preventDefault();
     e.stopPropagation();
 
-    const tbody = rowEl.closest("tbody") || rowEl.parentElement;
-    if (!tbody) return;
-
-    const trs = Array.from(tbody.querySelectorAll(".table-tr, tr"));
-    const rowIndex = trs.indexOf(rowEl);
-
-    if (rowIndex !== -1 && rows[rowIndex]) {
+    const row = rowOfElement(rowEl);
+    if (row) {
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
-        row: rows[rowIndex],
+        row,
       });
     }
   };
