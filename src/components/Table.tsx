@@ -136,7 +136,17 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const [tableWidth, setTableWidth] = useState<number>(0);
     const [autoLastColWidth, setAutoLastColWidth] = useState<number | null>(null);
 
-    const [columns, setColumns] = useState<ColumnConfig[]>(columnsData);
+    // Only the user's column order is state; the columns themselves always come
+    // from the current columnsData prop, so later changes to it (labels,
+    // callbacks, added/removed columns) take effect. Pass a stable array
+    // (module constant or useMemo): effects below depend on `columns`.
+    const [columnOrder, setColumnOrder] = useState<string[]>(() => columnsData.map(c => c.key));
+    const columns = useMemo(() => {
+        const byKey = new Map(columnsData.map(c => [c.key, c] as const));
+        const ordered = columnOrder.filter(k => byKey.has(k)).map(k => byKey.get(k)!);
+        for (const c of columnsData) if (!columnOrder.includes(c.key)) ordered.push(c);
+        return ordered;
+    }, [columnsData, columnOrder]);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(initialSort ?? null);
 
     // Sticky header: the table must scroll inside its own box for the header to
@@ -531,7 +541,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         const updatedColumns = [...columns];
         const [movedItem] = updatedColumns.splice(fromIdx, 1);
         updatedColumns.splice(toIdx, 0, movedItem);
-        setColumns(updatedColumns);
+        setColumnOrder(updatedColumns.map(c => c.key));
     };
 
     const handleSortClick = (e: React.MouseEvent, key: string) => {
