@@ -293,12 +293,16 @@ async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new S
   );
 }
 
+/** Thrown instead of starting a request for a load that was replaced (see createLimiter). */
+const LOAD_CANCELLED = { message: "This load was replaced by a newer one.", cancelled: true } as const;
+
 /**
  * At most `max` requests at once; the rest wait their turn. Applied to single
  * network calls (never to work that itself waits on other requests), so it
- * can't deadlock.
+ * can't deadlock. Once `isCancelled()` is true, requests still waiting are
+ * refused (LOAD_CANCELLED) instead of being sent.
  */
-function createLimiter(max: number): Limiter {
+function createLimiter(max: number, isCancelled?: () => boolean): Limiter {
   let active = 0;
   const waiting: (() => void)[] = [];
   return async (request) => {
@@ -306,6 +310,7 @@ function createLimiter(max: number): Limiter {
     if (active >= max) await new Promise<void>((resolve) => waiting.push(resolve));
     else active += 1;
     try {
+      if (isCancelled?.()) throw LOAD_CANCELLED;
       return await request();
     } finally {
       const next = waiting.shift();
@@ -474,6 +479,22 @@ export default function AssemblyBomPage() {
   const [publishProgress, setPublishProgress] = useState<PublishProgress | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+
+  /**
+   * Each loadTree call gets a number; a load is stale once a newer one starts
+   * or this page goes away (the panel remounts it when the Onshape tab shows
+   * another element). A stale load sends no more requests and leaves the
+   * shared image versions and telemetry label alone: they belong to the
+   * current page now.
+   */
+  const loadSeqRef = useRef(0);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Memoized on the ID strings: a new object every render made loadTree (and
   // its effect) change every render, reloading the tree endlessly.
@@ -745,6 +766,8 @@ export default function AssemblyBomPage() {
    */
   const loadTree = useCallback(async (options: { preferCache?: boolean } = {}): Promise<LoadedTree | null> => {
     if (!rootKey) return null;
+    const loadId = ++loadSeqRef.current;
+    const stale = () => !mountedRef.current || loadSeqRef.current !== loadId;
 
     setLoading(true);
     setError(null);
@@ -768,8 +791,15 @@ export default function AssemblyBomPage() {
         setLoading(false);
         // Images of unchanged models come from the image store; only changed ones render.
         void withOperation("Check for model changes", () =>
-          computeImageVersions(cached.rows, createLimiter(REFRESH_CONCURRENCY))
-        ).then(setImageVersions, cancelImageVersionCheck);
+          computeImageVersions(cached.rows, createLimiter(REFRESH_CONCURRENCY, stale))
+        ).then(
+          (versions) => {
+            if (!stale()) setImageVersions(versions);
+          },
+          () => {
+            if (!stale()) cancelImageVersionCheck();
+          }
+        );
         return null;
       }
     }
@@ -779,7 +809,7 @@ export default function AssemblyBomPage() {
     // Requests run in parallel (at most REFRESH_CONCURRENCY at once) through a
     // per-load cache: a prefetch downloads everything ahead while the walk
     // below builds the rows in the same order as before.
-    const limit = createLimiter(REFRESH_CONCURRENCY);
+    const limit = createLimiter(REFRESH_CONCURRENCY, stale);
     const src = createCachedSources(limit);
 
     const getParentBom = createParentBomLoader(limit);
@@ -789,6 +819,7 @@ export default function AssemblyBomPage() {
 
     try {
       const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', getParentBom, undefined, src);
+      if (stale()) throw LOAD_CANCELLED;
       if (rootNode.onshapeBom) void prefetchTree(rootNode.onshapeBom, src);
       setRootBomDB(dbBom);
       setRootIsPublished(Boolean(dbBom));
@@ -812,7 +843,9 @@ export default function AssemblyBomPage() {
       // A refresh discards unpublished edits (handleRefresh asks first).
       const freshRows = allRows;
       // Which row images changed since they were stored (one request per document).
-      setImageVersions(await computeImageVersions(freshRows, limit).catch(() => new Map<string, string>()));
+      const imageVersions = await computeImageVersions(freshRows, limit).catch(() => new Map<string, string>());
+      if (stale()) throw LOAD_CANCELLED;
+      setImageVersions(imageVersions);
       setRows(freshRows);
       setCachedAt(null);
       treeSavedAtRef.current = Date.now();
@@ -823,11 +856,13 @@ export default function AssemblyBomPage() {
       });
       return { rows: freshRows, rootBomDB: dbBom, rootOnshapeBom: rootNode.onshapeBom ?? null };
     } catch (err: any) {
+      // A replaced load just stops: the newer load (or page) owns the screen and the image check.
+      if (stale()) return null;
       setError(err as ApiError);
       cancelImageVersionCheck(); // don't keep images waiting for a check that won't come
       return null;
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
     });
   }, [rootKey, resolveBomNode, expandTree]);
