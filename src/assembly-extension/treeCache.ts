@@ -20,7 +20,8 @@ import type { OnshapeKey } from "./BomApi";
 // 6: rows carry isStandardContent.
 // 7: Standard Content rows: engineer "Standard Part", no files or Onshape link.
 // 8: parts carry wantStl / wantParasolid and the saved files' model version.
-const VERSION = 8;
+// 9: rows carry dbUpdatedAt (Publish BOM's check for newer publishes).
+const VERSION = 9;
 const PREFIX = "demacia-bom-tree:";
 const INDEX_KEY = "demacia-bom-tree-index";
 const MAX_ENTRIES = 20;

@@ -47,6 +47,12 @@ export default interface AssemblyBomRow extends BomTableRow {
   loaded?: Record<string, string | number>;
   /** Drive file IDs currently saved for this item, replaced (then deleted) by Publish BOM. */
   saved?: { avatarID?: string; stlLink?: string; parasolidLink?: string; filesModelVersion?: string };
+  /**
+   * The database record's updatedAt (ISO) when this row was loaded or last
+   * published here; "" when it wasn't saved. Publish BOM stops if the record
+   * changed since (someone else published it), instead of overwriting it.
+   */
+  dbUpdatedAt?: string;
   /** Parts: whether Publish BOM keeps an STL / Parasolid (unticking deletes it on publish). */
   wantStl?: boolean;
   wantParasolid?: boolean;

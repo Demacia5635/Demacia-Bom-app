@@ -147,6 +147,27 @@ export function upsertPartById(id: string, data: Partial<PartModel>): Promise<Pa
   return postToApi<PartModel>(`/db/part/id/${encodeURIComponent(id)}`, data);
 }
 
+/** Most IDs the server accepts in one batch lookup (MAX_BATCH_IDS on the server). */
+const BATCH_IDS = 500;
+
+/** The saved records among `ids` (missing ones are simply absent), in batches. */
+async function recordsByIds<T>(endpoint: string, ids: string[]): Promise<T[]> {
+  const unique = [...new Set(ids)];
+  const batches: Promise<T[]>[] = [];
+  for (let i = 0; i < unique.length; i += BATCH_IDS) {
+    batches.push(postToApi<T[]>(endpoint, { ids: unique.slice(i, i + BATCH_IDS) }));
+  }
+  return (await Promise.all(batches)).flat();
+}
+
+export function getBomsByIds(ids: string[]): Promise<BomModel[]> {
+  return recordsByIds<BomModel>("/db/bom/ids", ids);
+}
+
+export function getPartsByIds(ids: string[]): Promise<PartModel[]> {
+  return recordsByIds<PartModel>("/db/part/ids", ids);
+}
+
 /* ---------------------------------------------------------------------- */
 /* Onshape, called directly with the user's browser session                */
 /* (src/extension/onshapeDirect.ts). The server never calls Onshape.       */

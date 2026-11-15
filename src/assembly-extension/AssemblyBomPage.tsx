@@ -16,7 +16,9 @@ import {
   syncPartFilesToDrive,
   syncBomThumbnailToDrive,
   getOnshapeThumbnailSrc,
-  deleteDriveFile
+  deleteDriveFile,
+  getBomsByIds,
+  getPartsByIds
 } from "./BomApi";
 import { getElementMicroversions } from "../extension/onshapeDirect";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
@@ -121,6 +123,16 @@ function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): s
   if (!against || isExternalRow(row)) return [];
   const r = row as unknown as Record<string, unknown>;
   return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
+}
+
+/**
+ * A record's updatedAt as an ISO string ("" when none). It arrives as JSON
+ * text (or a Date), so it's normalized before comparing.
+ */
+function stampOf(updatedAt: unknown): string {
+  if (!updatedAt) return "";
+  const date = new Date(updatedAt as string);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
 /** Row ID used for the top assembly (which has no row) in the problem list. */
@@ -556,6 +568,7 @@ export default function AssemblyBomPage() {
         quantity: parentItem?.quantity || 1,
         comments: pick("comments", dbBom?.comments),
         saved: { avatarID: dbBom?.avatarID || undefined, filesModelVersion: dbBom?.filesModelVersion || undefined },
+        dbUpdatedAt: stampOf(dbBom?.updatedAt),
         documentID: key.documentID,
         wvmType: key.wvmType,
         wvmID: key.wvmID,
@@ -681,6 +694,7 @@ export default function AssemblyBomPage() {
           parasolidLink: dbPart?.parasolidLink || undefined,
           filesModelVersion: dbPart?.filesModelVersion || undefined,
         },
+        dbUpdatedAt: stampOf(dbPart?.updatedAt),
         wantStl: files.wantStl,
         wantParasolid: files.wantParasolid,
         documentID: key.documentID,
@@ -1171,6 +1185,36 @@ export default function AssemblyBomPage() {
           (): ModelVersions => ({ byRow: new Map(), tree: null })
         );
 
+        // Someone else may have published these items since this copy was loaded
+        // (e.g. it's a saved copy from days ago). Publishing it would overwrite
+        // their data and delete Drive files their records now use, so stop and
+        // say which items changed. Nothing has been written yet.
+        rootTrack.step("Checking for newer publishes");
+        const assemblyIds = [rootID, ...rowsToPublish.filter((r) => r.isAssembly).map((r) => r.id)];
+        const partIds = rowsToPublish.filter((r) => !r.isAssembly).map((r) => r.id);
+        const [freshBoms, freshParts] = await Promise.all([getBomsByIds(assemblyIds), getPartsByIds(partIds)]);
+        const freshBomStamp = new Map(freshBoms.map((b) => [b.id, stampOf(b.updatedAt)]));
+        const freshPartStamp = new Map(freshParts.map((p) => [p.id, stampOf(p.updatedAt)]));
+        /** Changed since loaded: saved by someone else, or newly saved when it wasn't. (Deleted doesn't count.) */
+        const changedSince = (fresh: string | undefined, loaded: string | undefined) => !!fresh && fresh !== (loaded || "");
+        const newer = [
+          ...(changedSince(freshBomStamp.get(rootID), stampOf(rootBomDB?.updatedAt)) ? [values.name] : []),
+          ...rowsToPublish
+            .filter((r) => changedSince((r.isAssembly ? freshBomStamp : freshPartStamp).get(r.id), r.dbUpdatedAt))
+            .map((r) => r.name),
+        ];
+        if (newer.length > 0) {
+          const names = newer.slice(0, 3).map((n) => `"${n}"`).join(", ");
+          const more = newer.length > 3 ? ` and ${newer.length - 3} more` : "";
+          const message =
+            `Not published: ${names}${more} ${newer.length === 1 ? "was" : "were"} published again after this copy was loaded. ` +
+            `Press Refresh BOM to load the latest, then publish again. Nothing was changed.`;
+          setPublishError(message);
+          client.showMessageBubble(message);
+          setPublishOpen(false);
+          return null; // marks the operation failed on /tele
+        }
+
         // The top assembly is saved last, once everything it links to is (see below).
         rootTrack.step("Waiting for the items inside it");
 
@@ -1234,7 +1278,7 @@ export default function AssemblyBomPage() {
             }
             const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
             const filesModelVersion = !unchanged && !avatar ? "" : versions.tree ?? "";
-            await upsertBomById(row.id, {
+            const savedBom = await upsertBomById(row.id, {
               id: row.id,
               name: row.name,
               description: row.description,
@@ -1271,6 +1315,7 @@ export default function AssemblyBomPage() {
             rowUpdates.set(row.id, {
               engineer,
               saved: { avatarID, filesModelVersion: filesModelVersion || undefined },
+              dbUpdatedAt: stampOf(savedBom?.updatedAt),
             });
           } else if (row.isAssembly) {
             const links = buildLinkArrays(row.id);
@@ -1283,7 +1328,7 @@ export default function AssemblyBomPage() {
               if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
             }
             const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
-            await upsertBomById(row.id, {
+            const savedBom = await upsertBomById(row.id, {
               id: row.id,
               name: row.name,
               description: row.description,
@@ -1313,6 +1358,7 @@ export default function AssemblyBomPage() {
             }
             rowUpdates.set(row.id, {
               saved: { avatarID, filesModelVersion: !unchanged && !avatar ? undefined : versions.tree ?? undefined },
+              dbUpdatedAt: stampOf(savedBom?.updatedAt),
             });
           } else {
             // Standard Content (screws, nuts...) and parts marked standard are bought,
@@ -1355,7 +1401,7 @@ export default function AssemblyBomPage() {
               filesModelVersion: exportFailed ? undefined : version ?? undefined,
             };
             progress.step("Saving to the database");
-            await upsertPartById(row.id, {
+            const savedPart = await upsertPartById(row.id, {
               id: row.id,
               name: row.name,
               description: row.description,
@@ -1384,6 +1430,7 @@ export default function AssemblyBomPage() {
             });
             rowUpdates.set(row.id, {
               saved,
+              dbUpdatedAt: stampOf(savedPart?.updatedAt),
               exportSTL: saved.stlLink,
               exportParasolid: saved.parasolidLink,
               ...(standard ? { onshapeURL: "", engineer } : {}),
