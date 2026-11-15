@@ -114,9 +114,22 @@ const BUTTON_ID = "demacia-bom-open";
   // Onshape is a single-page app: tab switches change the URL without a page
   // load. Re-check whenever the URL changes.
   let lastHref = "";
+  // Retries after a failed element-type check (e.g. a 401 while Onshape is
+  // still loading), so one transient error doesn't hide the button for good.
+  const RETRY_DELAYS_MS = [2000, 5000, 15000];
+  let retryHref = "";
+  let retryCount = 0;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
   async function refresh() {
     if (location.href === lastHref) return;
-    lastHref = location.href;
+    const href = location.href;
+    lastHref = href;
+    clearTimeout(retryTimer);
+    if (href !== retryHref) {
+      retryHref = href;
+      retryCount = 0;
+    }
     const loc = parseLocation();
     if (!loc) {
       btn.hidden = true;
@@ -124,10 +137,21 @@ const BUTTON_ID = "demacia-bom-open";
     }
     try {
       const type = await getElementType(loc);
-      if (location.href === lastHref) btn.hidden = type !== "ASSEMBLY";
+      if (location.href === href) btn.hidden = type !== "ASSEMBLY";
     } catch (err) {
       console.warn("[Demacia BOM] could not determine element type", err);
+      // A late failure for a page the user already left must not hide the
+      // button of the page now shown.
+      if (location.href !== href) return;
       btn.hidden = true;
+      if (retryCount < RETRY_DELAYS_MS.length) {
+        const delay = RETRY_DELAYS_MS[retryCount++];
+        retryTimer = setTimeout(() => {
+          if (location.href !== href) return;
+          lastHref = ""; // let refresh() check this same URL again
+          refresh();
+        }, delay);
+      }
     }
   }
   refresh();
