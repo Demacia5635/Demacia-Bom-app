@@ -1,7 +1,7 @@
 import React, { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import { AuthenticatedImage, downloadFile, fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
-import type { PartModel, BomModel } from "../../util/Models";
+import { isPurchasedPart, type PartModel, type BomModel } from "../../util/Models";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { recordImageSrc } from "../../util/recordImage";
@@ -11,6 +11,10 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const { isLight } = useThemeSync();
     const navigate = useNavigate();
 
+    // Bought parts (a vendor, Onshape Standard Content, or marked standard in the
+    // extension, which saves isStandardContent) are locked, as in the extension.
+    // A part with no vendor field at all isn't one.
+    const locked = isPurchasedPart(part);
     const [formData, setFormData] = useState<PartModel>({ ...part });
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -143,7 +147,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                                 name="name"
                                 value={formData.name || ""}
                                 onChange={handleChange}
-                                disabled={part.vendor !== ""}
+                                disabled={locked}
                                 placeholder="Enter Part Name"
                                 className={`w-full border rounded-lg px-3.5 py-2 text-lg font-bold focus:outline-none focus:ring-2 ${inputBg}`}
                             />
@@ -169,7 +173,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             type="text"
                             name="catalogNumber"
                             value={formData.catalogNumber || ""}
-                            disabled={part.vendor !== ""}
+                            disabled={locked}
                             onChange={handleChange}
                             placeholder="e.g. PN-1002"
                             className={`w-full border rounded-lg px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 ${subInputBg}`}
@@ -184,7 +188,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             type="text"
                             name="revision"
                             value={formData.revision || ""}
-                            disabled={part.vendor !== ""}
+                            disabled={locked}
                             onChange={handleChange}
                             placeholder="e.g. Rev A"
                             className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
@@ -199,7 +203,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             type="text"
                             name="engineer"
                             value={formData.engineer || ""}
-                            disabled={part.vendor !== ""}
+                            disabled={locked}
                             onChange={handleChange}
                             placeholder="Engineer name"
                             className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
@@ -217,7 +221,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             type="text"
                             name="material"
                             value={formData.material || ""}
-                            disabled={part.vendor !== ""}
+                            disabled={locked}
                             onChange={handleChange}
                             placeholder="e.g. Aluminum 6061"
                             className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
@@ -233,7 +237,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             step="any"
                             name="mass"
                             value={formData.mass ?? ""}
-                            disabled={part.vendor !== ""}
+                            disabled={locked}
                             onChange={handleChange}
                             placeholder="0.00"
                             className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
@@ -249,7 +253,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             step="any"
                             name="price"
                             value={formData.price ?? ""}
-                            disabled={part.vendor !== ""}
+                            disabled={locked}
                             onChange={handleChange}
                             placeholder="0.00"
                             className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
@@ -331,7 +335,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         rows={3}
                         value={formData.description || ""}
                         onChange={handleChange}
-                        disabled={part.vendor !== ""}
+                        disabled={locked}
                         placeholder="Detailed description of the part..."
                         className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${textAreaColor}`}
                     />
@@ -347,7 +351,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         rows={4}
                         value={formData.comments || ""}
                         onChange={handleChange}
-                        disabled={part.vendor !== ""}
+                        disabled={locked}
                         placeholder="Additional manufacturing notes, comments, or issues..."
                         className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${commentsColor}`}
                     />
