@@ -20,7 +20,7 @@ import {
   getBomsByIds,
   getPartsByIds
 } from "./BomApi";
-import { getElementMicroversions } from "../extension/onshapeDirect";
+import { getElementMicroversions, onshapeJson } from "../extension/onshapeDirect";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
@@ -160,7 +160,9 @@ const TOP_ASSEMBLY_ID = "__top__";
  */
 function findWorkOrderProblems(
   rows: AssemblyBomRow[],
-  top: { name: string; number: string }
+  top: { name: string; number: string },
+  /** Used by Publish BOM for a made part without an engineer ("" if none). */
+  defaultEngineer: string
 ): Map<string, Map<string, string>> {
   const problems = new Map<string, Map<string, string>>();
   const add = (id: string, key: string, text: string) => {
@@ -190,11 +192,26 @@ function findWorkOrderProblems(
     seen.add(part.id);
     if (!String(part.material ?? "").trim()) add(part.id, "material", "Work orders need a material for made parts.");
     const engineer = String(part.engineer ?? "").trim();
-    if (!engineer || engineer === STANDARD_PART_ENGINEER) {
+    if ((!engineer || engineer === STANDARD_PART_ENGINEER) && !defaultEngineer) {
       add(part.id, "engineer", "Work orders need an engineer for made parts (or fill Default engineer when publishing).");
     }
   }
   return problems;
+}
+
+/**
+ * Name of the signed-in Onshape user (the default engineer), asked once per
+ * panel. "" if Onshape doesn't say; the panel then works as before.
+ */
+let onshapeUserNamePromise: Promise<string> | null = null;
+function getOnshapeUserName(): Promise<string> {
+  onshapeUserNamePromise ??= onshapeJson<{ name?: string }>("/users/sessioninfo")
+    .then((info) => String(info?.name ?? "").trim())
+    .catch(() => {
+      onshapeUserNamePromise = null; // try again next time
+      return "";
+    });
+  return onshapeUserNamePromise;
 }
 
 /** A name that is itself a catalog number (e.g. a part named 2714-1103). */
@@ -486,6 +503,25 @@ export default function AssemblyBomPage() {
   const client = useOnshapeClient({ context });
 
   const [rows, setRows] = useState<AssemblyBomRow[]>([]);
+  /**
+   * The signed-in Onshape user: the default engineer. Empty engineer cells show
+   * it greyed, Publish BOM writes it for items without one, and an empty
+   * engineer isn't a problem while it's known. Not put into the rows, so it
+   * isn't counted as an unpublished change.
+   */
+  const [onshapeUserName, setOnshapeUserName] = useState("");
+  /** For handlePublish, which reads the tree through refs too. */
+  const onshapeUserNameRef = useRef("");
+  useEffect(() => {
+    let cancelled = false;
+    getOnshapeUserName().then((name) => {
+      onshapeUserNameRef.current = name;
+      if (!cancelled) setOnshapeUserName(name);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [rootBomDB, setRootBomDB] = useState<BomModel | null>(null);
@@ -927,7 +963,7 @@ export default function AssemblyBomPage() {
     const number = rootOnshapeBom?.partNumber || rootBomDB?.catalogNumber || catalogNumberInName(name) || "";
     return { name, number };
   }, [rootOnshapeBom, rootBomDB]);
-  const workOrderProblems = useMemo(() => findWorkOrderProblems(rows, topAssembly), [rows, topAssembly]);
+  const workOrderProblems = useMemo(() => findWorkOrderProblems(rows, topAssembly, onshapeUserName), [rows, topAssembly, onshapeUserName]);
   const topProblem = workOrderProblems.get(TOP_ASSEMBLY_ID)?.get("catalogNumber");
   const problemsRef = useRef(workOrderProblems);
   problemsRef.current = workOrderProblems;
@@ -938,8 +974,12 @@ export default function AssemblyBomPage() {
 
   // The Table keeps the column set it first gets, so problems are read through a ref.
   const columns = useMemo(
-    () => buildAssemblyBomColumns((row, key) => problemsRef.current.get(row.id)?.get(key)),
-    []
+    () =>
+      buildAssemblyBomColumns(
+        (row, key) => problemsRef.current.get(row.id)?.get(key),
+        onshapeUserName
+      ),
+    [onshapeUserName]
   );
 
   /** Sub-assemblies whose insides are being loaded after their standard mark was removed. */
@@ -1273,7 +1313,7 @@ export default function AssemblyBomPage() {
             ? STANDARD_PART_ENGINEER
             : row.vendor !== ""
               ? row.vendor
-              : ownEngineer || values.defaultEngineer;
+              : ownEngineer || values.defaultEngineer || onshapeUserNameRef.current;
           const toDelete: string[] = [];
           if (row.isAssembly && row.markedStandard) {
             // A sub-assembly marked standard (a motor...): one bought item. Its
@@ -1554,7 +1594,7 @@ export default function AssemblyBomPage() {
           description: values.description,
           comments: values.comments,
           catalogNumber: values.catalogNumber,
-          engineer: rootBomDB?.engineer || values.defaultEngineer,
+          engineer: rootBomDB?.engineer || values.defaultEngineer || onshapeUserNameRef.current,
           parts: rootLinks.parts,
           subAssemblies: rootLinks.subAssemblies,
           avatarID: replaceFile(rootBomDB?.avatarID, rootAvatar, rootToDelete),
@@ -1861,6 +1901,7 @@ export default function AssemblyBomPage() {
               catalogNumber: topAssembly.number,
               description: rootOnshapeBom?.description || rootBomDB?.description || "",
               comments: rootBomDB?.comments || "",
+              defaultEngineer: onshapeUserName,
             }}
             onCancel={() => (publishing ? undefined : setPublishOpen(false))}
             onSubmit={handlePublish}
