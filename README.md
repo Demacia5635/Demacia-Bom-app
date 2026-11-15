@@ -1,167 +1,186 @@
-# BOM App — CAD, Inventory & Production Management Platform
+# Demacia BOM
 
-An integrated enterprise platform linking **Onshape CAD models**, **MongoDB inventory/parts databases**, **Google Drive asset storage**, and **Work Order manufacturing tracking**.
+The bill of materials (BOM) tool of the Demacia 5635 FRC robotics team. It connects the robot's Onshape assemblies to a parts database, so the team can see every part and sub-assembly, download its STL and Parasolid files, and track its manufacture through work orders.
 
----
+The project has three parts:
 
-## 📋 Table of Contents
-- [Overview](#overview)
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
-- [Project Architecture](#project-architecture)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Environment Variables](#environment-variables)
-  - [Installation & Execution](#installation--execution)
-- [API Route Structure](#api-route-structure)
-- [CAD & Onshape Integration](#cad--onshape-integration)
-- [Google Drive Integration](#google-drive-integration)
-- [Recent Bug Fixes & Code Audit Summary](#recent-bug-fixes--code-audit-summary)
-- [License](#license)
+| Part | What it does | Where it runs |
+|---|---|---|
+| **Browser extension** (`src/extension`, `src/assembly-extension`, `extension/`) | Shows an assembly's BOM in a side panel next to Onshape. Reads the assembly from Onshape, lets you edit part properties, and **publishes** the BOM: exports each part's thumbnail, STL and Parasolid, uploads them to Google Drive and saves the BOM to the database. | Chrome (side panel) and Firefox (sidebar) |
+| **Website** (`src/`) | Shows what has been published: BOMs, part search, work orders and their progress. | GitHub Pages: <https://demacia5635.github.io/Demacia-Bom-app/> |
+| **Server** (`server/`) | Express API in front of MongoDB and Google Drive. | Render: <https://demacia-bom-app-n2ag.onrender.com> |
 
----
+The server never calls Onshape and stores no Onshape API keys. All Onshape reads and writes come from the extension, using the signed-in user's own Onshape session, so they don't count against Onshape's API request limit.
 
-## 🔍 Overview
-
-The **BOM App** bridges computer-aided design (CAD) workflows in Onshape with real-world inventory management and manufacturing execution. It allows engineering and shop-floor teams to:
-- Pull parts and Bill of Materials (BOM) hierarchy directly from Onshape.
-- Track manufacturing status, material attributes, vendor pricing, and CAD exports (STL, Parasolid, SolidWorks).
-- Assign work orders and monitor sub-part manufacturing progress across shop floor teams.
-- Store thumbnail renders and attachments seamlessly in Google Drive.
-
----
-
-## ✨ Key Features
-
-- **Onshape CAD Synchronization:**
-  - Dynamic metadata extraction (`name`, `catalogNumber`, `revision`, `material`, `price`, `vendor`, `description`, `engineer`).
-  - Native Onshape composite key support (`/d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/p/:partID`).
-  - Multi-level assembly BOM hierarchy resolution.
-  - Automatic thumbnail generation and binary upload with header dimension auto-detection (PNG/JPEG).
-  - Multi-format CAD exports: STL (units/mode configuration), Parasolid (`.x_t`/`.x_b`), and asynchronous SolidWorks (`.sldprt`) translation job polling.
-
-- **Inventory & Part Management:**
-  - Centralized MongoDB schemas for parts and assembly items.
-  - Automatic Onshape property mapping (`PART_PROPERTY_ID_MAP`).
-  - Associated CAD export links (`stlLink`, `parasolidLink`) and avatar/thumbnail references.
-
-- **Work Order & Manufacturing Tracking:**
-  - Work Order tracking with sub-part level breakdown.
-  - Status codes and owner assignments for both GC (General Contractor) and Making/Manufacturing teams.
-  - Automated progress aggregation for complex multi-part subassemblies.
-
-- **Google Drive Integration:**
-  - OAuth2 service account / refresh token integration.
-  - Files sorted into folders by type: thumbnails (`GOOGLE_DRIVE_IMAGE_FOLDER_ID`), STL (`GOOGLE_DRIVE_STL_FOLDER_ID`) and Parasolid (`GOOGLE_DRIVE_PARASOLID_FOLDER_ID`).
-  - Binary streaming uploads, file metadata indexing, and attachment management.
-
----
-
-## 🛠 Tech Stack
-
-### Backend
-- **Runtime:** Node.js & Express v5
-- **Language:** TypeScript 5.7+
-- **Database:** MongoDB & Mongoose v9
-- **Integrations:** Onshape Glassworks REST API, Google Drive API (`googleapis` v3)
-- **Utilities:** `dotenv`, `cors`, `node-fetch` / Native `fetch`
-
-### Frontend
-- **Framework:** React v19 + Vite
-- **Styling:** Tailwind CSS v4
-- **Routing & UI:** React Router DOM v7, Lucide React Icons
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- **Node.js:** v18.0.0 or higher
-- **MongoDB:** Active MongoDB instance (Local or Atlas)
-- **Google Cloud Console:** OAuth2 Client ID, Client Secret, and Refresh Token with Drive API scope.
-
-### Environment Variables
-Create a `.env` file in the root directory:
-
-```env
-PORT=3000
-MONGODB_URI=mongodb://localhost:27017/bom-app
-
-# Google Drive API Credentials
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_REDIRECT_URI=https://developers.google.com/oauthplayground
-GOOGLE_REFRESH_TOKEN=your_google_refresh_token
-GOOGLE_DRIVE_IMAGE_FOLDER_ID=your_image_folder_id
-GOOGLE_DRIVE_STL_FOLDER_ID=your_stl_folder_id
-GOOGLE_DRIVE_PARASOLID_FOLDER_ID=your_parasolid_folder_id
+```
+Onshape ──(user's browser session)──> Extension ──┐
+                                                  ├──> Server ──> MongoDB
+                                    Website ──────┘          └──> Google Drive
 ```
 
-### Installation & Execution
+---
+
+# For team members
+
+## Installing the extension (Chrome)
+
+1. Get the latest `demacia-bom-extension-chrome-<version>.zip` from a team developer. It is shared only inside the team.
+2. Unzip it to a folder you will keep; Chrome loads the extension from that folder.
+3. Open `chrome://extensions`, turn on **Developer mode** (top right), click **Load unpacked** and choose the unzipped folder.
+4. Pin the extension: click the puzzle icon in the toolbar, then the pin next to **Demacia BOM for Onshape**.
+
+To update, replace the folder's contents with the new zip and click the reload arrow on the extension's card in `chrome://extensions`.
+
+You must be signed in to Onshape in the same browser. The extension sees only documents your Onshape account can open.
+
+## Using it
+
+1. Open an assembly in Onshape.
+2. Click the Demacia logo button in Onshape's right-hand sidebar (under BOM Table and the other panel buttons), or the extension's icon in the toolbar. The BOM opens in a side panel.
+3. Edit part properties in the panel if needed. Your changes are written to Onshape.
+4. Click **Publish BOM** to save the BOM to the team database. This exports each part's thumbnail, STL and Parasolid to the team's Google Drive.
+
+On the website you can then:
+
+- browse published BOMs and download part files,
+- search all parts,
+- create work orders from a BOM and track each part's manufacturing status.
+
+---
+
+# For developers
+
+## Running it locally
+
+You need Node.js 22 (Vite 8 needs 20.19+ or 22.12+), a MongoDB database, and Google Drive OAuth credentials.
+
+### 1. Server
 
 ```bash
-# Install dependencies
+cd server
 npm install
-
-# Run backend development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
+npm run dev        # tsx watch, listens on http://localhost:5050
 ```
 
----
+Create `server/.env`:
 
-## 🔌 API Route Structure
+```env
+PORT=5050
+MONGODB_URI=mongodb+srv://...
 
-| Mount Point | Sub-Route | Method | Description |
-| :--- | :--- | :--- | :--- |
-| `/api/` | `/` | GET | Health check |
-| `/api/db` | `/` | GET | MongoDB Connection Check |
-| `/api/db/part` | `/all`, `/id/:id`, `/d/.../p/:partID` | GET/POST/DEL | Part CRUD (also looked up by Onshape identity) |
-| `/api/db/bom` | `/all`, `/id/:id`, `/d/.../e/:elementID` | GET/POST/DEL | BOM CRUD & Assembly operations |
-| `/api/db/workOrder` | `/all`, `/id/:id` | GET/POST/DEL | Work Order production management |
-| `/api/enum` | `/productionType/*`, `/status/*` | GET | Enums for status & production classification |
-| `/api/drive` | `/file/*`, `/folder/*` | GET/POST/DEL | Google Drive file manipulation |
+# Shared secret; clients send it in the x-client-secret header.
+CLIENT_SECRET=some-long-random-string
 
----
+# Extra browser origins allowed to call the API, comma-separated.
+# localhost:5173 and localhost:5050 are always allowed.
+ALLOWED_ORIGINS=https://demacia5635.github.io,chrome-extension://ijejpoheiljnajdnanepbkhiegidelkl
 
-## 📐 CAD & Onshape Integration
+# Google Drive (OAuth2 refresh token with Drive scope)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=https://developers.google.com/oauthplayground
+GOOGLE_REFRESH_TOKEN=...
+GOOGLE_DRIVE_IMAGE_FOLDER_ID=...
+GOOGLE_DRIVE_STL_FOLDER_ID=...
+GOOGLE_DRIVE_PARASOLID_FOLDER_ID=...
+```
 
-The server never calls Onshape and stores no Onshape API keys or user accounts. Onshape is read and written by the **Chrome extension** (`src/extension`, built with `npm run build:extension`), using the signed-in user's own Onshape browser session, so its requests don't count against Onshape's yearly API limit:
+### 2. Website and extension settings
 
-- **Refresh BOM:** reads the assembly tree, properties and live part/assembly renders from Onshape.
-- **Publish BOM:** writes edited properties to Onshape, exports each part's thumbnail, STL (binary, meters) and Parasolid (`.x_t`), uploads them through `/api/drive`, and saves the BOM and parts to MongoDB.
+Create `.env.local` in the repository root. Both the website and the extension read it at build time:
 
-The website shows what has been published to the database.
+```env
+VITE_CLIENT_URL=http://localhost:5050     # or the Render URL
+VITE_CLIENT_SECRET=...                    # must equal CLIENT_SECRET in server/.env
+```
 
----
+`VITE_CLIENT_SECRET` is built into the JavaScript bundle, so anyone with the website or the extension can read it. It keeps out casual callers, not a determined one.
 
-## 📁 Google Drive Integration
+### 3. Website
 
-`driveService.ts` handles asset attachment and document storage:
-- Uploads go to the image, STL or Parasolid folder by file type (`folderForUpload`).
-- Supports streaming binary uploads (`express.raw`), file deletion, metadata inspection, and custom folder structures.
+```bash
+npm install
+npm run dev        # http://localhost:5173/Demacia-Bom-app/
+```
 
----
+In development, Vite forwards `/api` to `http://localhost:5050`.
 
-## 🛠 Recent Bug Fixes & Code Audit Summary
+### 4. Extension
 
-Across 6 auditing batches, critical bugs were resolved:
-1. **`WorkOrder.ts` Schema:** Corrected misspelling `quantityToal` -> `quantityTotal` to prevent Mongoose from discarding user quantity updates.
-2. **`onshapeController.ts` Buffer Check:** Fixed global `Buffer` reference typo (`"data" in Buffer` -> `"data" in buffer`).
-3. **HTTP 204 Responses:** Resolved hanging connections by appending `.send()` to `res.status(204)`.
-4. **Export Endpoints:** Added missing `return` statements on 404 paths to prevent `ERR_HTTP_HEADERS_SENT` server crashes.
-5. **Parameter Mutation in `partController.ts`:** Saved `req.params` prior to mutation during `upsertPartByOnshapeKey` calls.
-6. **Route Typo in `bomRoutes.ts`:** Corrected method reference `getBomByOnsahpeKey` -> `getBomByOnshapeKey`.
-7. **Google Drive API Field Error in `driveService.ts`:** Removed invalid field `blob` from Drive API query parameters.
-8. **Options Preservation in `getBom`:** Fixed hardcoded flags in `onshapeService.ts` to allow caller options (`multiLevel`, `indented`).
+```bash
+npm run build:extension            # Chrome  -> dist-extension/
+npm run build:extension:firefox    # Firefox -> dist-extension-firefox/
+npm run watch:extension            # Chrome, rebuilt on every change
+```
 
----
+- **Chrome:** `chrome://extensions` → turn on Developer mode → Load unpacked → choose `dist-extension/`.
+- **Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on → choose any file in `dist-extension-firefox/`. Temporary add-ons are removed when Firefox restarts.
 
-## 📄 License
+Then open an assembly in Onshape and click the Demacia logo button in Onshape's right-hand sidebar or the extension's toolbar icon.
 
-Internal Enterprise License — Reserved for system maintenance and authorized FRC / Industrial project use.
+`extension/manifest.json` is the Chrome manifest; the Firefox one is generated from it at build time (`vite.extension.config.ts`). The manifest's `key` keeps the Chrome extension ID fixed at `ijejpoheiljnajdnanepbkhiegidelkl`, which the server must allow in `ALLOWED_ORIGINS`.
+
+## Sharing the extension
+
+```bash
+npm run package:extension              # build and zip both browsers
+npm run package:extension -- chrome    # one browser only (or: firefox)
+npm run package:extension -- --no-build
+```
+
+The zips go to `publish/` (git-ignored) as `demacia-bom-extension-<browser>-<version>.zip`. They contain the client secret, so share them only inside the team.
+
+## Deployment
+
+- **Website:** every push to `MASTER` runs `.github/workflows/deploy.yml`, which type-checks, builds and publishes `dist/` to the `gh-pages` branch. It needs the repository secrets `VITE_CLIENT_URL` and `VITE_CLIENT_SECRET`. You can also run it by hand from the Actions tab.
+- **Server:** hosted on Render and deployed by hand from the Render dashboard. No file in this repository deploys the server; automatic deploys, if wanted, are turned on in Render's service settings (Auto-Deploy). The service's environment variables are the ones in `server/.env` above, with `ALLOWED_ORIGINS` including the website and the extension.
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Website dev server |
+| `npm run build` / `npm run preview` | Build the website into `dist/` / serve the build |
+| `npm run typecheck` | TypeScript check of the website and extension |
+| `npm run lint` | oxlint |
+| `npm run build:extension[:firefox]` | Build the extension |
+| `npm run package:extension` | Build and zip the extension |
+| `cd server && npm run dev` | Server with auto-reload |
+| `cd server && npm start` | Server without reload |
+
+## API
+
+Every `/api` route needs the `x-client-secret` header and an allowed origin, except `GET /api` (health check) and `GET /api/drive/file/id/:fileID` (so images load in `<img>` tags).
+
+| Route | Methods | Purpose |
+|---|---|---|
+| `/api` | GET | Health check |
+| `/api/db` | GET | Is MongoDB connected |
+| `/api/db/part/all`, `/ids`, `/id/:id` | GET, POST, DELETE | Parts |
+| `/api/db/part/d/:documentID/.../p/:partID` | GET, DELETE | A part by its Onshape identity |
+| `/api/db/bom/all`, `/ids`, `/id/:id` | GET, POST, DELETE | BOMs (assemblies) |
+| `/api/db/bom/d/:documentID/.../e/:elementID` | GET, POST, DELETE | A BOM by its Onshape identity |
+| `/api/db/workOrder/all`, `/id/:id`, `/id/:id/part` | GET, POST, DELETE | Work orders and their per-part progress |
+| `/api/enum/productionType/*`, `/api/enum/status/*` | GET | Production types and statuses (`server/db/enum.ts`) |
+| `/api/drive/file/id/:fileID` | GET, DELETE | Read or delete a Drive file |
+| `/api/drive/file/name/:fileName/mime/:mimeType` | POST | Upload a file (raw body, up to 50 MB); the folder is chosen by file type |
+| `/api/drive/folder/id/:folderID` | GET | List a Drive folder |
+| `/api/telemetry/events` | GET, POST | The extension's record of Onshape calls, shown on the website's unlisted `/tele` page |
+
+## Repository layout
+
+```
+server/             Express API: routes/, controllers/, models/ (Mongoose), services/driveService.ts
+src/                Website (React 19, React Router, Tailwind 4)
+  Pages/            BOM list and details, part search, work orders, telemetry
+  extension/        Extension background script, Onshape page button, side panel, Onshape access
+  assembly-extension/  The assembly BOM page shown in the side panel
+  util/             API client, shared models and helpers
+extension/          Extension manifest and static files
+scripts/            package-extension.mjs
+public/             Static files, including privacy.html (the extension's privacy policy)
+```
+
+## License
+
+For internal use by the Demacia 5635 robotics team only. Not licensed for use, copying or distribution outside the team.
