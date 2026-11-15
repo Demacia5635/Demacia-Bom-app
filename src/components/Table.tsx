@@ -600,7 +600,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             if (targetRow < 0 || targetRow >= visibleData.length) break;
             if (targetCol < 0 || targetCol >= columns.length) break;
 
-            const cellElement = document.querySelector(`[data-row="${targetRow}"][data-col="${targetCol}"]`) as HTMLInputElement | HTMLSelectElement;
+            // Only this table's cells (another table on the page uses the same indexes).
+            const cellElement = wrapperRef.current?.querySelector(`[data-row="${targetRow}"][data-col="${targetCol}"]`) as HTMLInputElement | HTMLSelectElement | null | undefined;
             if (cellElement && !cellElement.disabled) {
                 cellElement.focus();
                 if (cellElement instanceof HTMLInputElement) {
@@ -703,16 +704,17 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                         <select
                                                             data-row={rowIndex}
                                                             data-col={colIndex}
-                                                            value={displayValue}
+                                                            // Always controlled: an empty value shows the placeholder.
+                                                            value={displayValue ?? ''}
                                                             onChange={(e) => handleCellChange(row.id, col, e.target.value)}
                                                             onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
                                                             onClick={(e) => e.stopPropagation()}
                                                             className={`cell-input cell-select ${col.valueClass?.(displayValue) ?? ''}`}
                                                             disabled={isCellDisabled}
                                                         >
-                                                            <option value="" disabled selected>Select...</option>
+                                                            <option value="" disabled>Select...</option>
                                                             {col.options?.map((option) => (
-                                                                <option value={option}>{option}</option>
+                                                                <option key={option} value={option}>{option}</option>
                                                             ))}
                                                         </select>
                                                     ) : col.type === 'button' ? (
