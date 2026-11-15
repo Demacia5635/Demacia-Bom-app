@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
 import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
+import { collectBomParts } from "../../../util/bomParts";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import Table from "../../../components/Table";
 import WorkOrderColumns, { MANUFACTURING_METHODS, PRIORITIES } from "./WorkOrderColumns";
@@ -168,22 +169,10 @@ export default function WorkOrderDetailsPage() {
     useEffect(() => {
         if (!workOrderID || !workOrderData || !workOrderData.bomID) return;
 
-        /**
-         * Every part under an assembly with its quantity, sub-assemblies first,
-         * in the same order as before. Sub-assemblies are loaded in parallel.
-         */
-        async function collectParts(targetBomId: string, multiplier: number): Promise<[string, number][]> {
-            const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
-            const subLists = await Promise.all(
-                (currentBom.subAssemblies || []).map((sub) => collectParts(sub.bomID, (sub.quantity ?? 1) * multiplier))
-            );
-            const ownParts = (currentBom.parts || []).map((p): [string, number] => [p.partID, (p.quantity ?? 1) * multiplier]);
-            return [...subLists.flat(), ...ownParts];
-        }
-
         async function fetchBomPartsRecursively(targetBomId: string): Promise<Map<string, number>> {
             const aggregated = new Map<string, number>();
-            for (const [partID, quantity] of await collectParts(targetBomId, 1)) {
+            const fetchBom = (id: string) => fetchFromApi<BomModel>(`/db/bom/id/${id}`);
+            for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1)) {
                 aggregated.set(partID, (aggregated.get(partID) || 0) + quantity);
             }
             return aggregated;
