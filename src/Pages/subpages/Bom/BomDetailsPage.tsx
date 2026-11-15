@@ -5,6 +5,7 @@ import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/A
 import type { BomModel, PartModel } from "../../../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
+import SubAssemblySummary from "./SubAssemblySummary";
 import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
@@ -34,6 +35,8 @@ export default function BomDetailsPage() {
 
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
   const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
+  /** "Show Part Data" of a made sub-assembly (only a BOM record): read-only summary. */
+  const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -261,7 +264,10 @@ export default function BomDetailsPage() {
 
   const handleShowPartData = async (row: BomTableRow) => {
     setContextMenu(null);
-    const partId = row.entityID;
+    // A sub-assembly marked standard (a motor...) is also saved as a part with
+    // its BOM id; one the team makes has only its BOM record.
+    const subBomId = row.isSubAssembly ? ((row as any).subBomId as string | undefined) : undefined;
+    const partId = subBomId || row.entityID;
     if (!partId) return;
 
     try {
@@ -269,6 +275,15 @@ export default function BomDetailsPage() {
       setSelectedPart(partData);
       setIsPartPortalOpen(true);
     } catch (err: any) {
+      if (err?.statusCode === 404 && subBomId) {
+        try {
+          setSelectedSubBom(await fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(subBomId)}`));
+        } catch (bomErr) {
+          console.error("Failed to fetch sub-assembly data", bomErr);
+          window.alert(`Couldn't load "${row.name || subBomId}".`);
+        }
+        return;
+      }
       if (err?.statusCode === 404) {
         window.alert(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`);
         return;
@@ -336,21 +351,20 @@ export default function BomDetailsPage() {
               style={{ top: contextMenu.y, left: contextMenu.x }}
               onClick={(e) => e.stopPropagation()}
             >
-              {contextMenu.row.isSubAssembly ? (
+              {contextMenu.row.isSubAssembly && (
                 <button
                   type="button"
                   onClick={() => handleGoToSubBom(contextMenu.row)}
                 >
                   Go to Subassembly BOM
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleShowPartData(contextMenu.row)}
-                >
-                  Show Part Data
-                </button>
               )}
+              <button
+                type="button"
+                onClick={() => handleShowPartData(contextMenu.row)}
+              >
+                Show Part Data
+              </button>
             </div>
           )}
         </div>
@@ -367,6 +381,21 @@ export default function BomDetailsPage() {
               ✕ Close
             </button>
             <PartPortal part={selectedPart} />
+          </div>
+        </div>
+      )}
+
+      {selectedSubBom && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => setSelectedSubBom(null)}
+              className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+            >
+              ✕ Close
+            </button>
+            <SubAssemblySummary bom={selectedSubBom} />
           </div>
         </div>
       )}
