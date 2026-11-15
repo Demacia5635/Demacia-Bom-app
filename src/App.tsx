@@ -20,7 +20,9 @@ export default function App() {
           <Route path="/bom/:bomId" element={<BomDetailsPage />} />
           <Route path="/workorders" element={<WorkOrdersPage />} />
           <Route path="/workOrder/:workOrderID" element={<WorkOrderDetailsPage />} />
-          <Route path="/partSearch" element={<PartsSearchPage />} />
+          {/* Same page in two modes; the keys keep their search boxes separate. */}
+          <Route path="/partSearch" element={<PartsSearchPage key="made" />} />
+          <Route path="/standardParts" element={<PartsSearchPage key="standard" standard />} />
           {/* Onshape footprint - unlisted on purpose (not in the sidebar). */}
           <Route path="/tele" element={<TelemetryPage />} />
           <Route path="*" element={<HomeScreen />} />

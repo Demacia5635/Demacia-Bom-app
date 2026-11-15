@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { fetchFromApi, type ApiError } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import BomTable from "./BomTable";
-import type { BomModel } from "../../util/Models";
+import type { BomModel, PartModel } from "../../util/Models";
+import { isMadeRecord, splitStandard } from "../../util/standardItems";
 
 export type BomSummary = Omit<BomModel, 'description' | 'comments' | 'onshapeURL' | 'onshapeID' | 'parts' | 'subAssemblies' | 'createdAt'>;
 
@@ -14,10 +15,17 @@ export default function HomeScreen() {
   const [error, setError] = useState<ApiError | null>(null);
 
   useEffect(() => {
-    fetchFromApi<BomSummary[]>("/db/bom/all")
-      .then((data) => {
+    Promise.all([
+      fetchFromApi<BomModel[]>("/db/bom/all"),
+      // Only to recognise standard sub-assemblies by their part record; the
+      // BOMs' own marks still work if this fails.
+      fetchFromApi<PartModel[]>("/db/part/all").catch(() => [] as PartModel[]),
+    ])
+      .then(([data, parts]) => {
+        // Standard (bought) sub-assemblies and their insides are on the Standard Parts page.
+        const split = splitStandard(data, parts);
         const sorted = data
-          .filter((bom) => !bom.vendor || bom.vendor.trim() === "")
+          .filter((bom) => isMadeRecord(split, bom.id))
           .sort((a, b) => {
             const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
             const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;

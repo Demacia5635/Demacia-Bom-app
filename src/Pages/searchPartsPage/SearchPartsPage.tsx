@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import PartPortal from "./PartPortal";
 import { recordImageSrc } from "../../util/recordImage";
+import { isMadeRecord, splitStandard } from "../../util/standardItems";
 
 /** A search result: a part, or a sub-assembly (an assembly some other assembly uses). */
 type SearchItem =
@@ -28,7 +29,12 @@ function subAssembliesOf(boms: BomModel[], parts: PartModel[]): BomModel[] {
     return boms.filter((bom) => usedAsSub.has(bom.id) && !partIds.has(bom.id));
 }
 
-export function PartsSearchPage() {
+/**
+ * Search Parts lists what the team makes; with `standard` (the Standard Parts
+ * page) it lists the bought items instead: standard parts and standard
+ * sub-assemblies (util/standardItems.ts).
+ */
+export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const { isLight } = useThemeSync();
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
@@ -45,15 +51,28 @@ export function PartsSearchPage() {
                 fetchFromApi<BomModel[]>(`/db/bom/all`).catch(() => [] as BomModel[]),
             ]);
             if (cancelled) return;
+            const split = splitStandard(boms, parts);
+            if (standard) {
+                // A standard sub-assembly has a part record with its id too: listed once, as that part.
+                const partIds = new Set(parts.map((p) => p.id));
+                setItems([
+                    ...parts.filter((p) => split.standardPartIds.has(p.id)).map((record): SearchItem => ({ kind: "part", record })),
+                    ...boms
+                        .filter((b) => split.standardBomIds.has(b.id) && !partIds.has(b.id))
+                        .map((record): SearchItem => ({ kind: "subAssembly", record })),
+                ]);
+                return;
+            }
+            const made = (r: { id: string }) => isMadeRecord(split, r.id);
             setItems([
-                ...parts.map((record): SearchItem => ({ kind: "part", record })),
-                ...subAssembliesOf(boms, parts).map((record): SearchItem => ({ kind: "subAssembly", record })),
+                ...parts.filter(made).map((record): SearchItem => ({ kind: "part", record })),
+                ...subAssembliesOf(boms, parts).filter(made).map((record): SearchItem => ({ kind: "subAssembly", record })),
             ]);
         }
 
         getItems();
         return () => { cancelled = true; };
-    }, []);
+    }, [standard]);
 
     const filteredItems = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
@@ -84,8 +103,12 @@ export function PartsSearchPage() {
             <div className="max-w-6xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className={`text-2xl font-bold tracking-tight ${textHeading}`}>Parts Catalog</h1>
-                        <p className={`text-xs ${textMuted}`}>Search parts and sub-assemblies by name, catalog number, or description.</p>
+                        <h1 className={`text-2xl font-bold tracking-tight ${textHeading}`}>{standard ? "Standard Parts" : "Parts Catalog"}</h1>
+                        <p className={`text-xs ${textMuted}`}>
+                            {standard
+                                ? "Bought items saved by Publish BOM (Standard Content, vendor parts, items marked standard). Search by name, catalog number, or description."
+                                : "Search parts and sub-assemblies by name, catalog number, or description. Standard parts are on the Standard Parts page."}
+                        </p>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className={`text-xs ${textMuted} font-mono`}>

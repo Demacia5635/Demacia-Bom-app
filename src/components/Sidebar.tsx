@@ -1,4 +1,4 @@
-import { HomeIcon, SearchIcon, ClipboardList, X, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, Package, X, type LucideProps } from "lucide-react";
 import { type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -11,6 +11,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
         { label: 'Search Parts', path: '/partSearch', icon: SearchIcon },
+        { label: 'Standard Parts', path: '/standardParts', icon: Package },
         { label: 'Work Orders', path: '/workorders', icon: ClipboardList },
     ];
 
