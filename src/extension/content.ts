@@ -90,6 +90,7 @@ const BUTTON_ID = "demacia-bom-open";
    * Without a sidebar (e.g. while it loads) the button floats bottom-right.
    */
   function place() {
+    if (btn.hidden) return; // placed again when it's shown (setVisible)
     const sidebar = findSidebar();
     if (sidebar) {
       btn.classList.remove("demacia-bom-floating");
@@ -101,15 +102,42 @@ const BUTTON_ID = "demacia-bom-open";
   }
   place();
 
-  let placeQueued = false;
-  new MutationObserver(() => {
-    if (placeQueued) return;
-    placeQueued = true;
+  /** Shows/hides the button; a newly shown button is placed at once. */
+  function setVisible(visible: boolean) {
+    btn.hidden = !visible;
+    if (visible) place();
+  }
+
+  // Onshape's DOM changes constantly, and place() searches the page and reads
+  // layout. So: nothing while the button is hidden (any non-assembly tab), and
+  // at most one place() per PLACE_COOLDOWN_MS - the first change is handled on
+  // the next frame, later ones in that window are merged into one more pass.
+  const PLACE_COOLDOWN_MS = 250;
+  let placeScheduled = false;
+  let coolingDown = false;
+  let changedDuringCooldown = false;
+  function requestPlace() {
+    if (btn.hidden) return;
+    if (coolingDown) {
+      changedDuringCooldown = true;
+      return;
+    }
+    if (placeScheduled) return;
+    placeScheduled = true;
     requestAnimationFrame(() => {
-      placeQueued = false;
+      placeScheduled = false;
       place();
+      coolingDown = true;
+      setTimeout(() => {
+        coolingDown = false;
+        if (changedDuringCooldown) {
+          changedDuringCooldown = false;
+          requestPlace();
+        }
+      }, PLACE_COOLDOWN_MS);
     });
-  }).observe(document.body, { childList: true, subtree: true });
+  }
+  new MutationObserver(requestPlace).observe(document.body, { childList: true, subtree: true });
 
   // Onshape is a single-page app: tab switches change the URL without a page
   // load. Re-check whenever the URL changes.
@@ -132,18 +160,18 @@ const BUTTON_ID = "demacia-bom-open";
     }
     const loc = parseLocation();
     if (!loc) {
-      btn.hidden = true;
+      setVisible(false);
       return;
     }
     try {
       const type = await getElementType(loc);
-      if (location.href === href) btn.hidden = type !== "ASSEMBLY";
+      if (location.href === href) setVisible(type === "ASSEMBLY");
     } catch (err) {
       console.warn("[Demacia BOM] could not determine element type", err);
       // A late failure for a page the user already left must not hide the
       // button of the page now shown.
       if (location.href !== href) return;
-      btn.hidden = true;
+      setVisible(false);
       if (retryCount < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[retryCount++];
         retryTimer = setTimeout(() => {
