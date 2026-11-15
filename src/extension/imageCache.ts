@@ -13,6 +13,14 @@
 
 const CACHE_NAME = "demacia-bom-images-v1";
 const VERSION_HEADER = "x-model-version";
+/** When the image was stored (ms since epoch), for trimming. */
+const STORED_AT_HEADER = "x-stored-at";
+/** Images older than this are removed (re-rendered when next needed). */
+const MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000;
+/** Most images kept; the oldest beyond this are removed. */
+const MAX_ENTRIES = 3000;
+/** Trim this long after the first image is stored in a session. */
+const TRIM_DELAY_MS = 5000;
 /** Longest an image waits for the version check before rendering anyway. */
 const VERSION_WAIT_MS = 8000;
 
@@ -74,9 +82,50 @@ export async function putCachedImage(url: string, blob: Blob): Promise<void> {
     const cache = await caches.open(CACHE_NAME);
     await cache.put(
       cacheKey(url),
-      new Response(blob, { headers: { "Content-Type": blob.type || "image/png", [VERSION_HEADER]: version } })
+      new Response(blob, {
+        headers: {
+          "Content-Type": blob.type || "image/png",
+          [VERSION_HEADER]: version,
+          [STORED_AT_HEADER]: String(Date.now()),
+        },
+      })
     );
+    scheduleTrim();
   } catch {
     /* caching is best-effort */
+  }
+}
+
+let trimScheduled = false;
+/** Trims once per session, shortly after images start being stored. */
+function scheduleTrim(): void {
+  if (trimScheduled) return;
+  trimScheduled = true;
+  setTimeout(() => void trimImageCache(), TRIM_DELAY_MS);
+}
+
+/**
+ * Every new image URL (other configurations, versions, documents) adds an
+ * entry, so without this the cache only grows. Removes images older than
+ * MAX_AGE_MS, then the oldest beyond MAX_ENTRIES. Entries stored before the
+ * stored-at header existed count as oldest for the count limit, but aren't
+ * removed by age: dropping them all at once would re-render every image (and
+ * spend Onshape API calls) the first time this runs.
+ */
+export async function trimImageCache(now: number = Date.now()): Promise<void> {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const requests = await cache.keys();
+    const entries: { request: Request; storedAt: number }[] = [];
+    for (const request of requests) {
+      const res = await cache.match(request);
+      entries.push({ request, storedAt: Number(res?.headers.get(STORED_AT_HEADER)) || 0 });
+    }
+    entries.sort((a, b) => b.storedAt - a.storedAt); // newest first
+    const tooOld = (e: { storedAt: number }) => e.storedAt > 0 && now - e.storedAt > MAX_AGE_MS;
+    const remove = entries.filter((e, i) => i >= MAX_ENTRIES || tooOld(e));
+    for (const e of remove) await cache.delete(e.request);
+  } catch {
+    /* best-effort */
   }
 }
