@@ -134,8 +134,9 @@ function isHiddenByStandardToggle(row: AssemblyBomRow): boolean {
 }
 
 /**
- * Cells locked: everything for Standard Content and vendor parts; for parts
- * marked standard, everything except the mark itself (so it can be undone).
+ * Rows whose properties are locked (and which work-order checks skip): Standard
+ * Content, vendor parts (only their file and standard-part boxes can change,
+ * see editableFieldsOf) and parts marked standard (only the mark, to undo it).
  */
 function isLockedRow(row: AssemblyBomRow): boolean {
   return isExternalRow(row) || !!row.markedStandard;
