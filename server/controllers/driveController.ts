@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { GoogleDriveService, folderForUpload } from "../services/driveService";
+import { GoogleDriveService, folderForUpload, isTeamFolder } from "../services/driveService";
 
 export async function checkConnection(
   client: GoogleDriveService,
@@ -20,6 +20,10 @@ export async function getFilesFromFolder(
     const folderID = req.params.folderID;
     if (!folderID)
       return res.status(400).json({ message: "folder id is required" });
+    // Only the team's own folders (this also keeps the ID out of Drive's
+    // query syntax unless it's one we configured).
+    if (!isTeamFolder(folderID))
+      return res.status(404).json({ message: `Folder ${folderID} not found` });
     const files = await client.getAllFilesInFolder(folderID);
     if (!files)
       return res.status(404).json({ message: `Folder ${folderID} not found` });
@@ -43,6 +47,11 @@ export async function getFileFromId(
 
     let file: { data: Buffer; mimeType: string };
     try {
+      // This route is public (for <img> tags), so it may only serve files in
+      // the team folders - not anything else the Google account can reach.
+      if (!(await client.isInTeamFolders(fileID))) {
+        return res.status(404).json({ message: `File ${fileID} not found` });
+      }
       file = await client.getFileContent(fileID);
     } catch (err: any) {
       const errorDetails = err?.response?.data || err?.message || err;
@@ -127,6 +136,9 @@ export async function deleteFile(
   try {
     const id = req.params.fileID;
     if (!id) return res.status(400).json({ message: "file id is required" });
+    // Only files in the team folders may be deleted through the API.
+    if (!(await client.isInTeamFolders(id)))
+      return res.status(404).json({ message: `File ${id} not found` });
     await client.deleteFile(id);
     return res.status(204).send();
   } catch (err) {

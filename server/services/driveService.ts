@@ -48,6 +48,14 @@ export interface UploadFileParams {
   partID?: string; // Optional unique key for deduplication locking
 }
 
+/** The team's Drive folders (images, STL, Parasolid) that the API may touch. */
+export function isTeamFolder(folderId: string): boolean {
+  return !!folderId && [IMAGE_FOLDER_ID, STL_FOLDER_ID, PARASOLID_FOLDER_ID].includes(folderId);
+}
+
+/** Most file IDs remembered by isInTeamFolders. */
+const TEAM_FILE_CACHE_MAX = 5000;
+
 // Global cross-controller lock map to prevent parallel duplicate uploads
 const globalUploadLocks = new Map<string, Promise<DriveFile>>();
 
@@ -101,6 +109,37 @@ export class GoogleDriveService {
       console.error(`>>> [DRIVE ERROR] Failed to search for file with partID ${partID}:`, err);
       return null;
     }
+  }
+
+  /** fileId -> whether it's directly inside one of the team folders. */
+  private teamFileCache = new Map<string, boolean>();
+
+  /**
+   * Whether a file is directly inside one of the team folders. The API must
+   * not read or delete anything else the Google account can reach. Answers
+   * are cached (files don't move between folders), so each file costs one
+   * metadata request per server start. Unknown/malformed IDs answer false.
+   */
+  async isInTeamFolders(fileId: string): Promise<boolean> {
+    const cached = this.teamFileCache.get(fileId);
+    if (cached !== undefined) return cached;
+
+    let inTeam: boolean;
+    try {
+      const file = await this.getFile(fileId);
+      inTeam = (file.parents ?? []).some(isTeamFolder);
+    } catch (err: any) {
+      const status = Number(err?.response?.status ?? err?.code);
+      if (status !== 404 && status !== 400) throw err; // Drive/OAuth failure: don't cache
+      inTeam = false;
+    }
+
+    if (this.teamFileCache.size >= TEAM_FILE_CACHE_MAX) {
+      // Forget the oldest entry (Maps keep insertion order).
+      this.teamFileCache.delete(this.teamFileCache.keys().next().value!);
+    }
+    this.teamFileCache.set(fileId, inTeam);
+    return inTeam;
   }
 
   async getFile(fileId: string): Promise<DriveFile> {
@@ -207,6 +246,7 @@ export class GoogleDriveService {
 
   async deleteFile(fileId: string): Promise<void> {
     await this.drive.files.delete({ fileId });
+    this.teamFileCache.delete(fileId);
   }
 
   async deleteFolder(folderId: string): Promise<void> {
