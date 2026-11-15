@@ -35,6 +35,9 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem): Colu
     editable("catalogNumber", "Catalog No.", "string"),
     editable("revision", "Revision", "string"),
     editable("engineer", "Engineer", "string"),
+    // Must stay read-only: Table writes an edit to every row with the same id,
+    // and rows of an item used in several places share an id but each has its
+    // own quantity (how many under that parent).
     { key: "quantity", label: "Quantity", type: "number", isDisabled: () => true },
     editable("material", "Material", "string"),
     // Mass is computed by Onshape from geometry + material - never user-settable.
