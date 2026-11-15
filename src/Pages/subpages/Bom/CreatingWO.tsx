@@ -169,19 +169,13 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
                 updatedAt: new Date(),
             };
 
-            const secret: string = import.meta.env.VITE_CLIENT_SECRET;
-            const response = await fetch(`${import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com"}/api/db/workOrder/id/${id}`, {
+            // Same server as every other request (localhost:5050 when run locally).
+            await fetchFromApi(`/db/workOrder/id/${encodeURIComponent(id)}`, {
                 method: "POST",
-                headers: {
-                    "content-Type": "application/json",
-                    "x-client-secret": secret,
-                },
                 body: JSON.stringify(payload),
+            }).catch((err: any) => {
+                throw new Error(`Failed to create the work order: ${err?.message || err}`);
             });
-
-            if (!response.ok) {
-                throw new Error(`Failed to create Work Order: ${response.statusText}`);
-            }
 
             navigate(`/workOrder/${id}`);
         } catch (err: any) {

@@ -50,6 +50,8 @@ export default function BomDetailsPage() {
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<ApiError | null>(null);
+  /** The last failed cell save (cleared by the next one that succeeds). */
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
 
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
@@ -216,17 +218,16 @@ export default function BomDetailsPage() {
               vendor: newRow.vendor
             };
 
-            const backendBase = import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com";
-            await fetch(`${backendBase}/api/db/part/id/${encodeURIComponent(partId)}`, {
+            // Same server as every other request (localhost:5050 when run locally);
+            // throws on an HTTP error too, so a failed save is shown.
+            await fetchFromApi(`/db/part/id/${encodeURIComponent(partId)}`, {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-client-secret": import.meta.env.VITE_CLIENT_SECRET || "",
-              },
               body: JSON.stringify(payload),
             });
-          } catch (err) {
+            setSaveError(null);
+          } catch (err: any) {
             console.error("Failed to sync grid updates to part database:", err);
+            setSaveError(`"${newRow.name || partId}" wasn't saved: ${err?.message || err}`);
           }
         }, 600);
       }
@@ -318,6 +319,12 @@ export default function BomDetailsPage() {
 
       {mainBomData && (
         <MainBomDataUI bom={mainBomData} />
+      )}
+      {saveError && (
+        <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
+          <p className="font-semibold">Change not saved</p>
+          <p>{saveError}</p>
+        </div>
       )}
       {error && (
         <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">

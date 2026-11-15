@@ -14,6 +14,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const [formData, setFormData] = useState<PartModel>({ ...part });
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [saved, setSaved] = useState(false);
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
     // Linked BOM states
@@ -33,30 +34,24 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
             ...prev,
             [name]: type === "number" ? (value === "" ? undefined : Number(value)) : value,
         }));
+        setSaved(false);
     };
 
     const handleUpsert = async (e: FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
         setSaveError(null);
+        setSaved(false);
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/db/part/id/${encodeURIComponent(part.id)}`, {
+            // Same server as every other request (localhost:5050 when run locally).
+            await fetchFromApi(`/db/part/id/${encodeURIComponent(part.id)}`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-client-secret": import.meta.env.VITE_CLIENT_SECRET,
-                },
                 body: JSON.stringify(formData),
             });
-
-            if (!response.ok) {
-                throw new Error(`Failed to save part data (${response.status})`);
-            }
-
-            await response.json().catch(() => formData);
+            setSaved(true);
         } catch (err: any) {
-            setSaveError(err.message || "An unexpected error occurred while saving.");
+            setSaveError(`Failed to save the part: ${err?.message || "an unexpected error occurred."}`);
         } finally {
             setIsSaving(false);
         }
@@ -379,7 +374,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                             disabled={isSaving}
                             className="flex-1 sm:flex-none px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md"
                         >
-                            {isSaving ? "Saving..." : "Save / Upsert Part"}
+                            {isSaving ? "Saving..." : saved ? "Saved ✓" : "Save / Upsert Part"}
                         </button>
                     </div>
                 </div>
