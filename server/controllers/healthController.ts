@@ -19,7 +19,8 @@ export function checkAuth(req: Request, res: Response, next: NextFunction) {
 
   const clientSecret = req.headers['x-client-secret'];
 
-  if (clientSecret !== CLIENT_SECRET_KEY) {
+  // Never match an empty secret (config.ts already refuses to start without one).
+  if (!CLIENT_SECRET_KEY || clientSecret !== CLIENT_SECRET_KEY) {
     console.warn(`>>> [AUTH FAILED] Blocked route missing/invalid client secret: ${req.originalUrl}`);
     return res.status(401).json({ message: 'Invalid or missing client secrets' });
   }

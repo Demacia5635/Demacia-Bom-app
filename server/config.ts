@@ -7,8 +7,15 @@ export const PORT = process.env.PORT || 5050;
 
 export const MONGODB_URI = process.env.MONGODB_URI;
 
-/** Shared secret the frontend sends as x-client-secret. */
-export const CLIENT_SECRET = process.env.CLIENT_SECRET;
+/**
+ * Shared secret the frontend sends as x-client-secret. Required: without it
+ * the auth check compared the header against undefined, so requests with no
+ * header at all passed and the whole API was open.
+ */
+export const CLIENT_SECRET: string = process.env.CLIENT_SECRET ?? "";
+if (!CLIENT_SECRET) {
+    throw new Error("CLIENT_SECRET is not set. Add it to server/.env (or the host's environment variables); the server won't start without it.");
+}
 
 const defaultOrigins = [
     "http://localhost:5173",
