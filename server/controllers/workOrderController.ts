@@ -66,10 +66,18 @@ export async function upsertWorkOrderByID(
   try {
     const id = req.params.id;
     const existing = await WorkOrder.findOne({ id: id });
-    
+
+    // `parts` is written only when the work order is created. Afterwards each
+    // part changes through POST /id/:id/part, so a whole-work-order save
+    // (sent with an older copy of the parts) can't undo other people's
+    // per-part edits. $setOnInsert keeps this atomic.
+    const { parts, ...fields } = req.body ?? {};
+    const update: Record<string, unknown> = { $set: { ...fields, id: id } };
+    if (parts !== undefined) update.$setOnInsert = { parts };
+
     const workOrder = await WorkOrder.findOneAndUpdate(
       { id: id },
-      { $set: { ...req.body, id: id } },
+      update,
       {
         returnDocument: 'after', // Fixed deprecation warning
         upsert: true,
