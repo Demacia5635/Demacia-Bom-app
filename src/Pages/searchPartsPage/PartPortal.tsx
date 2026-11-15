@@ -66,20 +66,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
         if (!part?.id) return;
         setIsCheckingBoms(true);
         try {
-            let allBoms: BomModel[] = [];
-            
-            // Try fetching from common list endpoints
-            try {
-                allBoms = await fetchFromApi<BomModel[]>(`/db/bom`);
-            } catch (e1) {
-                try {
-                    allBoms = await fetchFromApi<BomModel[]>(`/db/boms`);
-                } catch (e2) {
-                    allBoms = await fetchFromApi<BomModel[]>(`/db/bom/all`);
-                }
-            }
-
-            console.log("Fetched all BOMs for lookup:", allBoms);
+            const allBoms = await fetchFromApi<BomModel[]>(`/db/bom/all`);
 
             const matchingBoms = (allBoms || []).filter((bom) => 
                 bom.parts?.some((p) => p.partID === part.id)
