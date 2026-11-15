@@ -48,4 +48,4 @@ I couldn't open the real panel on Onshape, so please check these when you next u
 ## Related, not changed here
 
 - **The same sub-assembly used in two places shows only once.** The tree skips a sub-assembly it has already loaded, so its second use isn't listed. That's a separate issue that should be fixed together with #5.
-- **Both fixes are committed but not pushed.** The website and the extension update only after a push, and a rebuild for the extension. The Render server fix (`0667cec`) is also still waiting for your OK to push.
+- **Both fixes are committed but not pushed.** The website and the extension update only after a push, and a rebuild for the extension. (The Render server fix `0667cec` is already pushed; Render deploys by hand, so the server still needs a manual redeploy if that hasn't been done.)
