@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { AuthenticatedImage, fetchFromApi } from "../../util/ApiService";
+import { AuthenticatedImage, fetchFromApi, type ApiError } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import type { BomModel, PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";
@@ -40,11 +40,25 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [items, setItems] = useState<SearchItem[]>([]);
     const [isOpen, setOpen] = useState<PartModel | null>(null);
+    // Without these, a slow or failed load showed "Nothing found", as if the database were empty.
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<ApiError | null>(null);
 
     useEffect(() => {
         let cancelled = false;
 
         async function getItems() {
+            try {
+                await loadItems();
+            } catch (err) {
+                // Only the parts list can fail here: a failed BOM list just means no sub-assemblies.
+                if (!cancelled) setError(err as ApiError);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        }
+
+        async function loadItems() {
             const [parts, boms] = await Promise.all([
                 fetchFromApi<PartModel[]>(`/db/part/all`),
                 // Sub-assemblies are extra: if the assembly list fails, still show the parts.
@@ -145,7 +159,23 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
 
             {/* Results Grid */}
             <div className="max-w-6xl mx-auto">
-                {filteredItems.length > 0 ? (
+                {loading ? (
+                    <div className={`${cardBg} border rounded-xl p-12 text-center`}>
+                        <p className={`${textMuted} text-sm font-medium`}>Loading {standard ? "standard parts" : "parts"}...</p>
+                    </div>
+                ) : error ? (
+                    <div className="p-4 bg-red-900/50 border border-red-500 rounded-xl text-red-200">
+                        <p className="font-semibold">Error loading parts</p>
+                        <p>{error.message}</p>
+                        {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
+                    </div>
+                ) : items.length === 0 ? (
+                    <div className={`${cardBg} border rounded-xl p-12 text-center`}>
+                        <p className={`${textMuted} text-sm font-medium`}>
+                            {standard ? "No standard parts have been published yet." : "No parts have been published yet."}
+                        </p>
+                    </div>
+                ) : filteredItems.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredItems.map((item) => {
                             const part = item.record;
