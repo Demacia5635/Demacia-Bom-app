@@ -257,7 +257,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         const wrapper = wrapperRef.current;
         if (!wrapper) return;
 
-        const lastCol = columns[-1];
+        const lastCol = columns[columns.length - 1];
         if (!lastCol) {
             setAutoLastColWidth(null);
             return;
