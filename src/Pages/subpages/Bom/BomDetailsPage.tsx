@@ -77,10 +77,14 @@ export default function BomDetailsPage() {
 
   useEffect(() => {
     if (!bomId) return;
+    // Switching BOMs: the previous one's header goes, and its late reply is ignored.
+    let cancelled = false;
+    setMainBomData(null);
 
-    fetchFromApi<BomModel>(`/db/bom/id/${bomId}`).then((bom) => {
-      setMainBomData(bom);
-    });
+    fetchFromApi<BomModel>(`/db/bom/id/${bomId}`)
+      .then((bom) => { if (!cancelled) setMainBomData(bom); })
+      .catch(() => { /* the table load below shows the error */ });
+    return () => { cancelled = true; };
   }, [bomId]);
 
   useEffect(() => {
@@ -176,11 +180,15 @@ export default function BomDetailsPage() {
       return collectedRows;
     }
 
+    let cancelled = false;
+    setRows([]);
+    setError(null);
     setLoading(true);
     fetchFlatBomData(bomId)
-      .then((data) => setRows(data))
-      .catch((err: ApiError) => setError(err))
-      .finally(() => setLoading(false));
+      .then((data) => { if (!cancelled) setRows(data); })
+      .catch((err: ApiError) => { if (!cancelled) setError(err); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [bomId]);
 
   const handleTableDataChange = (newData: BomTableRow[]) => {

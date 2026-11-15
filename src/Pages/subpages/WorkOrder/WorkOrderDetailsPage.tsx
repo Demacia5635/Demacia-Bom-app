@@ -152,22 +152,31 @@ export default function WorkOrderDetailsPage() {
 
     useEffect(() => {
         if (!workOrderID) return;
+        // Switching work orders: nothing of the previous one stays on screen, and
+        // its late replies are ignored.
+        let cancelled = false;
+        setWorkOrderData(null);
+        setRows([]);
+        setError(null);
 
         async function getWOData() {
             try {
                 const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
-                setWorkOrderData(data);
+                if (!cancelled) setWorkOrderData(data);
 
                 // The assembly image comes from the BOM record (WorkOrderDataUI).
             } catch (err: any) {
-                setError(err);
+                if (!cancelled) setError(err);
             }
         }
         getWOData();
+        return () => { cancelled = true; };
     }, [workOrderID]);
 
     useEffect(() => {
-        if (!workOrderID || !workOrderData || !workOrderData.bomID) return;
+        // Only the work order in the URL (not the previous one, still loaded for a moment).
+        if (!workOrderID || !workOrderData || !workOrderData.bomID || workOrderData.id !== workOrderID) return;
+        let cancelled = false;
 
         async function fetchBomPartsRecursively(targetBomId: string): Promise<Map<string, number>> {
             const aggregated = new Map<string, number>();
@@ -181,7 +190,8 @@ export default function WorkOrderDetailsPage() {
         async function getPartsData(): Promise<WorkOrderTableRow[]> {
             const aggregatedQuantities = await fetchBomPartsRecursively(workOrderData!.bomID!);
             const collectedRows: WorkOrderTableRow[] = [];
-            rowPartMapRef.current.clear();
+            // Not cleared: row ids include the work order id, and a save still
+            // waiting for a row of the previous work order looks its part up here.
 
             // All parts in one request instead of one per part.
             const partRecords = await fetchPartsByIds([...aggregatedQuantities.keys()]);
@@ -240,9 +250,10 @@ export default function WorkOrderDetailsPage() {
 
         setLoading(true);
         getPartsData()
-            .then((data) => setRows(data))
-            .catch((err: ApiError) => setError(err))
-            .finally(() => setLoading(false));
+            .then((data) => { if (!cancelled) setRows(data); })
+            .catch((err: ApiError) => { if (!cancelled) setError(err); })
+            .finally(() => { if (!cancelled) setLoading(false); });
+        return () => { cancelled = true; };
     }, [workOrderID, workOrderData]);
 
     /**
