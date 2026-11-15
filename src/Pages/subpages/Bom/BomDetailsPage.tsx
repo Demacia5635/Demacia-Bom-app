@@ -262,10 +262,8 @@ export default function BomDetailsPage() {
 
     const clickedRow = rowOfElement(trEl);
     if (clickedRow) {
-      const cellsInRow = Array.from(trEl.querySelectorAll(".table-td, td"));
-      const cellIndex = cellsInRow.indexOf(cellEl);
-
-      if (cellIndex === 0) {
+      // By column, not position: columns can be dragged into another order.
+      if (cellEl.getAttribute("data-col-key") === "avatar") {
         setEnlargedImageSrc(clickedRow.avatar || "FAILED");
       }
     }

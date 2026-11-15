@@ -744,6 +744,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                         return (
                                             <td
                                                 key={col.key}
+                                                data-col-key={col.key}
                                                 style={frozenStyle(colIndex)}
                                                 onMouseEnter={cellProblem ? (e) => showProblemTip(e.currentTarget, cellProblem) : undefined}
                                                 onMouseLeave={cellProblem ? () => setProblemTip(null) : undefined}
