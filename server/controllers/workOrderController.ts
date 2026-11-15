@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
+import { cleanUpdateBody, upsertWithRetry } from "./upsert";
 
 interface SubPartBody {
   partID: string;
@@ -71,11 +72,11 @@ export async function upsertWorkOrderByID(
     // part changes through POST /id/:id/part, so a whole-work-order save
     // (sent with an older copy of the parts) can't undo other people's
     // per-part edits. $setOnInsert keeps this atomic.
-    const { parts, ...fields } = req.body ?? {};
+    const { parts, ...fields } = cleanUpdateBody(req.body);
     const update: Record<string, unknown> = { $set: { ...fields, id: id } };
     if (parts !== undefined) update.$setOnInsert = { parts };
 
-    const workOrder = await WorkOrder.findOneAndUpdate(
+    const workOrder = await upsertWithRetry(() => WorkOrder.findOneAndUpdate(
       { id: id },
       update,
       {
@@ -84,7 +85,7 @@ export async function upsertWorkOrderByID(
         runValidators: true,
         setDefaultsOnInsert: true,
       },
-    );
+    ));
 
     return res.status(existing ? 200 : 201).json(workOrder);
   } catch (err) {

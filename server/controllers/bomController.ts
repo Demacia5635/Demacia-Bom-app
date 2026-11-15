@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
+import { cleanUpdateBody, upsertWithRetry } from './upsert';
 
 interface OnshapeID {
     documentID: string;
@@ -76,16 +77,18 @@ export async function upsertBomByID(
     try {
         const id = req.params.id;
         const existing = await Bom.findOne({ id: id });
-        const bom = await Bom.findOneAndUpdate(
+        // Plain fields only, under $set: the body used to be passed as the
+        // update itself, so {"$unset": ...} or {"$rename": ...} ran as operators.
+        const bom = await upsertWithRetry(() => Bom.findOneAndUpdate(
             { id: id },
-            { ...req.body, id: id },
+            { $set: { ...cleanUpdateBody(req.body), id: id } },
             {
                 returnDocument: 'after',
                 upsert: true,
                 runValidators: true,
                 setDefaultsOnInsert: true
             },
-        );
+        ));
         
         return res.status(existing ? 200 : 201).json(bom);
     } catch (err) {

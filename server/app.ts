@@ -78,6 +78,12 @@ const errorHandler: ErrorRequestHandler = (
         return res.status(400).json({ message: err.message });
     }
 
+    // Duplicate key (a record with this id was created at the same moment):
+    // a conflict the client can retry, not an internal failure.
+    if ((err as { code?: number }).code === 11000) {
+        return res.status(409).json({ message: "A record with this id was just created by another request. Try again." });
+    }
+
     // Errors with a 4xx status (e.g. malformed JSON from express.json) describe
     // the request, so their message is safe to return. Anything else is an
     // internal failure whose message may expose server details: keep it in the

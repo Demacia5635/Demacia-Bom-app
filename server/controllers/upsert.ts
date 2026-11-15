@@ -1,0 +1,43 @@
+/**
+ * Shared helpers for the POST /id/:id upsert routes (parts, BOMs, work orders).
+ */
+
+/** Fields the server owns: never taken from a request body. */
+const SERVER_OWNED = new Set(["_id", "__v", "id", "createdAt", "updatedAt"]);
+
+/**
+ * The request body as plain field values for a `$set`. Mongoose already drops
+ * fields the schema doesn't know, but not:
+ * - keys starting with "$": passed straight into the update, they run as
+ *   MongoDB operators ({"$unset": ...}, {"$rename": ...});
+ * - dotted keys ("parts.0.partID"), which write inside nested documents;
+ * - server-owned fields (ids and timestamps).
+ */
+export function cleanUpdateBody(body: unknown): Record<string, unknown> {
+    if (!body || typeof body !== "object" || Array.isArray(body)) return {};
+    const clean: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(body)) {
+        if (key.startsWith("$") || key.includes(".") || SERVER_OWNED.has(key)) continue;
+        clean[key] = value;
+    }
+    return clean;
+}
+
+/** MongoDB's duplicate-key error. */
+export function isDuplicateKeyError(err: unknown): boolean {
+    return (err as { code?: number } | null)?.code === 11000;
+}
+
+/**
+ * Runs an upsert, retrying once on a duplicate-key error. Two first-time saves
+ * of the same id at the same moment can both try to insert; the loser fails
+ * with E11000, and on retry it finds the record and updates it.
+ */
+export async function upsertWithRetry<T>(run: () => Promise<T>): Promise<T> {
+    try {
+        return await run();
+    } catch (err) {
+        if (!isDuplicateKeyError(err)) throw err;
+        return await run();
+    }
+}

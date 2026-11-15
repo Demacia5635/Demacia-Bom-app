@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
+import { cleanUpdateBody, upsertWithRetry } from "./upsert";
 
 interface OnshapeID {
   documentID: string;
@@ -70,7 +71,7 @@ export async function upsertPartByID(
     const id = req.params.id;
     const existing = await Part.findOne({ id: id });
 
-    const updateData: any = { ...req.body, id: id };
+    const updateData: any = { ...cleanUpdateBody(req.body), id: id };
 
     // Fill in a name only when creating a part without a usable one. A partial
     // update (e.g. just file links) leaves the saved name alone.
@@ -81,7 +82,7 @@ export async function upsertPartByID(
       delete updateData.name;
     }
 
-    const part = await Part.findOneAndUpdate(
+    const part = await upsertWithRetry(() => Part.findOneAndUpdate(
       { id: id },
       { $set: updateData },
       {
@@ -90,7 +91,7 @@ export async function upsertPartByID(
         runValidators: true,
         setDefaultsOnInsert: true,
       },
-    );
+    ));
 
     return res.status(existing ? 200 : 201).json(part);
   } catch (err) {
