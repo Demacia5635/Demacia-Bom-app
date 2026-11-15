@@ -227,6 +227,21 @@ const directSources: TreeSources = {
 const keyString = (k: OnshapeKey) => `${k.documentID}/${k.wvmType}/${k.wvmID}/${k.elementID}`;
 
 /**
+ * A database record, or null when it isn't saved (the server answers 404).
+ * Any other failure (server down, 502, timeout) is thrown: treating it as "not
+ * saved" would drop the saved file IDs, so the next Publish BOM would
+ * overwrite the record and leave its Drive files orphaned.
+ */
+async function recordOrNull<T>(request: Promise<T>): Promise<T | null> {
+  try {
+    return await request;
+  } catch (err) {
+    if ((err as ApiError)?.statusCode === 404) return null;
+    throw err;
+  }
+}
+
+/**
  * Per-load cache in front of the network: each BOM / record is requested once
  * (at most `limit` requests at a time), and asking again returns the same
  * promise. Lets a parallel prefetch run ahead of the in-order tree walk.
@@ -484,12 +499,7 @@ export default function AssemblyBomPage() {
       const onshapeBom = await src.onshapeBom(key);
       const bomID = onshapeBom.id || key.elementID;
 
-      let dbBom: BomModel | null = null;
-      try {
-        dbBom = await src.dbBom(key, bomID);
-      } catch {
-        dbBom = null;
-      }
+      const dbBom = await recordOrNull(src.dbBom(key, bomID));
       const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${bomID}`;
 
       const isPublished = Boolean(dbBom);
@@ -576,12 +586,7 @@ export default function AssemblyBomPage() {
       };
       const partID = parsedItem.itemSource.partId || "";
 
-      let dbPart: PartModel | null = null;
-      try {
-        dbPart = await src.dbPart(key, partID);
-      } catch {
-        dbPart = null;
-      }
+      const dbPart: PartModel | null = await recordOrNull(src.dbPart(key, partID));
       const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${partID}`;
 
       const isPublished = Boolean(dbPart);
