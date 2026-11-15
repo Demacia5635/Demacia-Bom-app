@@ -1077,7 +1077,10 @@ export default function AssemblyBomPage() {
    * saved there. Every assembly and part is written in full with a fresh
    * thumbnail, STL and Parasolid; the Drive files they replace are deleted.
    * Cells edited in the table are written to Onshape first, so Onshape stays
-   * the source. It does not reload from Onshape: the table is updated in place.
+   * the source. Items are saved bottom-up (parts, then sub-assemblies deepest
+   * first, then the top assembly), and an assembly is skipped when something
+   * inside it wasn't saved, so no record links to one that doesn't exist.
+   * It does not reload from Onshape: the table is updated in place.
    */
   const handlePublish = useCallback(
     async (values: PublishBomFormValues) => withOperation("Publish BOM", async () => {
@@ -1168,32 +1171,8 @@ export default function AssemblyBomPage() {
           (): ModelVersions => ({ byRow: new Map(), tree: null })
         );
 
-        rootTrack.step(isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
-        const rootLinks = buildLinkArrays(rootRowId);
-        const rootToDelete: string[] = [];
-        const rootUnchanged = !!versions.tree && rootBomDB?.filesModelVersion === versions.tree && !!rootBomDB?.avatarID;
-        const rootAvatar = rootUnchanged ? null : await syncBomThumbnailToDrive(rootKey, values.name);
-        if (!rootUnchanged && !rootAvatar) problems.push(`Thumbnail of "${values.name}"`);
-        const savedRoot = await upsertBomById(rootID, {
-          id: rootID,
-          name: values.name,
-          description: values.description,
-          comments: values.comments,
-          catalogNumber: values.catalogNumber,
-          engineer: rootBomDB?.engineer || values.defaultEngineer,
-          parts: rootLinks.parts,
-          subAssemblies: rootLinks.subAssemblies,
-          avatarID: replaceFile(rootBomDB?.avatarID, rootAvatar, rootToDelete),
-          // A failed render leaves no version, so the next publish tries again.
-          filesModelVersion: !rootUnchanged && !rootAvatar ? "" : versions.tree ?? "",
-          onshapeID: {
-            ...rootKey,
-            bomID: rootOnshapeBom.id
-          },
-          onshapeURL: onshapeUrlOf(rootKey),
-        });
-        await deleteReplaced(rootToDelete);
-        rootTrack.finish();
+        // The top assembly is saved last, once everything it links to is (see below).
+        rootTrack.step("Waiting for the items inside it");
 
         // What changed per row, applied to the table at the end.
         const rowUpdates = new Map<string, Partial<AssemblyBomRow>>();
@@ -1416,25 +1395,59 @@ export default function AssemblyBomPage() {
           await deleteReplaced(toDelete);
         };
 
-        // Up to PUBLISH_CONCURRENCY items at once. One item failing doesn't stop
-        // the others: it's listed as a problem and keeps its unpublished state.
-        const queue = [...rowsToPublish];
+        // Children are saved before their parents, so a saved assembly never links
+        // to a record that doesn't exist. An assembly with a child that wasn't
+        // saved isn't saved either (its old record, if any, stays as it was):
+        // saving it without that link would misstate what's in it.
         const published = new Set<string>();
-        await Promise.all(
-          Array.from({ length: Math.min(PUBLISH_CONCURRENCY, queue.length) }, async () => {
-            for (let row = queue.shift(); row; row = queue.shift()) {
-              const progress = track(row.name, "Starting");
-              try {
-                await publishRow(row, progress);
-                published.add(row.id);
-              } catch (err: any) {
-                problems.push(`Saving "${row.name}": ${err?.message || err}`);
-              } finally {
-                progress.finish();
+        /** Items not saved this time: failed, or skipped because something inside failed. */
+        const notSaved = new Set<string>();
+        const blockedBy = (parentRowId: string) =>
+          (childrenByParentRowId.get(parentRowId) ?? []).filter((c) => notSaved.has(c.id));
+
+        /** Publishes `items` up to PUBLISH_CONCURRENCY at once. One failing doesn't stop the others. */
+        const publishAll = async (items: AssemblyBomRow[]) => {
+          const queue = [...items];
+          await Promise.all(
+            Array.from({ length: Math.min(PUBLISH_CONCURRENCY, queue.length) }, async () => {
+              for (let row = queue.shift(); row; row = queue.shift()) {
+                const progress = track(row.name, "Starting");
+                try {
+                  const blocked = row.isAssembly && !row.markedStandard ? blockedBy(row.id) : [];
+                  if (blocked.length > 0) {
+                    notSaved.add(row.id);
+                    problems.push(`"${row.name}" not saved: "${blocked[0].name}" inside it wasn't saved`);
+                    continue;
+                  }
+                  await publishRow(row, progress);
+                  published.add(row.id);
+                } catch (err: any) {
+                  notSaved.add(row.id);
+                  problems.push(`Saving "${row.name}": ${err?.message || err}`);
+                } finally {
+                  progress.finish();
+                }
               }
-            }
-          })
-        );
+            })
+          );
+        };
+
+        // 1. Parts, and sub-assemblies marked standard (one bought item, nothing inside).
+        await publishAll(rowsToPublish.filter(isLinkedAsPart));
+        // 2. Sub-assemblies, deepest first: each level's children are all done before it.
+        const rowById = new Map(rows.map((r) => [r.id, r]));
+        const depthOf = (r: AssemblyBomRow): number => {
+          let depth = 1;
+          for (let p = r.parentId; p !== null && depth <= rows.length; p = rowById.get(p)?.parentId ?? null) depth++;
+          return depth;
+        };
+        const byDepth = new Map<number, AssemblyBomRow[]>();
+        for (const r of rowsToPublish) {
+          if (isLinkedAsPart(r)) continue;
+          const d = depthOf(r);
+          byDepth.set(d, [...(byDepth.get(d) ?? []), r]);
+        }
+        for (const d of [...byDepth.keys()].sort((a, b) => b - a)) await publishAll(byDepth.get(d)!);
 
         // What was published is now saved: update those rows in place (no reload).
         const nextRows = rows.map((r) =>
@@ -1452,9 +1465,58 @@ export default function AssemblyBomPage() {
               }
             : r
         );
+        // Kept before the top assembly is saved, so a failure there doesn't lose them.
         setRows(nextRows);
+        currentTreeRef.current = { ...currentTreeRef.current, rows: nextRows };
+        writeTreeCache(
+          treeCacheKey(rootKey),
+          { rows: nextRows, rootBomDB, rootBom: rootBomSummary(rootOnshapeBom) },
+          treeSavedAtRef.current
+        );
+
+        // 3. The top assembly, last.
+        const rootBlocked = blockedBy(rootRowId);
+        if (rootBlocked.length > 0) {
+          rootTrack.finish();
+          const message =
+            `"${values.name}" was not saved: ${notSaved.size} item${notSaved.size === 1 ? "" : "s"} in it ` +
+            `could not be saved (first: ${problems[0]}). The items that were saved are kept. Publish BOM again to retry.`;
+          console.warn("[publish] problems:", problems);
+          setPublishError(message);
+          client.showMessageBubble(message);
+          setPublishOpen(false);
+          return null; // marks the operation failed on /tele
+        }
+        rootTrack.step(isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
+        const rootLinks = buildLinkArrays(rootRowId);
+        const rootToDelete: string[] = [];
+        const rootUnchanged = !!versions.tree && rootBomDB?.filesModelVersion === versions.tree && !!rootBomDB?.avatarID;
+        const rootAvatar = rootUnchanged ? null : await syncBomThumbnailToDrive(rootKey, values.name);
+        if (!rootUnchanged && !rootAvatar) problems.push(`Thumbnail of "${values.name}"`);
+        const savedRoot = await upsertBomById(rootID, {
+          id: rootID,
+          name: values.name,
+          description: values.description,
+          comments: values.comments,
+          catalogNumber: values.catalogNumber,
+          engineer: rootBomDB?.engineer || values.defaultEngineer,
+          parts: rootLinks.parts,
+          subAssemblies: rootLinks.subAssemblies,
+          avatarID: replaceFile(rootBomDB?.avatarID, rootAvatar, rootToDelete),
+          // A failed render leaves no version, so the next publish tries again.
+          filesModelVersion: !rootUnchanged && !rootAvatar ? "" : versions.tree ?? "",
+          onshapeID: {
+            ...rootKey,
+            bomID: rootOnshapeBom.id
+          },
+          onshapeURL: onshapeUrlOf(rootKey),
+        });
+        await deleteReplaced(rootToDelete);
+        rootTrack.finish();
+
         setRootBomDB(savedRoot);
         setRootIsPublished(true);
+        currentTreeRef.current = { ...currentTreeRef.current, rootBomDB: savedRoot };
         writeTreeCache(
           treeCacheKey(rootKey),
           { rows: nextRows, rootBomDB: savedRoot, rootBom: rootBomSummary(rootOnshapeBom) },
