@@ -72,7 +72,20 @@ const errorHandler: ErrorRequestHandler = (
     next: NextFunction
 ) => {
     console.error(err.stack);
-    res.status(err.status || 500).json({ message: err.message || "Internal server error" });
+
+    // Bad input the client can fix (e.g. a wrong field type): say what's wrong.
+    if (err.name === "ValidationError" || err.name === "CastError") {
+        return res.status(400).json({ message: err.message });
+    }
+
+    // Errors with a 4xx status (e.g. malformed JSON from express.json) describe
+    // the request, so their message is safe to return. Anything else is an
+    // internal failure whose message may expose server details: keep it in the
+    // log above and send a generic message.
+    const status = err.status && err.status >= 400 && err.status < 500 ? err.status : 500;
+    res.status(status).json({
+        message: status < 500 ? err.message : "Internal server error",
+    });
 }
 app.use(errorHandler);
 

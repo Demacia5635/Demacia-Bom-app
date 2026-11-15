@@ -72,7 +72,7 @@ export async function getFileFromId(
     return res.status(200).send(file.data);
   } catch (err: any) {
     console.error(">>> [DRIVE CONTROLLER UNCAUGHT ERROR]:", err?.message || err);
-    return res.status(500).json({ message: "Failed to stream file from Google Drive", error: err?.message });
+    return res.status(500).json({ message: "Failed to stream file from Google Drive" });
   }
 }
 
