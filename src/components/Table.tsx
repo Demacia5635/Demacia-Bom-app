@@ -23,8 +23,12 @@ interface RowContextMenuState {
 
 interface DraftInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> {
     value: string | number | undefined | null;
-    /** Called once with the final text when the edit ends (blur, Enter, Tab, arrow out), only if it changed. */
-    onCommit: (text: string) => void;
+    /**
+     * Called once with the final text when the edit ends (blur, Enter, Tab,
+     * arrow out), only if it changed. Returning false rejects it: the cell
+     * goes back to its value.
+     */
+    onCommit: (text: string) => boolean | void;
 }
 
 /**
@@ -61,7 +65,7 @@ function DraftInput({ value, onCommit, onKeyDown, onFocus, ...rest }: DraftInput
                     setDraft(external);
                     return;
                 }
-                if (draft !== external) onCommit(draft);
+                if (draft !== external && onCommit(draft) === false) setDraft(external);
             }}
             onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -564,27 +568,28 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             }));
     };
 
-    const handleNumberBlur = (rowId: string, col: ColumnConfig, rawValue: string | number) => {
+    /**
+     * Commits a number cell. Empty means 0. Text that isn't a whole number
+     * (quantity, revision) or a plain decimal with a dot ("1.5", ".5", "2.")
+     * is rejected and the cell goes back to its value, instead of being saved
+     * as 0 or cut short ("1,5", "12g", "1e3").
+     */
+    const handleNumberBlur = (rowId: string, col: ColumnConfig, rawValue: string | number): boolean => {
         const strVal = String(rawValue).trim();
         if (strVal === '' || strVal === '.') {
             handleCellChange(rowId, col, '0');
-            return;
+            return true;
         }
 
-        let processed = strVal;
         if (col.key === 'quantity' || col.key === 'revision') {
-            const intVal = parseInt(processed, 10);
-            const finalVal = isNaN(intVal) ? 0 : Math.max(0, intVal);
-            handleCellChange(rowId, col, String(finalVal));
-            return;
+            if (!/^\d+$/.test(strVal)) return false;
+            handleCellChange(rowId, col, String(parseInt(strVal, 10)));
+            return true;
         }
 
-        if (processed.startsWith('.')) processed = '0' + processed;
-        if (processed.endsWith('.')) processed = processed.slice(0, -1);
-
-        const num = Number(processed);
-        const finalVal = isNaN(num) ? 0 : num;
-        handleCellChange(rowId, col, String(finalVal));
+        if (!/^-?(\d+\.?\d*|\.\d+)$/.test(strVal)) return false;
+        handleCellChange(rowId, col, String(Number(strVal)));
+        return true;
     };
 
     const moveColumn = (fromIdx: number, toIdx: number) => {
