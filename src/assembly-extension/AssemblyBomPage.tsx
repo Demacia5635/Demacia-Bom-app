@@ -101,9 +101,20 @@ function sameValue(field: string, a: unknown, b: unknown): boolean {
 /** Engineer written for Onshape Standard Content (screws, nuts, washers...) and parts marked standard. */
 const STANDARD_PART_ENGINEER = "Standard Part";
 
-/** Standard Content and vendor parts come from outside Onshape documents you own: never editable. */
+/** Standard Content and vendor parts come from outside Onshape documents you own: their properties aren't editable. */
 function isExternalRow(row: AssemblyBomRow): boolean {
   return row.vendor !== "" || !!row.isStandardContent;
+}
+
+/**
+ * The cells of `row` that can change. Standard Content: none. Vendor parts:
+ * only the database choices (STL / Parasolid / Standard part), so one can be
+ * marked standard or have its files unticked; its properties stay locked.
+ */
+function editableFieldsOf(row: AssemblyBomRow): readonly string[] {
+  if (row.isStandardContent) return [];
+  if (row.vendor !== "") return EDITABLE_FIELDS.filter((k) => BOOLEAN_FIELDS.has(k));
+  return EDITABLE_FIELDS;
 }
 
 /** Bought, not made: Onshape Standard Content, or marked as a standard part here. */
@@ -132,9 +143,9 @@ function isLockedRow(row: AssemblyBomRow): boolean {
 
 /** Editable cells of `row` that differ from `against` (none for Standard Content, which isn't editable). */
 function changedFields(row: AssemblyBomRow, against: FieldValues | undefined): string[] {
-  if (!against || isExternalRow(row)) return [];
+  if (!against) return [];
   const r = row as unknown as Record<string, unknown>;
-  return EDITABLE_FIELDS.filter((k) => !sameValue(k, r[k], against[k]));
+  return editableFieldsOf(row).filter((k) => !sameValue(k, r[k], against[k]));
 }
 
 /**
@@ -704,7 +715,9 @@ export default function AssemblyBomPage() {
           ? { wantStl: !!dbPart!.wantStl, wantParasolid: !!dbPart!.wantParasolid }
           : dbPart
             ? { wantStl: !!dbPart.stlLink, wantParasolid: !!dbPart.parasolidLink }
-            : fileDefaultsForMaterial(material);
+            : parsedItem.vendor
+              ? { wantStl: false, wantParasolid: false } // a vendor part is usually bought
+              : fileDefaultsForMaterial(material);
 
       const savedValues: FieldValues | null = dbPart
         ? ({
@@ -1027,11 +1040,13 @@ export default function AssemblyBomPage() {
           (k) => (row as unknown as Record<string, unknown>)[k] !== (prev as unknown as Record<string, unknown>)[k]
         );
         if (editedKeys.length === 0) return row; // e.g. expanding/collapsing a row
-        // Standard Content / vendor parts: nothing editable. Marked standard: only
-        // the mark (to undo it). Mid-refresh or mid-publish edits would be lost.
+        // Standard Content: nothing editable; vendor parts: only the file and
+        // standard-part choices. Marked standard: only the mark (to undo it).
+        // Mid-refresh or mid-publish edits would be lost.
+        const allowed = editableFieldsOf(prev);
         const refused = editedKeys.filter(
           (k) =>
-            loading || publishing || subtreeLoads > 0 || isExternalRow(prev) || (prev.markedStandard && k !== "markedStandard")
+            loading || publishing || subtreeLoads > 0 || !allowed.includes(k) || (prev.markedStandard && k !== "markedStandard")
         );
         if (refused.length > 0) {
           blocked = true;
