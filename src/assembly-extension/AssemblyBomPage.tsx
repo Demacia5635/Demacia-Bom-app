@@ -24,7 +24,7 @@ import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import PublishBomModal, { type PublishBomFormValues, type PublishPreview, type PublishProgress } from "./PublishBomModel";
-import { describeAge, readTreeCache, treeCacheKey, writeTreeCache } from "./treeCache";
+import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { CATALOG_NUMBER_FORMAT, checkCatalogTree, type CatalogNode } from "../util/catalogNumbers";
 
@@ -869,7 +869,8 @@ export default function AssemblyBomPage() {
       currentTreeRef.current = { ...currentTreeRef.current, rows: nextRows };
       if (rootKey) {
         const { rootBomDB: savedRoot, rootOnshapeBom: onshapeRoot } = currentTreeRef.current;
-        writeTreeCache(
+        // Called on every edit/expand: written once edits pause.
+        writeTreeCacheSoon(
           treeCacheKey(rootKey),
           { rows: nextRows, rootBomDB: savedRoot, rootBom: rootBomSummary(onshapeRoot) },
           treeSavedAtRef.current

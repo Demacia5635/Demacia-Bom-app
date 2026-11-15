@@ -64,6 +64,7 @@ function remove(key: string, index: Record<string, number>): void {
 }
 
 export function readTreeCache(key: string): CachedTree | null {
+  flushPendingWrite(key); // a write still waiting must not be read as stale
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -76,25 +77,32 @@ export function readTreeCache(key: string): CachedTree | null {
 
 /** `savedAt`: when the tree was loaded from Onshape (defaults to now). */
 export function writeTreeCache(key: string, data: Omit<CachedTree, "v" | "savedAt">, savedAt: number = Date.now()): void {
+  cancelPendingWrite(key); // this newer write replaces one still waiting
   const entry: CachedTree = { v: VERSION, savedAt, ...data };
   const json = JSON.stringify(entry);
   const index = readIndex();
 
-  let saved = false;
-  try {
-    localStorage.setItem(key, json);
-    saved = true;
-  } catch {
-    // Probably full: drop every other saved tree and try once more.
-    for (const other of Object.keys(index)) {
-      if (other !== key) remove(other, index);
-    }
+  const trySet = () => {
     try {
       localStorage.setItem(key, json);
-      saved = true;
+      return true;
     } catch {
-      /* too big to store; the page works without it */
+      return false;
     }
+  };
+
+  let saved = trySet();
+  if (!saved) {
+    // Probably full: drop the oldest other saved trees, one at a time, until
+    // this one fits (rather than every other tree at once).
+    const oldestFirst = Object.entries(index)
+      .filter(([other]) => other !== key)
+      .sort((a, b) => a[1] - b[1]);
+    for (const [other] of oldestFirst) {
+      remove(other, index);
+      if ((saved = trySet())) break;
+    }
+    // Otherwise it's too big to store; the page works without it.
   }
 
   if (saved) index[key] = entry.savedAt;
@@ -104,6 +112,54 @@ export function writeTreeCache(key: string, data: Omit<CachedTree, "v" | "savedA
   const byAge = Object.entries(index).sort((a, b) => b[1] - a[1]);
   for (const [oldKey] of byAge.slice(MAX_ENTRIES)) remove(oldKey, index);
   writeIndex(index);
+}
+
+/** How long writeTreeCacheSoon waits for more changes before writing. */
+const WRITE_DELAY_MS = 500;
+
+interface PendingWrite {
+  timer: ReturnType<typeof setTimeout>;
+  write: () => void;
+}
+const pendingWrites = new Map<string, PendingWrite>();
+
+function cancelPendingWrite(key: string): void {
+  const pending = pendingWrites.get(key);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingWrites.delete(key);
+}
+
+function flushPendingWrite(key: string): void {
+  const pending = pendingWrites.get(key);
+  if (pending) pending.write(); // write() removes it from pendingWrites
+}
+
+/** Writes every tree still waiting (e.g. when the panel closes). */
+export function flushTreeCacheWrites(): void {
+  for (const key of Array.from(pendingWrites.keys())) flushPendingWrite(key);
+}
+
+/**
+ * Like writeTreeCache, but waits until edits pause: typing or expanding rows
+ * quickly writes the (possibly large) tree once instead of on every change.
+ * The latest data wins; pending writes are flushed when the page is hidden or
+ * closed, so edits still survive closing the panel.
+ */
+export function writeTreeCacheSoon(key: string, data: Omit<CachedTree, "v" | "savedAt">, savedAt: number = Date.now()): void {
+  cancelPendingWrite(key);
+  const write = () => {
+    cancelPendingWrite(key);
+    writeTreeCache(key, data, savedAt);
+  };
+  pendingWrites.set(key, { timer: setTimeout(write, WRITE_DELAY_MS), write });
+}
+
+if (typeof addEventListener === "function") {
+  addEventListener("pagehide", flushTreeCacheWrites);
+  addEventListener("visibilitychange", () => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") flushTreeCacheWrites();
+  });
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 days ago". */
