@@ -210,9 +210,9 @@ function toParsedRow(
  * Returns the DIRECT top-level rows of one BOM table - i.e. rows whose
  * `item` number has no dot (like "1" or "2"), not anything nested under a
  * sub-assembly (like "1.1"). A top-level row is a sub-assembly if some
- * OTHER row's item number is "<thisNumber>.something" - Onshape doesn't
- * mark this with a boolean field, so it has to be inferred from the
- * indented numbering across the whole items array.
+ * OTHER row's item number is "<thisNumber>.something", or if its itemSource
+ * has no partId (an empty sub-assembly has no children to number) - Onshape
+ * doesn't mark this with a boolean field, so it has to be inferred.
  *
  * This deliberately ignores rows nested more than one level deep in the
  * SAME response (e.g. "1.1.2"): AssemblyBomPage re-fetches a fresh,
@@ -229,6 +229,11 @@ export function parseOnshapeBomTable(table: OnshapeBomTable): ParsedOnshapeBomRo
   const hasChildren = (itemNumber: string) =>
     items.some((it) => it.item && it.item.startsWith(`${itemNumber}.`));
 
+  // A row without a partId is an assembly even when it has no children in the
+  // response (an empty sub-assembly), which the numbering alone can't show.
+  const isAssemblyRow = (item: OnshapeBomItem) =>
+    hasChildren(item.item) || (!!item.itemSource && !item.itemSource.partId);
+
   const columns = bomFieldColumns(table);
-  return topLevel.map((item) => toParsedRow(item, hasChildren(item.item), columns));
+  return topLevel.map((item) => toParsedRow(item, isAssemblyRow(item), columns));
 }
