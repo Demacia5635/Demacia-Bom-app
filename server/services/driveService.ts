@@ -113,13 +113,18 @@ export class GoogleDriveService {
     return this.mapFile(res.data);
   }
 
-  async getFileContent(fileId: string): Promise<Buffer> {
+  /** A file's bytes, with the content type Google Drive reports for it. */
+  async getFileContent(fileId: string): Promise<{ data: Buffer; mimeType: string }> {
     const res = await this.drive.files.get(
       { fileId, alt: "media" },
       { responseType: "arraybuffer" },
     );
 
-    return Buffer.from(res.data as ArrayBuffer);
+    const header = (res.headers as Record<string, unknown> | undefined)?.["content-type"];
+    return {
+      data: Buffer.from(res.data as ArrayBuffer),
+      mimeType: typeof header === "string" ? header : "",
+    };
   }
 
   /**

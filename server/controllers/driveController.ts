@@ -41,25 +41,35 @@ export async function getFileFromId(
       return res.status(400).json({ message: "File ID is required" });
     }
 
-    const fileContent = await client.getFileContent(fileID).catch((err: any) => {
+    let file: { data: Buffer; mimeType: string };
+    try {
+      file = await client.getFileContent(fileID);
+    } catch (err: any) {
       const errorDetails = err?.response?.data || err?.message || err;
       console.error(`>>> [DRIVE GET CONTENT ERROR] fileID: ${fileID}:`, errorDetails);
 
       if (typeof errorDetails === "object" && errorDetails?.error === "unauthorized_client") {
         console.error(">>> [CRITICAL OAUTH MISMATCH] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET does not match the app that created GOOGLE_REFRESH_TOKEN.");
       }
-      return null;
-    });
 
-    if (!fileContent) {
-      return res.status(401).json({ 
-        message: `Failed to stream file from Google Drive for ID: ${fileID}. Check GOOGLE_CLIENT_ID and GOOGLE_REFRESH_TOKEN pairing.` 
-      });
+      // Drive answers 404 for unknown IDs and 400 for malformed ones.
+      const driveStatus = Number(err?.response?.status ?? err?.code);
+      if (driveStatus === 404 || driveStatus === 400) {
+        return res.status(404).json({ message: `File ${fileID} not found` });
+      }
+      // Anything else (bad OAuth credentials, Drive outage) is the server's
+      // problem, not the caller's.
+      return res.status(502).json({ message: "Failed to stream file from Google Drive" });
     }
 
-    res.setHeader("Content-Type", "image/png");
+    // Images keep their type so <img> tags render them; everything else (STL,
+    // Parasolid, or anything unexpected such as HTML/SVG) is sent as a plain
+    // download so it can never run as a page on this server's origin.
+    const isRasterImage = /^image\/(png|jpeg|gif|webp|bmp)$/i.test(file.mimeType);
+    res.setHeader("Content-Type", isRasterImage ? file.mimeType : "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "public, max-age=86400");
-    return res.status(200).send(fileContent);
+    return res.status(200).send(file.data);
   } catch (err: any) {
     console.error(">>> [DRIVE CONTROLLER UNCAUGHT ERROR]:", err?.message || err);
     return res.status(500).json({ message: "Failed to stream file from Google Drive", error: err?.message });
