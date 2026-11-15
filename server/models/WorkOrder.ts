@@ -4,7 +4,9 @@ const subPartSchema = new mongoose.Schema(
   {
     partID: { type: String, required: true },
     quantityTotal: { type: Number, default: 1 },
-    quantityMade: { type: Number, default: 1 },
+    // Nothing is made yet when a part enters a work order (also when it's
+    // added later by the per-part route, which doesn't send this field).
+    quantityMade: { type: Number, default: 0 },
     statusCode: { type: mongoose.Schema.Types.Mixed, default: "In Planning" },
     Priority: { type: String, default: "Medium" },
     manufacturingMethod: { type: String, default: "Manual" },
