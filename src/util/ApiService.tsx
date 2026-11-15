@@ -153,6 +153,8 @@ export function setOnshapeImageCache(cache: OnshapeImageCache | null): void {
 const ONSHAPE_IMAGE_CONCURRENCY = 4;
 /** Waits before retrying a rate-limited (429) image, when Onshape sends no Retry-After. */
 const ONSHAPE_IMAGE_RETRY_MS = [1000, 3000, 8000];
+/** Longest one image request may take (the image then shows as failed). */
+const ONSHAPE_IMAGE_TIMEOUT_MS = 30000;
 let onshapeImagesActive = 0;
 const onshapeImageWaiting: (() => void)[] = [];
 
@@ -170,7 +172,8 @@ async function fetchOnshapeImage(url: string, stillWanted: () => boolean): Promi
   try {
     for (let attempt = 0; ; attempt++) {
       if (!stillWanted()) return null;
-      const res = await fetch(url, { credentials: "include" });
+      // A render Onshape never answers must not hold a slot forever.
+      const res = await fetch(url, { credentials: "include", signal: AbortSignal.timeout(ONSHAPE_IMAGE_TIMEOUT_MS) });
       onshapeImageListener?.(url, res.ok);
       if (res.status !== 429 || attempt >= ONSHAPE_IMAGE_RETRY_MS.length) return res;
       const retryAfter = Number(res.headers.get("retry-after"));
