@@ -95,8 +95,10 @@ export interface ColumnConfig {
     isModified?: (row: RowData & any) => boolean;
     /** Extra class for a select cell from its value (e.g. a status colour). */
     valueClass?: (value: any) => string | undefined;
-    /** A problem with the cell's value: marks the cell (class "cell-problem") with the text as its tooltip. */
+    /** A problem with the cell's value: marks the cell (class "cell-problem") and shows the text on hover or focus. */
     problem?: (row: RowData & any) => string | undefined;
+    /** Grey hint shown in an empty text cell (e.g. the value used if it stays empty). */
+    placeholder?: (row: RowData & any) => string | undefined;
     apiPath?: string | ((value: any) => string);
 }
 
@@ -130,6 +132,22 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
     const [, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, rowId: null });
+
+    // Tooltip of a problem cell, drawn by the table: the browser's own title
+    // tooltip is slow, and doesn't show over the cell's input in the extension panel.
+    const [problemTip, setProblemTip] = useState<{ text: string; left: number; top: number } | null>(null);
+    const showProblemTip = (cell: HTMLElement, text: string) => {
+        const r = cell.getBoundingClientRect();
+        const left = Math.max(8, Math.min(r.left, window.innerWidth - 288));
+        setProblemTip({ text, left, top: r.bottom + 4 });
+    };
+    useEffect(() => {
+        if (!problemTip) return;
+        // The tooltip doesn't follow its cell, so scrolling hides it.
+        const hide = () => setProblemTip(null);
+        window.addEventListener('scroll', hide, true);
+        return () => window.removeEventListener('scroll', hide, true);
+    }, [problemTip]);
 
     const wrapperRef = useRef<HTMLDivElement>(null);
     const bottomScrollRef = useRef<HTMLDivElement>(null);
@@ -719,7 +737,14 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                         const cellProblem = col.problem?.(row);
 
                                         return (
-                                            <td key={col.key} style={frozenStyle(colIndex)} title={cellProblem} className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''} ${cellProblem ? 'cell-problem' : ''}`}>
+                                            <td
+                                                key={col.key}
+                                                style={frozenStyle(colIndex)}
+                                                onMouseEnter={cellProblem ? (e) => showProblemTip(e.currentTarget, cellProblem) : undefined}
+                                                onMouseLeave={cellProblem ? () => setProblemTip(null) : undefined}
+                                                onFocus={cellProblem ? (e) => showProblemTip(e.currentTarget, cellProblem) : undefined}
+                                                onBlur={cellProblem ? () => setProblemTip(null) : undefined}
+                                                className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''} ${cellProblem ? 'cell-problem' : ''}`}>
                                                 <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
                                                     {colIndex === 0 && isRowParent && (
                                                         <button
@@ -807,6 +832,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                             type="text"
                                                             value={displayValue}
                                                             onCommit={(text) => handleCellChange(row.id, col, text)}
+                                                            placeholder={col.placeholder?.(row)}
                                                             onFocus={(e) => e.target.select()}
                                                             onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
                                                             onClick={(e) => e.stopPropagation()}
@@ -831,6 +857,12 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                     </tbody>
                 </table>
             </div>
+
+            {problemTip && (
+                <div className="cell-problem-tip" role="tooltip" style={{ left: problemTip.left, top: problemTip.top }}>
+                    {problemTip.text}
+                </div>
+            )}
 
             {/* Synced Bottom Horizontal Scrollbar */}
             <div
