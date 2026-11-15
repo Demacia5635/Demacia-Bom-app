@@ -41,7 +41,8 @@ export function PartsSearchPage() {
         async function getItems() {
             const [parts, boms] = await Promise.all([
                 fetchFromApi<PartModel[]>(`/db/part/all`),
-                fetchFromApi<BomModel[]>(`/db/bom/all`),
+                // Sub-assemblies are extra: if the assembly list fails, still show the parts.
+                fetchFromApi<BomModel[]>(`/db/bom/all`).catch(() => [] as BomModel[]),
             ]);
             if (cancelled) return;
             setItems([
