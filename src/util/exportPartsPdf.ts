@@ -76,9 +76,8 @@ function buildHtml(options: PartsPdfOptions, thumbnails: Map<string, string>): s
         return `<tr>
   <td class="num">${i + 1}</td>
   <td class="img">${img ? `<img src="${img}" alt="">` : `<div class="noimg">No image</div>`}</td>
-  <td class="name"><div class="pname">${escapeHtml(row.name || "Unnamed part")}</div>${
-            row.catalogNumber ? `<div class="cat">${escapeHtml(row.catalogNumber)}</div>` : ""
-        }</td>
+  <td class="name">${escapeHtml(row.name || "Unnamed part")}</td>
+  <td class="cat">${row.catalogNumber?.trim() ? escapeHtml(row.catalogNumber.trim()) : `<span class="none">—</span>`}</td>
   <td class="qty">${escapeHtml(String(row.quantity ?? ""))}</td>
 </tr>`;
     }).join("\n");
@@ -105,8 +104,10 @@ function buildHtml(options: PartsPdfOptions, thumbnails: Map<string, string>): s
   td.img { width: 34mm; }
   td.img img { display: block; width: 30mm; height: 30mm; object-fit: contain; border: .5pt solid #ddd; border-radius: 1.5mm; }
   .noimg { width: 30mm; height: 30mm; border: .5pt dashed #bbb; border-radius: 1.5mm; display: flex; align-items: center; justify-content: center; font-size: 8pt; color: #999; }
-  .pname { font-size: 12pt; font-weight: 600; word-break: break-word; }
-  .cat { font-size: 9pt; color: #666; margin-top: 1mm; font-family: Consolas, monospace; }
+  td.name { font-size: 12pt; font-weight: 600; word-break: break-word; }
+  th.cat, td.cat { width: 40mm; }
+  td.cat { font-size: 10.5pt; font-family: Consolas, monospace; word-break: break-all; }
+  td.cat .none { color: #aaa; }
   th.qty, td.qty { width: 22mm; text-align: center; }
   td.qty { font-size: 18pt; font-weight: 700; }
 </style></head>
@@ -115,7 +116,7 @@ function buildHtml(options: PartsPdfOptions, thumbnails: Map<string, string>): s
   ${subtitles}
   <div class="summary">${options.rows.length} part${options.rows.length === 1 ? "" : "s"} · total quantity ${totalQty}</div>
   <table>
-    <thead><tr><th class="num">#</th><th>Image</th><th>Name</th><th class="qty">Qty</th></tr></thead>
+    <thead><tr><th class="num">#</th><th>Image</th><th>Name</th><th class="cat">Catalogue #</th><th class="qty">Qty</th></tr></thead>
     <tbody>
 ${body}
     </tbody>
