@@ -11,4 +11,4 @@ Website changes are logged in `src/upd. logs/`, server changes in `server/upd. l
 | Version | Built | Highlights |
 |---|---|---|
 | [2.0.0](2.0.0/v2.0.0.md) | 2026-11-15 20:13 | Safe Publish BOM, correct sub-assembly quantities, vendor parts always standard, no ghost rows |
-| [0.1.0](0.1.0/v0.1.0.md) | 2026-11-14 23:00 | The version in use before the code review |
+| [1.0.0](1.0.0/v1.0.0.md) | 2026-11-14 23:00 | The version in use before the code review |
