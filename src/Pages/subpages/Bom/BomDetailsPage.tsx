@@ -19,6 +19,141 @@ const SAVED_PART_FIELDS = [
   "material", "mass", "price", "comments", "vendor",
 ] as const satisfies readonly (keyof BomTableRow)[];
 
+/**
+ * How the BOM's sub-assemblies are shown:
+ * - single: one level, each sub-assembly is a row like a part.
+ * - structured: each sub-assembly opens (▶) to show its own parts and sub-assemblies.
+ * - flattened: structured with every sub-assembly already open.
+ */
+type BomView = "single" | "structured" | "flattened";
+
+const BOM_VIEWS: { key: BomView; label: string; title: string }[] = [
+  { key: "single", label: "Single-level", title: "Sub-assemblies are rows, like parts" },
+  { key: "structured", label: "Structured", title: "Open a sub-assembly to see what's inside it" },
+  { key: "flattened", label: "Flattened", title: "Every sub-assembly opened" },
+];
+
+const VIEW_STORAGE_KEY = "bomDetailsView";
+
+function savedView(): BomView {
+  try {
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY);
+    if (BOM_VIEWS.some((v) => v.key === saved)) return saved as BomView;
+  } catch { /* storage blocked: default view */ }
+  return "single";
+}
+
+/** A BOM with every sub-assembly under it, and all their parts. */
+interface BomTree {
+  rootId: string;
+  root: BomModel;
+  boms: Map<string, BomModel>;
+  parts: Map<string, PartModel>;
+}
+
+/** Loads a BOM's whole tree: one batch request per level of sub-assemblies, then one for the parts. */
+async function loadBomTree(rootId: string): Promise<BomTree> {
+  const root = await fetchFromApi<BomModel>(`/db/bom/id/${rootId}`);
+  const boms = new Map<string, BomModel>();
+  const tried = new Set<string>([rootId]);
+  let level: BomModel[] = [root];
+
+  while (level.length > 0) {
+    const next = [...new Set(level.flatMap((b) => (b.subAssemblies || []).map((s) => s.bomID)))]
+      .filter((id) => id && !tried.has(id));
+    next.forEach((id) => tried.add(id));
+    const found = await fetchBomsByIds(next);
+    found.forEach((bom, id) => boms.set(id, bom));
+    level = [...found.values()];
+  }
+
+  const partIds = [root, ...boms.values()].flatMap((b) => (b.parts || []).map((p) => p.partID));
+  const parts = await fetchPartsByIds(partIds);
+  return { rootId, root, boms, parts };
+}
+
+/**
+ * The table rows of `tree` in `view`. Quantities are per parent, as in Onshape's
+ * structured BOM. A sub-assembly row's id is its path from the root, so the same
+ * sub-assembly used in two places opens and closes on its own; a part's id is
+ * its part id, so an edit shows on every row of that part.
+ */
+function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
+  const rows: BomTableRow[] = [];
+
+  const addBom = (bom: BomModel, parentRowId: string | null, path: string[]) => {
+    for (const sub of bom.subAssemblies || []) {
+      const record = tree.boms.get(sub.bomID) ?? null;
+      const subPath = [...path, sub.bomID];
+      const rowId = `sub-${subPath.join("/")}`;
+      rows.push({
+        id: rowId,
+        parentId: parentRowId,
+        isExpanded: view === "flattened",
+        isSubAssembly: true,
+        subBomId: sub.bomID,
+        avatar: recordImageSrc(record as any),
+        name: partDisplayName(record, sub.bomID),
+        catalogNumber: record?.catalogNumber || "",
+        revision: "-",
+        description: record?.description || "",
+        engineer: record?.engineer || "",
+        material: "-",
+        mass: 0,
+        price: 0,
+        quantity: sub.quantity || 1,
+        comments: record?.comments || "",
+        documentID: record?.onshapeID?.documentID || "",
+        wvmType: record?.onshapeID?.wvmType || "w",
+        wvmID: record?.onshapeID?.wvmID || "",
+        elementID: record?.onshapeID?.elementID || "",
+        entityID: record?.onshapeID?.bomID || record?.id || sub.bomID,
+        onshapeURL: record?.onshapeURL || "",
+        exportSTL: "",
+        exportParasolid: "",
+        vendor: record?.vendor || "",
+      });
+      // `path` guards against a BOM that (wrongly) contains itself.
+      if (view !== "single" && record && !path.includes(sub.bomID)) addBom(record, rowId, subPath);
+    }
+
+    for (const p of bom.parts || []) {
+      // A part missing from the database shows as a plain row with its ID.
+      const part = tree.parts.get(p.partID) ?? ({ id: p.partID } as PartModel);
+      rows.push({
+        id: `part-${p.partID}`,
+        parentId: parentRowId,
+        isExpanded: false,
+        isSubAssembly: false,
+        avatar: recordImageSrc(part as any),
+        name: partDisplayName(part, p.partID),
+        catalogNumber: part.catalogNumber || "",
+        revision: part.revision || "",
+        description: part.description || "",
+        engineer: part.engineer || "",
+        material: part.material || "",
+        mass: part.mass || 0,
+        price: part.price || 0,
+        quantity: p.quantity || 1,
+        comments: part.comments || "",
+        documentID: part.onshapeID?.documentID || "",
+        wvmType: part.onshapeID?.wvmType || "w",
+        wvmID: part.onshapeID?.wvmID || "",
+        elementID: part.onshapeID?.elementID || "",
+        entityID: p.partID,
+        onshapeURL: part.onshapeURL || "",
+        exportSTL: part.stlLink || "",
+        exportParasolid: part.parasolidLink || "",
+        vendor: part.vendor || "",
+        isStandardContent: !!part.isStandardContent,
+      });
+    }
+  };
+
+  addBom(tree.root, null, [tree.rootId]);
+  return rows;
+}
+
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
   const navigate = useNavigate();
@@ -43,6 +178,8 @@ export default function BomDetailsPage() {
     row: BomTableRow;
   } | null>(null);
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+  const [tree, setTree] = useState<BomTree | null>(null);
+  const [view, setView] = useState<BomView>(savedView);
 
   // Ref to hold debounced save timeouts per part ID
   const saveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -68,103 +205,30 @@ export default function BomDetailsPage() {
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
+  // The whole assembly tree, loaded once per BOM; each view builds its rows from it.
   useEffect(() => {
     if (!bomId) return;
-
-    async function fetchFlatBomData(targetBomId: string): Promise<BomTableRow[]> {
-      const bom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
-      const collectedRows: BomTableRow[] = [];
-
-      // All sub-assemblies and parts in two requests instead of one per item.
-      const [subBoms, parts] = await Promise.all([
-        fetchBomsByIds((bom.subAssemblies || []).map((s) => s.bomID)),
-        fetchPartsByIds((bom.parts || []).map((p) => p.partID)),
-      ]);
-
-      for (const sub of bom.subAssemblies || []) {
-        const subBomRecord = subBoms.get(sub.bomID) ?? null;
-        let subAvatarUrl = recordImageSrc(subBomRecord as any);
-
-        const subAssemblyRow: BomTableRow = {
-          id: `sub-${sub.bomID}`,
-          parentId: null,
-          isExpanded: false,
-          isSubAssembly: true,
-          subBomId: sub.bomID,
-          avatar: subAvatarUrl,
-          name: partDisplayName(subBomRecord, sub.bomID),
-          catalogNumber: subBomRecord?.catalogNumber || "",
-          revision: "-",
-          description: subBomRecord?.description || "",
-          engineer: subBomRecord?.engineer || "",
-          material: "-",
-          mass: 0,
-          price: 0,
-          quantity: sub.quantity || 1,
-          comments: subBomRecord?.comments || "",
-          documentID: subBomRecord?.onshapeID?.documentID || "",
-          wvmType: subBomRecord?.onshapeID?.wvmType || "w",
-          wvmID: subBomRecord?.onshapeID?.wvmID || "",
-          elementID: subBomRecord?.onshapeID?.elementID || "",
-          entityID: subBomRecord?.onshapeID?.bomID || subBomRecord?.id || sub.bomID,
-          onshapeURL: subBomRecord?.onshapeURL || "",
-          exportSTL: "",
-          exportParasolid: "",
-          vendor: subBomRecord?.vendor || "",
-        };
-
-        collectedRows.push(subAssemblyRow);
-      }
-
-      for (const p of bom.parts || []) {
-        // A part missing from the database shows as a plain row with its ID.
-        const part = parts.get(p.partID) ?? ({ id: p.partID } as PartModel);
-
-        let partAvatarUrl = recordImageSrc(part as any);
-
-        const partRow: BomTableRow = {
-          id: `part-${part.id}`,
-          parentId: null,
-          isExpanded: false,
-          isSubAssembly: false,
-          avatar: partAvatarUrl,
-          name: partDisplayName(part, p.partID),
-          catalogNumber: part.catalogNumber || "",
-          revision: part.revision || "",
-          description: part.description || "",
-          engineer: part.engineer || "",
-          material: part.material || "",
-          mass: part.mass || 0,
-          price: part.price || 0,
-          quantity: p.quantity || 1,
-          comments: part.comments || "",
-          documentID: part.onshapeID?.documentID || "",
-          wvmType: part.onshapeID?.wvmType || "w",
-          wvmID: part.onshapeID?.wvmID || "",
-          elementID: part.onshapeID?.elementID || "",
-          entityID: p.partID,
-          onshapeURL: part.onshapeURL || "",
-          exportSTL: part.stlLink || "",
-          exportParasolid: part.parasolidLink || "",
-          vendor: part.vendor || "",
-          isStandardContent: !!part.isStandardContent,
-        };
-        collectedRows.push(partRow);
-      }
-
-      return collectedRows;
-    }
-
     let cancelled = false;
+    setTree(null);
     setRows([]);
     setError(null);
     setLoading(true);
-    fetchFlatBomData(bomId)
-      .then((data) => { if (!cancelled) setRows(data); })
+    loadBomTree(bomId)
+      .then((loaded) => { if (!cancelled) setTree(loaded); })
       .catch((err: ApiError) => { if (!cancelled) setError(err); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [bomId]);
+
+  // A new view starts as it's defined: Structured all closed, Flattened all open.
+  useEffect(() => {
+    if (tree) setRows(buildBomRows(tree, view));
+  }, [tree, view]);
+
+  const changeView = (next: BomView) => {
+    setView(next);
+    try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* not remembered */ }
+  };
 
   const handleTableDataChange = (newData: BomTableRow[]) => {
     // 1. Instantly update local table state so typing has 0 lag
@@ -180,6 +244,9 @@ export default function BomDetailsPage() {
         : [];
       if (changed.length > 0) {
         const partId = newRow.entityID;
+        // Kept in the loaded tree too, so switching views shows the edit.
+        const edits = Object.fromEntries(changed.map((k) => [k, newRow[k]])) as Partial<PartModel>;
+        tree?.parts.set(partId, { ...(tree.parts.get(partId) ?? ({ id: partId } as PartModel)), ...edits });
         pendingFieldsRef.current[partId] = {
           ...pendingFieldsRef.current[partId],
           ...Object.fromEntries(changed.map((k) => [k, newRow[k]])),
@@ -326,8 +393,30 @@ export default function BomDetailsPage() {
         </div>
       )}
 
+      <div className="flex items-center gap-3 mb-3">
+        <span className={`text-sm ${loadingText}`}>View:</span>
+        <div className={`inline-flex rounded-lg border overflow-hidden ${isLight ? "border-zinc-300" : "border-zinc-700"}`} role="group" aria-label="BOM view">
+          {BOM_VIEWS.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              title={v.title}
+              aria-pressed={view === v.key}
+              onClick={() => changeView(v.key)}
+              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                view === v.key
+                  ? "bg-blue-600 text-white"
+                  : isLight ? "bg-white text-zinc-700 hover:bg-zinc-100" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {loading ? (
-        <div className={`p-8 text-center ${loadingText}`}>Fetching single-level BOM data...</div>
+        <div className={`p-8 text-center ${loadingText}`}>Loading BOM data...</div>
       ) : (
         <div 
           onClick={handleTableClick}
