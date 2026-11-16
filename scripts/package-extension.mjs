@@ -5,7 +5,7 @@
  *   npm run package:extension -- chrome              -> Chrome only (or: firefox)
  *   npm run package:extension -- --no-build          -> zip the existing dist folders as is
  *
- * Output: publish/demacia-bom-extension-<browser>-<version>.zip
+ * Output: publish/<version>/demacia-bom-extension-<browser>-<version>.zip
  *   Chrome:  unzip, then chrome://extensions > Developer mode > Load unpacked > the folder.
  *   Firefox: about:debugging > This Firefox > Load Temporary Add-on > the zip itself
  *            (temporary: removed when Firefox restarts, unless the add-on is signed).
@@ -123,7 +123,7 @@ for (const target of targets) {
     process.exit(1);
   }
   const { version } = JSON.parse(readFileSync(join(dist, 'manifest.json'), 'utf8'));
-  const outFile = join(OUT_DIR, `demacia-bom-extension-${target}-${version}.zip`);
+  const outFile = join(OUT_DIR, version, `demacia-bom-extension-${target}-${version}.zip`);
   const entries = zipDir(dist, outFile);
   results.push(`  ${target.padEnd(8)} ${entries} files -> ${relative(ROOT, outFile)}`);
 }

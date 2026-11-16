@@ -128,7 +128,7 @@ npm run package:extension -- chrome    # one browser only (or: firefox)
 npm run package:extension -- --no-build
 ```
 
-The zips go to `publish/` (git-ignored) as `demacia-bom-extension-<browser>-<version>.zip`. They contain the client secret, so share them only inside the team.
+The zips go to `publish/<version>/` as `demacia-bom-extension-<browser>-<version>.zip`, next to that version's update log (`v<version>.md`). The zips are git-ignored; the logs are committed. The zips contain the client secret, so share them only inside the team.
 
 ## Deployment
 

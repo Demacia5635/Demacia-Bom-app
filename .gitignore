@@ -29,4 +29,8 @@ dist-extension-firefox
 *.env.local
 important.txt
 
-publish/
+# Extension zips are ignored; the update logs next to them are committed.
+publish/**
+!publish/*/
+!publish/*/v*.md
+!publish/README.md
