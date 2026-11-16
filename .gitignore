@@ -34,3 +34,6 @@ publish/**
 !publish/*/
 !publish/*/v*.md
 !publish/README.md
+
+# Local review checklist for Claude sessions
+REVIEW_CHECKLIST.md
