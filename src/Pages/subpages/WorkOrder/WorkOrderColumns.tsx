@@ -76,7 +76,8 @@ const WorkOrderColumns: ColumnConfig[] = [
         options: PRIORITIES,
     },
     { key: "comments", label: "Comments", type: "string", isDisabled: () => true }, // Read-only
-    { key: "links", label: "Links", type: "string" },
+    // Parts cut in one CNC run share one Links cell (merged, like Excel).
+    { key: "links", label: "Links", type: "string", mergeKey: (row: WorkOrderTableRow) => row.cncGroupID },
     
     // Actions / Links at the end
     {

@@ -90,6 +90,8 @@ export interface WorkorderModel {
   workOrderOwner?: string;
   description?: string;
   parts?: WorkorderPartModel[];
+  /** Parts cut together in one CNC run, sharing one G-code link (WorkOrder/cncGroups.ts). */
+  cncGroups?: { id: string; partIDs: string[]; links?: string }[];
   avatarID?: string;
   thumbnailURL?: string;
   onshapeID?: OnshapeID & { workOrderID?: string; assemblyID?: string };

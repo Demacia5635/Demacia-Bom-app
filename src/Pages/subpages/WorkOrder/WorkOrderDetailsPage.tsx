@@ -14,6 +14,7 @@ import { fetchPartsByIds } from "../../../util/records";
 import { printPartsPdf } from "../../../util/exportPartsPdf";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
+import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, type CncGroup } from "./cncGroups";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -107,6 +108,16 @@ export default function WorkOrderDetailsPage() {
     /** "Show size" checkbox, shared with the BOM page (remembered in this browser). */
     const [showSize, setShowSize] = useState(readShowSize);
     useEffect(() => writeShowSize(showSize), [showSize]);
+
+    // ---- CNC groups: parts cut in one run, sharing one Links cell (cncGroups.ts) ----
+    const [cncGroups, setCncGroups] = useState<CncGroup[]>([]);
+    const cncGroupsRef = useRef(cncGroups);
+    cncGroupsRef.current = cncGroups;
+    /** Part IDs picked with "Select for CNC merge" (right-click). */
+    const [mergeSelection, setMergeSelection] = useState<string[]>([]);
+    const [groupSaving, setGroupSaving] = useState(false);
+    /** Links edits of a merged cell waiting to be saved, per group. */
+    const groupLinkTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'In Planning') return 'In Planning';
@@ -205,6 +216,7 @@ export default function WorkOrderDetailsPage() {
                     catalogNumber: part?.catalogNumber || "",
                     name: partDisplayName(part, partID),
                     size: part?.size || "",
+                    partID,
                     quantityTotal: totalQty,
                     statusCode: parseStatusToString(existingWoPart?.statusCode),
                     approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
@@ -262,10 +274,104 @@ export default function WorkOrderDetailsPage() {
         pendingSavesRef.current.set(rowId, pending);
     }, [workOrderID, rows]);
 
+    // The work order's groups, as loaded (later changes come back from the server).
+    useEffect(() => {
+        const loaded = (workOrderData?.id === workOrderID ? workOrderData?.cncGroups : undefined) ?? [];
+        setCncGroups(loaded.map((g) => ({ id: g.id, partIDs: g.partIDs ?? [], links: g.links ?? "" })));
+        setMergeSelection([]);
+    }, [workOrderData, workOrderID]);
+
+    /** The rows as the table shows them: groups together, sharing their links. */
+    const displayRows = useMemo(() => applyCncGroups(rows, cncGroups), [rows, cncGroups]);
+
+    /**
+     * Creates (no groupID), changes or dissolves (partIDs []) a CNC group, or
+     * with partIDs undefined changes only its links. The server answers with
+     * every group of the work order, which replaces what's shown.
+     */
+    const saveCncGroup = useCallback(async (group: { groupID?: string; partIDs?: string[]; links?: string }) => {
+        if (!workOrderID) return false;
+        try {
+            const result = await fetchFromApi<{ cncGroups: CncGroup[] }>(
+                `/db/workOrder/id/${encodeURIComponent(workOrderID)}/cncGroup`,
+                { method: "POST", body: JSON.stringify(group) }
+            );
+            setCncGroups((result?.cncGroups ?? []).map((g) => ({ id: g.id, partIDs: g.partIDs ?? [], links: g.links ?? "" })));
+            return true;
+        } catch (err: any) {
+            console.error("Failed to save the CNC group:", err);
+            setSaveError(`Couldn't save the CNC merge: ${err?.message || err}`);
+            // Someone changed the groups meanwhile: show theirs instead of ours.
+            if (err?.statusCode === 409) {
+                fetchFromApi<WorkorderModel>(`/db/workOrder/id/${encodeURIComponent(workOrderID)}`)
+                    .then((wo) => setCncGroups((wo?.cncGroups ?? []).map((g) => ({ id: g.id, partIDs: g.partIDs ?? [], links: g.links ?? "" }))))
+                    .catch(() => undefined);
+            }
+            return false;
+        }
+    }, [workOrderID]);
+
+    /** Merges these parts into one CNC job (joining the one group among them, if any). */
+    const mergeParts = async (partIDs: string[]) => {
+        const groups = cncGroupsRef.current;
+        const touched = groups.filter((g) => g.partIDs.some((p) => partIDs.includes(p)));
+        const base = touched.length === 1 ? touched[0] : undefined;
+        const members = [...new Set([...(base?.partIDs ?? []), ...partIDs])];
+        if (members.length < 2) return;
+        // Links as shown: a part already in a job brings that job's links.
+        const memberRows = displayRows.filter((r) => r.partID && members.includes(r.partID));
+        setGroupSaving(true);
+        const ok = await saveCncGroup(
+            base
+                ? { groupID: base.id, partIDs: members }
+                : { partIDs: members, links: combinedLinks(memberRows) }
+        );
+        setGroupSaving(false);
+        if (ok) setMergeSelection([]);
+    };
+
+    /** Takes one part out of its CNC job (its own links show again). */
+    const removeFromGroup = async (row: WorkOrderTableRow) => {
+        const group = cncGroupsRef.current.find((g) => row.partID && g.partIDs.includes(row.partID));
+        if (!group) return;
+        setGroupSaving(true);
+        await saveCncGroup({ groupID: group.id, partIDs: group.partIDs.filter((p) => p !== row.partID) });
+        setGroupSaving(false);
+    };
+
+    /** A merged Links cell was edited: shown at once, saved to the group shortly after. */
+    const queueGroupLinks = (groupID: string, links: string) => {
+        setCncGroups((groups) => groups.map((g) => (g.id === groupID ? { ...g, links } : g)));
+        const timers = groupLinkTimersRef.current;
+        const pending = timers.get(groupID);
+        if (pending) clearTimeout(pending);
+        timers.set(groupID, setTimeout(() => {
+            timers.delete(groupID);
+            void saveCncGroup({ groupID, links });
+        }, 600));
+    };
+
+    const suggestions = useMemo(
+        () => suggestCncGroups(rows, new Set(cncGroups.flatMap((g) => g.partIDs))),
+        [rows, cncGroups]
+    );
+    /** CNC candidates without a saved size (published before sizes existed), so never suggested. */
+    const unsizedCount = useMemo(() => rows.filter((r) => isCncCandidate(r) && !r.size).length, [rows]);
+
     const handleTableDataChange = (newData: WorkOrderTableRow[]) => {
+        const shownById = new Map(displayRows.map((r) => [r.id, r]));
+        const ownById = new Map(rows.map((r) => [r.id, r]));
         const processedData = newData.map((newRow) => {
-            const oldRow = rows.find(r => r.id === newRow.id);
+            const oldRow = shownById.get(newRow.id);
             const updated = { ...newRow };
+
+            // A merged Links cell belongs to its group: saved there, and the
+            // part keeps its own links (shown again if it leaves the group).
+            if (updated.cncGroupID) {
+                if (oldRow && updated.links !== oldRow.links) queueGroupLinks(updated.cncGroupID, updated.links);
+                updated.links = ownById.get(updated.id)?.links ?? "";
+                updated.cncGroupID = undefined;
+            }
 
             if (oldRow) {
                 // Parts made elsewhere or bought aren't tracked through manufacturing.
@@ -286,7 +392,7 @@ export default function WorkOrderDetailsPage() {
         setRows(processedData);
 
         // Save what changed, part by part (expanding a row etc. saves nothing).
-        const oldById = new Map(rows.map((r) => [r.id, r]));
+        const oldById = ownById;
         for (const row of processedData) {
             const old = oldById.get(row.id);
             if (!old) continue;
@@ -568,6 +674,56 @@ export default function WorkOrderDetailsPage() {
                         </div>
                     </div>
                 )}
+                {rows.length > 0 && (suggestions.length > 0 || mergeSelection.length > 0 || cncGroups.length > 0 || unsizedCount > 0) && (
+                    <div className={`mb-3 rounded-xl border p-3 space-y-1.5 text-xs ${filterCard}`}>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span
+                                className={`font-semibold ${filterLabel}`}
+                                title="Parts with the same thickness (smallest side of their size, to 0.1 mm) and material can be cut in one CNC run. Merged parts sit together and share one Links cell (for the G-code)."
+                            >
+                                CNC merge
+                            </span>
+                            <span className={filterLabel}>
+                                {cncGroups.length > 0 ? `${cncGroups.length} merged job${cncGroups.length === 1 ? "" : "s"}. ` : ""}
+                                Right-click a part to select it for a merge by hand, or to remove it from its job.
+                                {unsizedCount > 0 ? ` ${unsizedCount} part${unsizedCount === 1 ? " has" : "s have"} no saved size (publish the BOM again from the extension) and can only be merged by hand.` : ""}
+                            </span>
+                        </div>
+                        {suggestions.map((sug) => (
+                            <div key={sug.label} className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    disabled={groupSaving}
+                                    onClick={() => void mergeParts(sug.partIDs)}
+                                    className="rounded-lg bg-blue-600 px-2.5 py-0.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                                >
+                                    Merge {sug.partIDs.length}
+                                </button>
+                                <span className="font-semibold">{sug.label}:</span>
+                                <span className={filterLabel}>{sug.names.join(", ")}</span>
+                            </div>
+                        ))}
+                        {mergeSelection.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    disabled={groupSaving || mergeSelection.length + (cncGroups.some((g) => g.partIDs.some((p) => mergeSelection.includes(p))) ? 1 : 0) < 2}
+                                    onClick={() => void mergeParts(mergeSelection)}
+                                    className="rounded-lg bg-blue-600 px-2.5 py-0.5 font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
+                                    title="Merge the selected parts into one CNC job (if one of them is already in a job, the others join it)"
+                                >
+                                    Merge selected ({mergeSelection.length})
+                                </button>
+                                <button type="button" onClick={() => setMergeSelection([])} className="font-semibold text-blue-500 hover:underline">
+                                    Clear
+                                </button>
+                                <span className={filterLabel}>
+                                    {rows.filter((r) => r.partID && mergeSelection.includes(r.partID)).map((r) => r.name).join(", ")}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                )}
                 <div
                     ref={tableAreaRef}
                     onClick={handleTableClick}
@@ -575,7 +731,7 @@ export default function WorkOrderDetailsPage() {
                     className="relative cursor-pointer"
                 >
                     <Table
-                        data={rows}
+                        data={displayRows}
                         columnsData={showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE}
                         newRowFunction={undefined}
                         setData={(newData) => handleTableDataChange(newData as WorkOrderTableRow[])}
@@ -597,6 +753,36 @@ export default function WorkOrderDetailsPage() {
                             >
                                 Show Part Data
                             </button>
+                            {contextMenu.row.partID && (() => {
+                                const partID = contextMenu.row.partID!;
+                                const selected = mergeSelection.includes(partID);
+                                const inGroup = cncGroups.some((g) => g.partIDs.includes(partID));
+                                return (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setMergeSelection((list) => toggleIn(list, partID));
+                                                setContextMenu(null);
+                                            }}
+                                        >
+                                            {selected ? "Unselect for CNC merge" : "Select for CNC merge"}
+                                        </button>
+                                        {inGroup && (
+                                            <button
+                                                type="button"
+                                                disabled={groupSaving}
+                                                onClick={() => {
+                                                    setContextMenu(null);
+                                                    void removeFromGroup(contextMenu.row);
+                                                }}
+                                            >
+                                                Remove from CNC job
+                                            </button>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>
