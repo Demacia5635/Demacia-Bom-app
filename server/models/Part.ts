@@ -23,6 +23,9 @@ const partSchema = new mongoose.Schema(
 
     material: { type: String },
     mass: { type: Number },
+    // Bounding box in Onshape, longest side first, e.g. "25 × 8 × 8 mm"
+    // (set by Publish BOM in the extension; see src/util/partSize.ts).
+    size: { type: String },
     price: { type: Number },
     productionType: { type: Number, ref: "ProductionType" },
 
