@@ -10,7 +10,6 @@ Website changes are logged in `src/upd. logs/`, server changes in `server/upd. l
 
 | Version | Built | Highlights |
 |---|---|---|
-| [2.3.0](2.3.0/v2.3.0.md) | Not built yet | Polycarbonate → Parasolid; material change re-ticks files |
-| [2.2.0](2.2.0/v2.2.0.md) | 2026-11-17 22:52 | Show part sizes; redder problem cells; clearer warning when Onshape refuses access |
+| [3.0.0](3.0.0/v3.0.0.md) | Not built yet (built once as 2.2.0) | Show part sizes; panel toggle; polycarbonate → Parasolid; redder problem cells |
 | [2.0.0](2.0.0/v2.0.0.md) | 2026-11-15 20:13 | Safe Publish BOM, correct sub-assembly quantities, vendor parts always standard, no ghost rows |
 | [1.0.0](1.0.0/v1.0.0.md) | 2026-11-14 23:00 | The version in use before the code review |
