@@ -165,9 +165,21 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const [columnOrder, setColumnOrder] = useState<string[]>(() => columnsData.map(c => c.key));
     const columns = useMemo(() => {
         const byKey = new Map(columnsData.map(c => [c.key, c] as const));
-        const ordered = columnOrder.filter(k => byKey.has(k)).map(k => byKey.get(k)!);
-        for (const c of columnsData) if (!columnOrder.includes(c.key)) ordered.push(c);
-        return ordered;
+        // Removed columns drop out without leaving a gap.
+        const order = columnOrder.filter(k => byKey.has(k));
+        // A column not in the order yet (added after mount, e.g. shown by a
+        // checkbox, or hidden while the user dragged columns) goes right after
+        // the column it follows in columnsData, wherever the user moved that one.
+        columnsData.forEach((c, i) => {
+            if (order.includes(c.key)) return;
+            let at = 0;
+            for (let j = i - 1; j >= 0; j--) {
+                const p = order.indexOf(columnsData[j].key);
+                if (p >= 0) { at = p + 1; break; }
+            }
+            order.splice(at, 0, c.key);
+        });
+        return order.map(k => byKey.get(k)!);
     }, [columnsData, columnOrder]);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(initialSort ?? null);
 
