@@ -374,6 +374,15 @@ function needsSize(row: AssemblyBomRow): boolean {
   return !row.isAssembly && !isHiddenByStandardToggle(row) && !!row.entityID;
 }
 
+/**
+ * Whether a size saved in the database is out of date: the part's model
+ * changed since it was read. Sizes just read from Onshape (no sizeVersion) and
+ * parts whose current version is unknown are kept.
+ */
+function isSavedSizeStale(row: AssemblyBomRow, currentVersion: string | null): boolean {
+  return row.sizeVersion !== undefined && !!currentVersion && row.sizeVersion !== currentVersion;
+}
+
 /** A part's size text from Onshape (util/partSize), waiting and retrying when rate-limited. */
 async function readPartSize(row: AssemblyBomRow): Promise<string> {
   const key = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
@@ -459,8 +468,8 @@ function partFilesVersion(row: AssemblyBomRow, versions: ModelVersions): string 
  * (imageCache.ts). Parts use their Part Studio's marker; assemblies the tree
  * fingerprint. Images with an unknown version aren't stored.
  */
-async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter): Promise<Map<string, string>> {
-  const { byRow, tree } = await computeModelVersions(rows, limit);
+async function computeImageVersions(rows: AssemblyBomRow[], limit: Limiter, known?: ModelVersions): Promise<Map<string, string>> {
+  const { byRow, tree } = known ?? (await computeModelVersions(rows, limit));
   const versions = new Map<string, string>();
   for (const r of rows) {
     const version = r.isAssembly ? tree : byRow.get(r.id);
@@ -765,6 +774,8 @@ export default function AssemblyBomPage() {
         engineer: standard ? STANDARD_PART_ENGINEER : pickText("engineer", dbPart?.engineer),
         material,
         mass: pickNumber("mass", dbPart?.mass),
+        // The saved size (checked against the current model after the load).
+        ...(dbPart?.size ? { size: dbPart.size, sizeVersion: dbPart.filesModelVersion ?? "" } : {}),
         price: pickNumber("price", dbPart?.price),
         quantity: parsedItem.quantity || 1,
         comments: pickText("comments", dbPart?.comments),
@@ -948,9 +959,15 @@ export default function AssemblyBomPage() {
         onItem: (name) => setLoadProgress({ done: allRows.length, total, current: name }),
       }, new Set([assemblyKeyId(rootKey)]));
       // A refresh discards unpublished edits (handleRefresh asks first).
-      const freshRows = allRows;
-      // Which row images changed since they were stored (one request per document).
-      const imageVersions = await computeImageVersions(freshRows, limit).catch(() => new Map<string, string>());
+      // Current model versions (one request per document): which row images
+      // changed since they were stored, and which saved sizes are out of date.
+      const modelVersions = await computeModelVersions(allRows, limit).catch(
+        (): ModelVersions => ({ byRow: new Map(), tree: null })
+      );
+      const freshRows = allRows.map((r) =>
+        isSavedSizeStale(r, partFilesVersion(r, modelVersions)) ? { ...r, size: undefined, sizeVersion: undefined } : r
+      );
+      const imageVersions = await computeImageVersions(freshRows, limit, modelVersions).catch(() => new Map<string, string>());
       if (stale()) throw LOAD_CANCELLED;
       setImageVersions(imageVersions);
       setRows(freshRows);
@@ -1525,7 +1542,8 @@ export default function AssemblyBomPage() {
               filesModelVersion: exportFailed ? undefined : version ?? undefined,
             };
             // Size for the website. Sent only when known: a failed read never blanks a saved one.
-            let size = standard ? "" : row.size || "";
+            // Read from Onshape only when there's no size, or the saved one is from an older model.
+            let size = standard || isSavedSizeStale(row, version) ? "" : row.size || "";
             if (!standard && !size && needsSize(row)) {
               progress.step("Reading its size");
               size = await readPartSize(row).catch(() => "");
@@ -1564,7 +1582,7 @@ export default function AssemblyBomPage() {
               dbUpdatedAt: stampOf(savedPart?.updatedAt),
               exportSTL: saved.stlLink,
               exportParasolid: saved.parasolidLink,
-              ...(size ? { size } : {}),
+              ...(size ? { size, sizeVersion: undefined } : {}),
               ...(standard ? { onshapeURL: "", engineer } : {}),
             });
           }

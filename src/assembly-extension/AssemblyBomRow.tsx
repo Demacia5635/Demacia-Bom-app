@@ -59,6 +59,13 @@ export default interface AssemblyBomRow extends BomTableRow {
    * "" when Onshape couldn't give one. Not an edit: saved on Publish when known.
    */
   size?: string;
+  /**
+   * Set only when `size` came from the database: the model version it was
+   * read at (the record's filesModelVersion, "" if unknown). A different
+   * current version means the geometry changed, so the size is read again.
+   * undefined for sizes just read from Onshape.
+   */
+  sizeVersion?: string;
   /** Parts: whether Publish BOM keeps an STL / Parasolid (unticking deletes it on publish). */
   wantStl?: boolean;
   wantParasolid?: boolean;
