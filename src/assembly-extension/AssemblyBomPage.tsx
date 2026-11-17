@@ -20,7 +20,8 @@ import {
   getBomsByIds,
   getPartsByIds
 } from "./BomApi";
-import { getElementMicroversions, onshapeJson } from "../extension/onshapeDirect";
+import { getElementMicroversions, getPartBoundingBox, onshapeJson } from "../extension/onshapeDirect";
+import { formatPartSize } from "../util/partSize";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
@@ -363,6 +364,30 @@ function createLimiter(max: number, isCancelled?: () => boolean): Limiter {
       else active -= 1;
     }
   };
+}
+
+/** Bounding-box requests in flight at once while "Show size" fills the Size column. */
+const SIZE_CONCURRENCY = 4;
+
+/** Whether a row gets a size: made parts only (bought ones are named by their size already). */
+function needsSize(row: AssemblyBomRow): boolean {
+  return !row.isAssembly && !isHiddenByStandardToggle(row) && !!row.entityID;
+}
+
+/** A part's size text from Onshape (util/partSize), waiting and retrying when rate-limited. */
+async function readPartSize(row: AssemblyBomRow): Promise<string> {
+  const key = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return formatPartSize(await getPartBoundingBox(key, row.entityID, row.configuration || undefined));
+    } catch (err) {
+      if ((err as { onshapeStatus?: number })?.onshapeStatus === 429 && attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 /** Requests in flight at once during Refresh BOM (Onshape + our server). */
@@ -977,13 +1002,18 @@ export default function AssemblyBomPage() {
 
   // Problems are read through a ref, so the columns are only rebuilt when the
   // default engineer changes, not on every edit.
+  /** "Show size": the Size column, filled from Onshape (remembered in this browser). */
+  const [showSize, setShowSize] = useState(() => readToggle("showSize"));
+  useEffect(() => writeToggle("showSize", showSize), [showSize]);
+
   const columns = useMemo(
     () =>
       buildAssemblyBomColumns(
         (row, key) => problemsRef.current.get(row.id)?.get(key),
-        onshapeUserName
+        onshapeUserName,
+        showSize
       ),
-    [onshapeUserName]
+    [onshapeUserName, showSize]
   );
 
   /** Sub-assemblies whose insides are being loaded after their standard mark was removed. */
@@ -1006,6 +1036,45 @@ export default function AssemblyBomPage() {
     },
     [rootKey]
   );
+
+  /**
+   * While "Show size" is on, reads the size of every made part that has none
+   * yet, at most SIZE_CONCURRENCY at a time. Results are put into the rows
+   * shown at that moment (by row ID), a few at a time. A failed read leaves ""
+   * (blank cell); Publish BOM tries again and never saves "".
+   */
+  const sizeLimitRef = useRef<Limiter | null>(null);
+  const sizeRequestedRef = useRef(new Set<string>());
+  /** A load or publish replaces the rows: sizes arriving then are dropped (and read again after). */
+  const sizeBusyRef = useRef(false);
+  sizeBusyRef.current = loading || publishing;
+  useEffect(() => {
+    if (!showSize || loading || publishing) return;
+    const limit = (sizeLimitRef.current ??= createLimiter(SIZE_CONCURRENCY));
+    const requested = sizeRequestedRef.current;
+    const pending = new Map<string, string>();
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    const flush = () => {
+      flushTimer = undefined;
+      if (pending.size === 0 || sizeBusyRef.current) return pending.clear();
+      const done = new Map(pending);
+      pending.clear();
+      saveRows(currentTreeRef.current.rows.map((r) => (done.has(r.id) && r.size === undefined ? { ...r, size: done.get(r.id)! } : r)));
+    };
+    for (const row of rows) {
+      if (!needsSize(row) || row.size !== undefined) continue;
+      const requestKey = `${row.id}|${row.configuration ?? ""}`;
+      if (requested.has(requestKey)) continue;
+      requested.add(requestKey);
+      limit(() => readPartSize(row))
+        .catch(() => "")
+        .then((size) => {
+          requested.delete(requestKey);
+          pending.set(row.id, size);
+          flushTimer ??= setTimeout(flush, 300);
+        });
+    }
+  }, [showSize, rows, loading, publishing, saveRows]);
 
   /**
    * Table edits stay in this browser until Publish BOM: cells that differ
@@ -1455,8 +1524,15 @@ export default function AssemblyBomPage() {
               // the next publish exports again.
               filesModelVersion: exportFailed ? undefined : version ?? undefined,
             };
+            // Size for the website. Sent only when known: a failed read never blanks a saved one.
+            let size = standard ? "" : row.size || "";
+            if (!standard && !size && needsSize(row)) {
+              progress.step("Reading its size");
+              size = await readPartSize(row).catch(() => "");
+            }
             progress.step("Saving to the database");
             const savedPart = await upsertPartById(row.id, {
+              ...(size ? { size } : {}),
               id: row.id,
               name: row.name,
               description: row.description,
@@ -1488,6 +1564,7 @@ export default function AssemblyBomPage() {
               dbUpdatedAt: stampOf(savedPart?.updatedAt),
               exportSTL: saved.stlLink,
               exportParasolid: saved.parasolidLink,
+              ...(size ? { size } : {}),
               ...(standard ? { onshapeURL: "", engineer } : {}),
             });
           }
@@ -1878,6 +1955,13 @@ export default function AssemblyBomPage() {
                 onChange={(e) => setHideStandardAssemblies(e.target.checked)}
               />
               Hide standard assemblies ({standardAssemblyCount})
+            </label>
+            <label
+              className="bom-toolbar-toggle"
+              title="Each made part's size in Onshape (bounding box, longest side first), e.g. a spacer's length. Read from Onshape while this is on."
+            >
+              <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
+              Show size
             </label>
           </div>
           <Table

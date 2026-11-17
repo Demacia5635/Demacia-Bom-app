@@ -53,6 +53,12 @@ export default interface AssemblyBomRow extends BomTableRow {
    * changed since (someone else published it), instead of overwriting it.
    */
   dbUpdatedAt?: string;
+  /**
+   * Made parts: bounding box from Onshape, e.g. "25 × 8 × 8 mm" (util/partSize).
+   * undefined until read (only while "Show size" is on, or on Publish BOM);
+   * "" when Onshape couldn't give one. Not an edit: saved on Publish when known.
+   */
+  size?: string;
   /** Parts: whether Publish BOM keeps an STL / Parasolid (unticking deletes it on publish). */
   wantStl?: boolean;
   wantParasolid?: boolean;

@@ -15,6 +15,7 @@
 import type { ApiError } from "../util/ApiService";
 import { recordOnshapeCall } from "./telemetry";
 import type { OnshapeBomTable } from "../assembly-extension/OnshapeBom";
+import type { BoundingBox } from "../util/partSize";
 
 /** Same shape as BomApi's OnshapeKey (not imported to avoid a circular import). */
 export interface OnshapeElementKey {
@@ -311,6 +312,11 @@ export async function getPartThumbnail(
   px = 300
 ): Promise<Blob> {
   return renderedPng(shadedViewUrl(key, partID, configuration, px), "part");
+}
+
+/** Bounding box of one part (in metres) in the configuration used in the assembly. */
+export function getPartBoundingBox(key: OnshapeElementKey, partID: string, configuration?: string): Promise<BoundingBox> {
+  return onshapeJson<BoundingBox>(`/parts/${seg(key)}/partid/${pid(partID)}/boundingboxes${configQuery(configuration, "?")}`);
 }
 
 /** `?configuration=...` (or "") so exports match the configuration used in the assembly. */

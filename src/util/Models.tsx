@@ -35,6 +35,8 @@ export interface PartModel {
   engineer?: string;
   material?: string;
   mass?: number;
+  /** Bounding box in Onshape, longest side first, e.g. "25 × 8 × 8 mm" (util/partSize). */
+  size?: string;
   price?: number;
   comments?: string;
   onshapeURL?: string;

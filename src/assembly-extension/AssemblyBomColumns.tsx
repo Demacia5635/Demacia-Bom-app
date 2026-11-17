@@ -18,8 +18,9 @@ export type CellProblem = (row: AssemblyBomRow, key: string) => string | undefin
  * `cellProblem` marks values that would stop a work order (read on every render).
  * `defaultEngineer` is shown greyed in an empty engineer cell: what Publish BOM
  * writes there.
+ * `showSize` adds the read-only Size column (bounding box) after Name.
  */
-export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defaultEngineer = ""): ColumnConfig[] {
+export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defaultEngineer = "", showSize = false): ColumnConfig[] {
   /** Editable column: disabled for Standard Content, marked while it has an unpublished change. */
   const editable = (key: string, label: string, type: "string" | "number"): ColumnConfig => ({
     key,
@@ -33,6 +34,8 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
   return [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: isStandardContent },
     editable("name", "Name", "string"),
+    // Parts named only by catalog number (spacers...) can be told apart by size.
+    ...(showSize ? [{ key: "size", label: "Size", type: "string", isDisabled: () => true } satisfies ColumnConfig] : []),
     editable("description", "Description", "string"),
     editable("catalogNumber", "Catalog No.", "string"),
     editable("revision", "Revision", "string"),
