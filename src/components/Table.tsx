@@ -103,6 +103,12 @@ export interface ColumnConfig {
     problem?: (row: RowData & any) => string | undefined;
     /** Grey hint shown in an empty text cell (e.g. the value used if it stays empty). */
     placeholder?: (row: RowData & any) => string | undefined;
+    /**
+     * Merged cells, like Excel: consecutive shown rows with the same non-empty
+     * key show this column as one cell spanning them (the first row's value).
+     * An edit there changes only the first row; the page applies it to the rest.
+     */
+    mergeKey?: (row: RowData & any) => string | undefined;
     apiPath?: string | ((value: any) => string);
 }
 
@@ -489,6 +495,34 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [childrenByParent, sortConfig, filterSets, hideRow]);
 
+    const renderedRows = useMemo(
+        () => visibleData.filter((_row, i) => !removeTopRow || i !== 0),
+        [visibleData, removeTopRow]
+    );
+
+    /**
+     * For columns with mergeKey: per rendered row, how many rows its cell
+     * spans (1 = normal, 0 = covered by the merged cell above). Only rows that
+     * end up next to each other merge (a sort or filter can split a group).
+     */
+    const mergeSpans = useMemo(() => {
+        const spans = new Map<string, number[]>();
+        for (const col of columns) {
+            if (!col.mergeKey) continue;
+            const keys = renderedRows.map((r) => col.mergeKey!(r) || '');
+            const colSpans = keys.map(() => 1);
+            for (let i = 0; i < keys.length; ) {
+                let j = i + 1;
+                if (keys[i]) while (j < keys.length && keys[j] === keys[i]) j++;
+                colSpans[i] = j - i;
+                for (let k = i + 1; k < j; k++) colSpans[k] = 0;
+                i = j;
+            }
+            spans.set(col.key, colSpans);
+        }
+        return spans;
+    }, [columns, renderedRows]);
+
     /**
      * React key of each shown row. Row ids aren't always unique: in the BOM
      * extension a part used in several sub-assemblies (or listed twice by
@@ -743,12 +777,14 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                         </tr>
                     </thead>
                     <tbody>
-                        {visibleData.filter((_row, i) => !removeTopRow || (i !== 0)).map((row, rowIndex) => {
+                        {renderedRows.map((row, rowIndex) => {
                             const isRowParent = isParent(row.id);
 
                             return (
                                 <tr key={rowKeys.get(row) ?? row.id} data-row-id={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row.id)}>
                                     {columns.map((col, colIndex) => {
+                                        const span = mergeSpans.get(col.key)?.[rowIndex] ?? 1;
+                                        if (span === 0) return null; // covered by the merged cell above
                                         let isCellDisabled = col.isDisabled ? col.isDisabled(row) : false;
                                         let displayValue: string | number = row[col.key] as string | number;
                                         const cellProblem = col.problem?.(row);
@@ -757,6 +793,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                             <td
                                                 key={col.key}
                                                 data-col-key={col.key}
+                                                rowSpan={span > 1 ? span : undefined}
                                                 style={frozenStyle(colIndex)}
                                                 onMouseEnter={cellProblem ? (e) => showProblemTip(e.currentTarget, cellProblem) : undefined}
                                                 onMouseLeave={cellProblem ? () => setProblemTip(null) : undefined}
