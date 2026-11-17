@@ -6,6 +6,8 @@ export default interface WorkOrderTableRow extends RowData {
     productionMakingOwner: string;
     catalogNumber: string;
     name: string;
+    /** Bounding box from Onshape, e.g. "25 × 8 × 8 mm" (util/partSize); "" when unknown. */
+    size?: string;
     quantityTotal: number;
     statusCode: string;
     approxArrivalDate: string;     

@@ -9,6 +9,8 @@ export default interface BomTableRow extends RowData {
   engineer: string;
   material: string;
   mass: number;
+  /** Bounding box from Onshape, e.g. "25 × 8 × 8 mm" (util/partSize); "" when unknown. */
+  size?: string;
   price: number;
   quantity: number;
   comments: string;

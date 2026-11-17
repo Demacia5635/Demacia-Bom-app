@@ -13,6 +13,10 @@ import { recordImageSrc } from "../../../util/recordImage";
 import { fetchPartsByIds } from "../../../util/records";
 import { printPartsPdf } from "../../../util/exportPartsPdf";
 import { partDisplayName } from "../../../util/partDisplayName";
+import { readShowSize, writeShowSize } from "../../../util/partSize";
+
+/** The table columns without Size, for when "Show size" is off. */
+const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
 
 const ISRAEL_TIME = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Jerusalem",
@@ -100,6 +104,9 @@ export default function WorkOrderDetailsPage() {
     /** Edits waiting to be saved, per row (merged until the save goes out). */
     const pendingSavesRef = useRef<Map<string, { changes: Record<string, unknown>; timer?: ReturnType<typeof setTimeout> }>>(new Map());
     const [saveError, setSaveError] = useState<string | null>(null);
+    /** "Show size" checkbox, shared with the BOM page (remembered in this browser). */
+    const [showSize, setShowSize] = useState(readShowSize);
+    useEffect(() => writeShowSize(showSize), [showSize]);
 
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'In Planning') return 'In Planning';
@@ -197,6 +204,7 @@ export default function WorkOrderDetailsPage() {
                     productionMakingOwner: (existingWoPart as any)?.productionMakingOwner || "",
                     catalogNumber: part?.catalogNumber || "",
                     name: partDisplayName(part, partID),
+                    size: part?.size || "",
                     quantityTotal: totalQty,
                     statusCode: parseStatusToString(existingWoPart?.statusCode),
                     approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
@@ -442,6 +450,13 @@ export default function WorkOrderDetailsPage() {
                     assemblyThumbnailURL={assemblyThumbnailUrl} 
                 />
             )}
+            {/* Under the title card, on the right. */}
+            <div className="flex justify-end -mt-3 mb-3">
+                <label className={`flex items-center gap-2 cursor-pointer text-sm ${filterLabel}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
+                    <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
+                    Show size
+                </label>
+            </div>
             {error && (
                 <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
                     <p className="font-semibold">Error Loading Work Order Data</p>
@@ -561,7 +576,7 @@ export default function WorkOrderDetailsPage() {
                 >
                     <Table
                         data={rows}
-                        columnsData={WorkOrderColumns}
+                        columnsData={showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE}
                         newRowFunction={undefined}
                         setData={(newData) => handleTableDataChange(newData as WorkOrderTableRow[])}
                         // Like Excel's freeze panes: header row + avatar and name stay visible.

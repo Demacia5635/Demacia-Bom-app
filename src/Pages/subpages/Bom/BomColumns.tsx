@@ -7,6 +7,8 @@ import { isLockedBomRow } from "./BomTableRow";
 const BomColumns: ColumnConfig[] = [
   { key: "avatar", label: "Avatar", type: "image", isDisabled: isLockedBomRow },
   { key: "name", label: "Name", type: "string", isDisabled: isLockedBomRow },
+  // Shown by the "Show size" checkbox (BomDetailsPage); saved by Publish BOM.
+  { key: "size", label: "Size", type: "string", isDisabled: () => true },
   { key: "description", label: "Description", type: "string", isDisabled: isLockedBomRow },
   { key: "catalogNumber", label: "Catalog No.", type: "string", isDisabled: isLockedBomRow },
   { key: "revision", label: "Revision", type: "string", isDisabled: isLockedBomRow },

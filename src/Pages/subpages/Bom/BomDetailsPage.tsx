@@ -12,6 +12,10 @@ import { recordImageSrc } from "../../../util/recordImage";
 import { fetchBomsByIds, fetchPartsByIds } from "../../../util/records";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { partDisplayName } from "../../../util/partDisplayName";
+import { readShowSize, writeShowSize } from "../../../util/partSize";
+
+/** The table columns without Size, for when "Show size" is off. */
+const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
 
 /** Part fields the table edits and saves (only the changed ones are sent). */
 const SAVED_PART_FIELDS = [
@@ -133,6 +137,7 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
         engineer: part.engineer || "",
         material: part.material || "",
         mass: part.mass || 0,
+        size: part.size || "",
         price: part.price || 0,
         quantity: p.quantity || 1,
         comments: part.comments || "",
@@ -180,6 +185,9 @@ export default function BomDetailsPage() {
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
   const [tree, setTree] = useState<BomTree | null>(null);
   const [view, setView] = useState<BomView>(savedView);
+  /** "Show size" checkbox, shared with the work-order page (remembered in this browser). */
+  const [showSize, setShowSize] = useState(readShowSize);
+  useEffect(() => writeShowSize(showSize), [showSize]);
 
   // Ref to hold debounced save timeouts per part ID
   const saveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -413,6 +421,11 @@ export default function BomDetailsPage() {
             </button>
           ))}
         </div>
+        {/* Right of the view buttons, under the title card. */}
+        <label className={`ml-auto flex items-center gap-2 cursor-pointer text-sm ${loadingText}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
+          <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
+          Show size
+        </label>
       </div>
 
       {loading ? (
@@ -425,7 +438,7 @@ export default function BomDetailsPage() {
         >
           <Table
             data={rows}
-            columnsData={BomColumns}
+            columnsData={showSize ? BomColumns : COLUMNS_WITHOUT_SIZE}
             setData={(newData) => handleTableDataChange(newData as BomTableRow[])}
             newRowFunction={undefined}
             initialSort={{ key: "catalogNumber", direction: "asc" }}
