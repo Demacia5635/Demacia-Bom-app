@@ -77,10 +77,11 @@ const BOOLEAN_FIELDS = new Set(["wantStl", "wantParasolid", "markedStandard"]);
 function fileRuleForMaterial(material: string): { wantStl: boolean; wantParasolid: boolean } | null {
   const m = material.toLowerCase();
   if (/\b(delrin|acetal|pom|polyoxymethylene)\b/.test(m)) return { wantStl: false, wantParasolid: false };
-  if (/\b(polycarbonate|lexan|pc)\b/.test(m)) return { wantStl: false, wantParasolid: true };
+  // Printing plastics first, so a printing blend like "PC-ABS" stays STL.
   if (/\b(pla\+?|abs|tpu|petg|pet-g|asa|nylon|pa\s?\d*|onyx|resin|tpe|hips)\b/.test(m)) {
     return { wantStl: true, wantParasolid: false };
   }
+  if (/\b(polycarbonate|lexan|pc)\b/.test(m)) return { wantStl: false, wantParasolid: true };
   if (/\b(alumin(i)?um|al\s?\d{4}|\d{4}-t\d+)\b/.test(m)) return { wantStl: false, wantParasolid: true };
   return null;
 }
