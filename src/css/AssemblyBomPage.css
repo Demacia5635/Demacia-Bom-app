@@ -37,7 +37,7 @@
 }
 
 .assembly-bom-top-problem {
-  color: #fca5a5;
+  color: #f87171;
   max-width: 70ch;
 }
 
@@ -68,17 +68,17 @@ body.light-theme-active .assembly-bom-top-problem {
 }
 
 .bom-problems-btn {
-  border-color: rgba(239, 68, 68, 0.6);
-  color: #fca5a5;
+  border-color: #ef4444;
+  color: #f87171;
 }
 
 .bom-problems-btn-active,
 .bom-problems-btn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.28);
 }
 
 body.light-theme-active .bom-problems-btn {
-  border-color: #ef4444;
+  border-color: #dc2626;
   color: #b91c1c;
 }
 

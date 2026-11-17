@@ -373,12 +373,25 @@ body.dark-theme-active .table-page-container,
 
 /* A value that would stop a work order (bad catalog number, missing material...). */
 .cell-problem {
-  background-color: rgba(239, 68, 68, 0.12);
-  box-shadow: inset 0 -2px 0 #ef4444;
+  background-color: rgba(239, 68, 68, 0.28);
+  box-shadow: inset 0 -3px 0 #ef4444;
 }
 
 .cell-modified.cell-problem {
-  box-shadow: inset 3px 0 0 #f59e0b, inset 0 -2px 0 #ef4444;
+  box-shadow: inset 3px 0 0 #f59e0b, inset 0 -3px 0 #ef4444;
+}
+
+/* Frozen cells paint an opaque background, so lay the red over it. */
+.table-td.cell-frozen.cell-problem {
+  background: linear-gradient(rgba(239, 68, 68, 0.28), rgba(239, 68, 68, 0.28)), var(--bg-surface, #1e293b);
+}
+
+.table-td.cell-frozen.cell-problem.cell-frozen-last {
+  box-shadow: inset 0 -3px 0 #ef4444, 4px 0 6px -2px rgba(0, 0, 0, 0.45);
+}
+
+.table-td.cell-frozen.cell-modified.cell-problem.cell-frozen-last {
+  box-shadow: inset 3px 0 0 #f59e0b, inset 0 -3px 0 #ef4444, 4px 0 6px -2px rgba(0, 0, 0, 0.45);
 }
 
 /* Why a red cell is a problem, shown on hover / focus (Table.tsx). */
