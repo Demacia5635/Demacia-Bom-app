@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
 import { cleanUpdateBody, upsertWithRetry } from "./upsert";
@@ -72,7 +73,9 @@ export async function upsertWorkOrderByID(
     // part changes through POST /id/:id/part, so a whole-work-order save
     // (sent with an older copy of the parts) can't undo other people's
     // per-part edits. $setOnInsert keeps this atomic.
-    const { parts, ...fields } = cleanUpdateBody(req.body);
+    // cncGroups are written only by POST /id/:id/cncGroup, so a save sent with
+    // an older copy can't undo someone's merge.
+    const { parts, cncGroups: _ignored, ...fields } = cleanUpdateBody(req.body);
     const update: Record<string, unknown> = { $set: { ...fields, id: id } };
     if (parts !== undefined) update.$setOnInsert = { parts };
 
@@ -170,6 +173,87 @@ export async function deleteWorkOrderByID(
     if (!deleted)
       return res.status(404).json({ message: `Work order ${id} not found` });
     return res.status(204).json();
+  } catch (err) {
+    return next(err);
+  }
+}
+const GROUP_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * Creates, changes or dissolves one CNC group of a work order:
+ * body { groupID?, partIDs: string[], links?: string }.
+ * - No groupID: a new group (the server makes its ID).
+ * - partIDs: the group's parts (all must be in the work order). They leave
+ *   any other group; a group left with fewer than 2 parts is removed, so an
+ *   empty list dissolves it. parts[] is never touched.
+ * - links: the shared G-code link(s); left out = unchanged ("" for a new group).
+ * One atomic update, so people merging at the same time don't overwrite each
+ * other. Answers with the work order's groups.
+ */
+export async function updateCncGroup(
+  req: Request<{ id: string }, unknown, { groupID?: unknown; partIDs?: unknown; links?: unknown }>,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const id = req.params.id;
+    const body = req.body ?? {};
+    if (body.groupID !== undefined && (typeof body.groupID !== "string" || !GROUP_ID.test(body.groupID)))
+      return res.status(400).json({ message: "groupID must be 1-64 letters, digits, - or _" });
+    if (!Array.isArray(body.partIDs) || !body.partIDs.every((p) => typeof p === "string" && p !== ""))
+      return res.status(400).json({ message: "partIDs must be a list of part IDs" });
+    if (body.links !== undefined && typeof body.links !== "string")
+      return res.status(400).json({ message: "links must be text" });
+    const partIDs = [...new Set(body.partIDs as string[])];
+    const groupID = (body.groupID as string | undefined) ?? randomUUID();
+    if (body.groupID === undefined && partIDs.length < 2)
+      return res.status(400).json({ message: "A new group needs at least 2 parts" });
+    const links = body.links as string | undefined;
+    const now = new Date();
+
+    // $literal: IDs and links are values, never field paths or operators.
+    const groups = { $ifNull: ["$cncGroups", []] };
+    const others = {
+      $map: {
+        input: { $filter: { input: groups, cond: { $ne: ["$$this.id", { $literal: groupID }] } } },
+        as: "g",
+        in: { $mergeObjects: ["$$g", { partIDs: { $setDifference: ["$$g.partIDs", { $literal: partIDs }] } }] },
+      },
+    };
+    const mine = { $arrayElemAt: [{ $filter: { input: groups, cond: { $eq: ["$$this.id", { $literal: groupID }] } } }, 0] };
+    const updated = {
+      $mergeObjects: [
+        { createdAt: now, links: "" },
+        { $ifNull: [mine, {}] },
+        { id: { $literal: groupID }, partIDs: { $literal: partIDs }, updatedAt: now },
+        links !== undefined ? { links: { $literal: links } } : {},
+      ],
+    };
+    const pipeline = [
+      {
+        $set: {
+          cncGroups: {
+            $filter: {
+              input: { $concatArrays: [others, partIDs.length >= 2 ? [updated] : []] },
+              cond: { $gte: [{ $size: "$$this.partIDs" }, 2] },
+            },
+          },
+        },
+      },
+    ];
+
+    // Native driver: a pipeline update, checked against parts[] in the same step.
+    const result = await WorkOrder.collection.findOneAndUpdate(
+      { id, ...(partIDs.length > 0 ? { "parts.partID": { $all: partIDs } } : {}) },
+      pipeline,
+      { returnDocument: "after" },
+    );
+    if (!result) {
+      const exists = await WorkOrder.exists({ id });
+      if (!exists) return res.status(404).json({ message: `Work order ${id} not found` });
+      return res.status(400).json({ message: "Some of those parts aren't in this work order" });
+    }
+    return res.status(200).json({ groupID, cncGroups: (result as { cncGroups?: unknown[] }).cncGroups ?? [] });
   } catch (err) {
     return next(err);
   }

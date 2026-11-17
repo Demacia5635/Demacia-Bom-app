@@ -21,6 +21,21 @@ const subPartSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Parts of the work order cut together in one CNC run (same thickness and
+// material): they share one G-code link. Kept apart from parts[], so a part's
+// own links come back when it leaves a group. Written only by
+// POST /id/:id/cncGroup (never by the whole-work-order save).
+const cncGroupSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true },
+    partIDs: { type: [String], default: [] },
+    links: { type: String, default: "" },
+    createdAt: { type: Date },
+    updatedAt: { type: Date },
+  },
+  { _id: false },
+);
+
 const workOrderSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, unique: true, index: true },
@@ -31,6 +46,7 @@ const workOrderSchema = new mongoose.Schema(
     description: { type: String },
 
     parts: { type: [subPartSchema], default: [] },
+    cncGroups: { type: [cncGroupSchema], default: [] },
 
     avatarID: { type: String },
 

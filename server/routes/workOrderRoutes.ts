@@ -9,6 +9,7 @@ router.get('/id/:id', workOrderController.getWorkOrderByID);
 router.post('/id/:id', workOrderController.upsertWorkOrderByID);
 // One part's fields: { partID, changes } (partID in the body: part IDs can contain "/").
 router.post('/id/:id/part', workOrderController.updateWorkOrderPart);
+router.post('/id/:id/cncGroup', workOrderController.updateCncGroup);
 router.delete('/id/:id', workOrderController.deleteWorkOrderByID);
 
 export default router;
