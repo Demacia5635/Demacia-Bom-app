@@ -39,16 +39,48 @@ function openPanelForTab(tabId: number): void {
   chrome.sidePanel.open({ tabId }).catch(console.error);
 }
 
+// Each open panel holds a port named PANEL_PORT_PREFIX + its tab ID
+// (reportPanelOpen in onshapeTab.ts). Kept in memory so the click handlers
+// can check it synchronously; if the worker restarts, the panels reconnect.
+const PANEL_PORT_PREFIX = "demacia-bom:panel:";
+const tabsWithOpenPanel = new Set<number>();
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port.name.startsWith(PANEL_PORT_PREFIX)) return;
+  const tabId = Number(port.name.slice(PANEL_PORT_PREFIX.length));
+  if (!Number.isInteger(tabId)) return;
+  tabsWithOpenPanel.add(tabId);
+  port.onDisconnect.addListener(() => tabsWithOpenPanel.delete(tabId));
+});
+
+/** Closes the tab's panel (its state is discarded, as when the user closes it). */
+function closePanelForTab(tabId: number): void {
+  tabsWithOpenPanel.delete(tabId);
+  // sidePanel.close exists from Chrome 141; disabling the tab's panel closes it too.
+  const sidePanel = chrome.sidePanel as { close?: (o: { tabId: number }) => Promise<void> };
+  if (sidePanel.close) {
+    sidePanel.close({ tabId }).catch(() => chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(console.error));
+  } else {
+    chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(console.error);
+  }
+}
+
+/** Icon / "BOM" button click: opens the tab's panel, or closes it if it's already open. */
+function togglePanelForTab(tabId: number): void {
+  if (tabsWithOpenPanel.has(tabId)) closePanelForTab(tabId);
+  else openPanelForTab(tabId);
+}
+
 // In-page "BOM" button.
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg?.type === OPEN_PANEL_MESSAGE && sender.tab?.id !== undefined) {
-    openPanelForTab(sender.tab.id);
+    togglePanelForTab(sender.tab.id);
   }
 });
 
 // Toolbar icon: only meaningful on an Onshape tab.
 chrome.action.onClicked.addListener((tab) => {
-  if (tab.id !== undefined && isOnshapeUrl(tab.url)) openPanelForTab(tab.id);
+  if (tab.id !== undefined && isOnshapeUrl(tab.url)) togglePanelForTab(tab.id);
 });
 
 // The tab left Onshape (navigated to another site): close its panel.

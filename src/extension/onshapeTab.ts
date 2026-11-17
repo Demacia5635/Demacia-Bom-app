@@ -62,6 +62,44 @@ function sameLocation(a: OnshapeLocation | null, b: OnshapeLocation | null): boo
 }
 
 /**
+ * The tab this panel document was opened for. Firefox gives each tab its own
+ * panel document, panel.html?tab=<id> (background.firefox.ts). Otherwise
+ * (Chrome, or Firefox's default panel) it's the tab that is active while the
+ * panel loads.
+ */
+export function getOwnTab(): Promise<chrome.tabs.Tab | undefined> {
+  const tabParam = Number(new URLSearchParams(window.location.search).get("tab"));
+  return Number.isInteger(tabParam) && tabParam > 0
+    ? chrome.tabs.get(tabParam).catch(() => undefined)
+    : chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab);
+}
+
+/**
+ * Chrome only: tells the background worker that this panel is open for its
+ * tab, so a second click on the toolbar icon or the in-page "BOM" button
+ * closes it (background.ts). The open port is the signal; when the worker is
+ * restarted the port drops, so reconnect to re-register.
+ */
+export function reportPanelOpen(): void {
+  if (!("sidePanel" in chrome)) return; // Firefox toggles its sidebar itself.
+  void getOwnTab().then((tab) => {
+    if (tab?.id === undefined) return;
+    const name = `${PANEL_PORT_PREFIX}${tab.id}`;
+    const connect = () => {
+      try {
+        chrome.runtime.connect({ name }).onDisconnect.addListener(() => setTimeout(connect, 200));
+      } catch {
+        // Extension reloaded: this panel is orphaned; nothing to report to.
+      }
+    };
+    connect();
+  });
+}
+
+// Keep in sync with background.ts.
+const PANEL_PORT_PREFIX = "demacia-bom:panel:";
+
+/**
  * The Onshape tab this side panel belongs to. The panel is opened per tab
  * (see background.ts), so it binds to the tab that was active when it opened
  * and then follows only that tab's own navigation (Onshape changes the URL
@@ -93,15 +131,7 @@ export function useOwnOnshapeTab(): ActiveTabState {
       if (tabId === ownTabId && (info.url || info.status === "complete")) apply(tab);
     };
 
-    // Firefox gives each tab its own panel document, panel.html?tab=<id>
-    // (background.firefox.ts). Otherwise (Chrome, or Firefox's default panel)
-    // the tab this panel was opened for is the active one at that moment.
-    const tabParam = Number(new URLSearchParams(window.location.search).get("tab"));
-    const ownTab: Promise<chrome.tabs.Tab | undefined> =
-      Number.isInteger(tabParam) && tabParam > 0
-        ? chrome.tabs.get(tabParam).catch(() => undefined)
-        : chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab);
-    void ownTab.then((tab) => {
+    void getOwnTab().then((tab) => {
       if (cancelled) return;
       ownTabId = tab?.id ?? null;
       apply(tab);
