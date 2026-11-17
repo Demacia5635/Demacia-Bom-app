@@ -262,7 +262,11 @@ export async function updateCncGroup(
       if (!exists) return res.status(404).json({ message: `Work order ${id} not found` });
       return res.status(400).json({ message: "Some of those parts aren't in this work order" });
     }
-    return res.status(200).json({ groupID, cncGroups: (result as { cncGroups?: unknown[] }).cncGroups ?? [] });
+    const cncGroups = (result as { cncGroups?: { id?: string }[] }).cncGroups ?? [];
+    // A links-only change for a group someone removed meanwhile wasn't saved: say so.
+    if (keepParts && !cncGroups.some((g) => g.id === groupID))
+      return res.status(409).json({ message: "This CNC group was changed or removed by someone else; reload the page" });
+    return res.status(200).json({ groupID, cncGroups });
   } catch (err) {
     return next(err);
   }
