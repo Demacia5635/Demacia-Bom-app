@@ -35,7 +35,21 @@ const BUTTON_ID = "demacia-bom-open";
       `/api/v9/documents/d/${loc.did}/${loc.wvm}/${loc.wvmId}/elements?elementId=${loc.eid}`,
       { credentials: "include", headers: { Accept: "application/json;charset=UTF-8; qs=0.09" } }
     );
-    if (!res.ok) throw new Error(`Onshape API ${res.status}`);
+    if (!res.ok) {
+      // Onshape's own reason (e.g. no access to this document) helps more than the bare status.
+      let detail = "";
+      try {
+        const text = await res.text();
+        try {
+          detail = JSON.parse(text).message || "";
+        } catch {
+          detail = text.slice(0, 200);
+        }
+      } catch {
+        // no body
+      }
+      throw Object.assign(new Error(`Onshape API ${res.status}${detail ? `: ${detail}` : ""}`), { status: res.status });
+    }
     const list = await res.json();
     const type: string = (Array.isArray(list) && list[0]?.elementType) || "UNKNOWN";
     elementTypeCache.set(key, type);
@@ -172,7 +186,10 @@ const BUTTON_ID = "demacia-bom-open";
       // button of the page now shown.
       if (location.href !== href) return;
       setVisible(false);
-      if (retryCount < RETRY_DELAYS_MS.length) {
+      // 403/404: no access to this document, or it doesn't exist; asking again won't change that.
+      const status = (err as { status?: number })?.status;
+      const permanent = status === 403 || status === 404;
+      if (!permanent && retryCount < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[retryCount++];
         retryTimer = setTimeout(() => {
           if (location.href !== href) return;
