@@ -183,7 +183,8 @@ const GROUP_ID = /^[A-Za-z0-9_-]{1,64}$/;
  * Creates, changes or dissolves one CNC group of a work order:
  * body { groupID?, partIDs: string[], links?: string }.
  * - No groupID: a new group (the server makes its ID).
- * - partIDs: the group's parts (all must be in the work order). They leave
+ * - partIDs: the group's parts (all must be in the work order). Left out (with
+ *   a groupID) = unchanged, e.g. when only the links change. They leave
  *   any other group; a group left with fewer than 2 parts is removed, so an
  *   empty list dissolves it. parts[] is never touched.
  * - links: the shared G-code link(s); left out = unchanged ("" for a new group).
@@ -200,11 +201,12 @@ export async function updateCncGroup(
     const body = req.body ?? {};
     if (body.groupID !== undefined && (typeof body.groupID !== "string" || !GROUP_ID.test(body.groupID)))
       return res.status(400).json({ message: "groupID must be 1-64 letters, digits, - or _" });
-    if (!Array.isArray(body.partIDs) || !body.partIDs.every((p) => typeof p === "string" && p !== ""))
+    const keepParts = body.partIDs === undefined && body.groupID !== undefined;
+    if (!keepParts && (!Array.isArray(body.partIDs) || !body.partIDs.every((p) => typeof p === "string" && p !== "")))
       return res.status(400).json({ message: "partIDs must be a list of part IDs" });
     if (body.links !== undefined && typeof body.links !== "string")
       return res.status(400).json({ message: "links must be text" });
-    const partIDs = [...new Set(body.partIDs as string[])];
+    const partIDs = keepParts ? [] : [...new Set(body.partIDs as string[])];
     const groupID = (body.groupID as string | undefined) ?? randomUUID();
     if (body.groupID === undefined && partIDs.length < 2)
       return res.status(400).json({ message: "A new group needs at least 2 parts" });
@@ -225,7 +227,8 @@ export async function updateCncGroup(
       $mergeObjects: [
         { createdAt: now, links: "" },
         { $ifNull: [mine, {}] },
-        { id: { $literal: groupID }, partIDs: { $literal: partIDs }, updatedAt: now },
+        { id: { $literal: groupID }, updatedAt: now },
+        keepParts ? {} : { partIDs: { $literal: partIDs } },
         links !== undefined ? { links: { $literal: links } } : {},
       ],
     };
@@ -234,7 +237,13 @@ export async function updateCncGroup(
         $set: {
           cncGroups: {
             $filter: {
-              input: { $concatArrays: [others, partIDs.length >= 2 ? [updated] : []] },
+              input: {
+                $concatArrays: [
+                  others,
+                  // Links only: an existing group is updated, a missing one isn't made.
+                  keepParts ? { $cond: [{ $eq: [{ $type: mine }, "object"] }, [updated], []] } : partIDs.length >= 2 ? [updated] : [],
+                ],
+              },
               cond: { $gte: [{ $size: "$$this.partIDs" }, 2] },
             },
           },
