@@ -6,6 +6,22 @@ import { fetchPartsByIds } from "../../../util/records";
 import { isPurchasedPart, type BomModel, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
 import { checkCatalogTree, type CatalogNode } from "../../../util/catalogNumbers";
 
+/**
+ * A made part's manufacturing method from the files it keeps (the STL /
+ * Parasolid ticks in the BOM extension): STL -> "Printed", Parasolid -> "CNC".
+ * Both or neither: left to the default ("Manual") for a person to choose.
+ * Parts saved before the ticks existed go by the files they have.
+ */
+function methodFromFiles(part: PartModel | null): string | undefined {
+    if (!part) return undefined;
+    const hasChoice = typeof part.wantStl === "boolean" || typeof part.wantParasolid === "boolean";
+    const stl = hasChoice ? !!part.wantStl : !!part.stlLink;
+    const parasolid = hasChoice ? !!part.wantParasolid : !!part.parasolidLink;
+    if (stl && !parasolid) return "Printed";
+    if (parasolid && !stl) return "CNC";
+    return undefined;
+}
+
 export interface WorkOrderFormData {
     name: string;
     workOrderOwner: string;
@@ -134,7 +150,8 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
                 quantityMade: 0,
                 // Purchased parts aren't manufactured, so their progress isn't tracked.
                 statusCode: isPurchased ? "Untracked" : 0,
-                ...(isPurchased ? { manufacturingMethod: "Purchased" } : {}),
+                // Made parts: Printed / CNC from their STL / Parasolid tick.
+                ...(isPurchased ? { manufacturingMethod: "Purchased" } : methodFromFiles(partRecord) ? { manufacturingMethod: methodFromFiles(partRecord) } : {}),
                 productionGCOwner: "",
                 productionMakingOwner: "",
                 updatedAt: new Date(),
