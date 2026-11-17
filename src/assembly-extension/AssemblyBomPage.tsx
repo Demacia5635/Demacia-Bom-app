@@ -70,18 +70,24 @@ const DATABASE_ONLY_FIELDS = new Set(["material", "wantStl", "wantParasolid", "m
 const BOOLEAN_FIELDS = new Set(["wantStl", "wantParasolid", "markedStandard"]);
 
 /**
- * Which files a part not chosen yet should get, from its material:
- * 3D-printing plastics -> STL; aluminum -> Parasolid; acetal/Delrin/POM and
- * anything else -> neither.
+ * Which files a material calls for: 3D-printing plastics -> STL; aluminum and
+ * polycarbonate (cut from sheet on the CNC) -> Parasolid; acetal/Delrin/POM ->
+ * neither. Null for a material with no rule.
  */
-function fileDefaultsForMaterial(material: string): { wantStl: boolean; wantParasolid: boolean } {
+function fileRuleForMaterial(material: string): { wantStl: boolean; wantParasolid: boolean } | null {
   const m = material.toLowerCase();
   if (/\b(delrin|acetal|pom|polyoxymethylene)\b/.test(m)) return { wantStl: false, wantParasolid: false };
-  if (/\b(pla\+?|abs|tpu|petg|pet-g|asa|nylon|pa\s?\d*|onyx|resin|tpe|hips|pc|polycarbonate)\b/.test(m)) {
+  if (/\b(polycarbonate|lexan|pc)\b/.test(m)) return { wantStl: false, wantParasolid: true };
+  if (/\b(pla\+?|abs|tpu|petg|pet-g|asa|nylon|pa\s?\d*|onyx|resin|tpe|hips)\b/.test(m)) {
     return { wantStl: true, wantParasolid: false };
   }
   if (/\b(alumin(i)?um|al\s?\d{4}|\d{4}-t\d+)\b/.test(m)) return { wantStl: false, wantParasolid: true };
-  return { wantStl: false, wantParasolid: false };
+  return null;
+}
+
+/** Which files a part not chosen yet should get, from its material (no rule -> neither). */
+function fileDefaultsForMaterial(material: string): { wantStl: boolean; wantParasolid: boolean } {
+  return fileRuleForMaterial(material) ?? { wantStl: false, wantParasolid: false };
 }
 
 type FieldValues = Record<string, string | number>;
@@ -1125,6 +1131,13 @@ export default function AssemblyBomPage() {
         if (refused.length > 0) {
           blocked = true;
           row = { ...row, ...Object.fromEntries(refused.map((k) => [k, (prev as unknown as Record<string, unknown>)[k]])) } as AssemblyBomRow;
+        }
+        // A part's new material re-ticks its files (polycarbonate -> Parasolid...);
+        // a material with no rule leaves the ticks. They can still be changed after.
+        if (!row.isAssembly && editedKeys.includes("material") && !refused.includes("material")
+          && !editedKeys.includes("wantStl") && !editedKeys.includes("wantParasolid")) {
+          const rule = fileRuleForMaterial(String(row.material ?? ""));
+          if (rule) row = { ...row, ...rule };
         }
         // (Table writes an edit to every row with this id, i.e. every use of the
         // item; each sub-assembly is listed once here.)
