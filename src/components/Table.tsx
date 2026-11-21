@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AuthenticatedImage } from "../util/ApiService";
+import { AuthenticatedImage } from "./AuthenticatedImage";
 
 export interface RowData {
     id: string;

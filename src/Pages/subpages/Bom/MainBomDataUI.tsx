@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AuthenticatedImage } from "../../../util/ApiService";
+import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import { type BomModel } from "../../../util/Models";
 import { createPortal } from "react-dom";
 import { WorkOrderForm } from "./CreatingWO";

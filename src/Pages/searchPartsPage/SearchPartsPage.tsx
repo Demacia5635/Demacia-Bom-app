@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { AuthenticatedImage, fetchFromApi, type ApiError } from "../../util/ApiService";
+import { fetchFromApi, type ApiError } from "../../util/ApiService";
+import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import type { BomModel, PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";

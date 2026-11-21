@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AuthenticatedImage } from "../../util/ApiService";
+import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 import type { WorkorderRow } from "../../util/Models";

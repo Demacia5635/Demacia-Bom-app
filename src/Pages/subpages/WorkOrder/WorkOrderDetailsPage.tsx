@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
-import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
+import { fetchFromApi, type ApiError } from "../../../util/ApiService";
+import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import { collectBomParts } from "../../../util/bomParts";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import Table from "../../../components/Table";

@@ -1,4 +1,4 @@
-import { AuthenticatedImage } from "../../../util/ApiService";
+import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import type { BomModel } from "../../../util/Models";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { openExternal } from "../../../util/openExternal";

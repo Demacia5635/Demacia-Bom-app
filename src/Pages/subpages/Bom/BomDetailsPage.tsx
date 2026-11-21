@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef, type MouseEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Table from "../../../components/Table";
-import { fetchFromApi, AuthenticatedImage, type ApiError } from "../../../util/ApiService";
+import { fetchFromApi, type ApiError } from "../../../util/ApiService";
+import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import type { BomModel, PartModel } from "../../../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { WorkorderModel, BomModel } from "../../../util/Models";
-import { AuthenticatedImage, fetchFromApi } from "../../../util/ApiService";
+import { fetchFromApi } from "../../../util/ApiService";
+import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
 import { recordImageSrc } from "../../../util/recordImage";

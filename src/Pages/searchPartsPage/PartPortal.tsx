@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
-import { AuthenticatedImage, downloadDriveFile, fetchFromApi } from "../../util/ApiService";
+import { downloadDriveFile, fetchFromApi } from "../../util/ApiService";
+import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import { isPurchasedPart, type PartModel, type BomModel } from "../../util/Models";
 import { useNavigate } from "react-router-dom";
