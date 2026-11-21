@@ -992,9 +992,6 @@ export default function AssemblyBomPage() {
       const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', getParentBom, undefined, src);
       if (stale()) throw LOAD_CANCELLED;
       if (rootNode.onshapeBom) void prefetchTree(rootNode.onshapeBom, src);
-      setRootBomDB(dbBom);
-      setRootIsPublished(Boolean(dbBom));
-      setRootOnshapeBom(rootNode.onshapeBom ?? null);
       setTelemetryAssembly(assemblyNameOf(rootNode.onshapeBom) || dbBom?.name || "", rootKey.documentID, rootKey.elementID);
       visitedBomIds.add(assemblyKeyId(rootKey));
 
@@ -1023,6 +1020,11 @@ export default function AssemblyBomPage() {
       const imageVersions = await computeImageVersions(freshRows, limit, modelVersions).catch(() => new Map<string, string>());
       if (stale()) throw LOAD_CANCELLED;
       setImageVersions(imageVersions);
+      // The new top assembly is shown together with its rows, so a load that
+      // fails halfway leaves the previous tree on screen as it was.
+      setRootBomDB(dbBom);
+      setRootIsPublished(Boolean(dbBom));
+      setRootOnshapeBom(rootNode.onshapeBom ?? null);
       setRows(freshRows);
       setCachedAt(null);
       treeSavedAtRef.current = Date.now();
