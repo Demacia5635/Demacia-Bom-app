@@ -12,6 +12,7 @@
 - The Parasolid download is now named `<part>.x_t`, the standard extension that CAD programs open (it was `.parasolid`). (`371155d`)
 - **New work orders get the right quantities.** Each part's total used to be its quantity in one parent only: a sub-assembly's own quantity wasn't multiplied in, a sub-assembly used twice was counted once, and a part used in several sub-assemblies got a separate line for each. Now each part gets one line with its full total, the same numbers the work-order page shows. Existing work orders aren't changed. (B2, `2d4e822`)
 - **A sub-assembly bought whole (marked standard, or with a vendor) is one "Purchased" line in a work order.** Its insides aren't listed, and they aren't checked for material or engineer, which used to block creating the work order. This applies on the work-order page too, so **existing work orders show such a sub-assembly as one Purchased line instead of its inner parts** (any progress recorded on those inner parts is no longer shown). (B8, `278ec81`)
+- On a work order, **"Show Part Data" on a bought sub-assembly line opens its summary** (picture, name, catalog number, description, Open Onshape), the same as on the BOM page. (`36ea642`)
 - **A work order follows its assembly's current BOM, and says so:** a grey note under the title reads "Parts and quantities follow the assembly's current BOM: publishing it again updates this work order." New work orders no longer store quantities nobody used, and merging into or removing from a CNC job drops parts that are no longer in the BOM. (B9, `f727d21`)
 - A work order no longer flashes an empty table before it loads, and one without a BOM says so instead of showing nothing. (W5, `9bb667f`)
 - The "Create work order" form can't be closed by clicking outside it while it's creating. (W6, `e9642b7`)
@@ -58,10 +59,6 @@
 
 - Old work orders made before extension 3.2.0 keep the saved status and links of hidden copies of a part hidden; re-enter them on the combined row (B22, the user's choice).
 - Restricting who can open the statistics page (/tele) waits for the sign-in project.
-
-## Known problems
-
-- On a work order, "Show Part Data" on a bought sub-assembly that has no part record says it "isn't saved in the database yet".
 
 ## Not tested yet
 
