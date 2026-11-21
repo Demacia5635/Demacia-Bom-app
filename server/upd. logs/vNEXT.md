@@ -1,6 +1,6 @@
 # Server: next version
 
-**Unreleased.** On branch `fix/serv` (`bc677c7`–`8f827bb`), not on `MASTER` yet.
+**Unreleased.** Merged into `MASTER` on 2026-11-21 (`bc677c7`–`8f827bb`), not pushed yet.
 
 ## Before you deploy
 
