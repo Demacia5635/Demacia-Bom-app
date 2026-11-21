@@ -1,4 +1,5 @@
 import { SidebarIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync"; // Adjust relative path if Appbar is in a different folder
 
 // The running build's version (vite.config.js). Not defined in the extension's
@@ -35,7 +36,8 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
             <h1 className={`text-base font-bold tracking-wider flex items-baseline gap-2 whitespace-nowrap ${titleColor}`}>
                 {title}
                 {APP_VERSION && (
-                    <span className={`text-xs font-medium tracking-normal ${versionColor}`}>v{APP_VERSION}</span>
+                    // Opens "What's new" (every version's update log).
+                    <Link to="/whatsnew" title="What's new" className={`text-xs font-medium tracking-normal hover:underline hover:text-blue-500 ${versionColor}`}>v{APP_VERSION}</Link>
                 )}
             </h1>
 
