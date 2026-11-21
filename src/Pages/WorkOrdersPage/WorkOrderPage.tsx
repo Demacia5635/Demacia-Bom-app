@@ -1,15 +1,15 @@
 import { useState, useMemo, useEffect } from "react";
 import { fetchFromApi } from "../../util/ApiService";
-import { useThemeSync } from "../../util/misc/useThemeSync";
 import WorkOrderTable from "./WorkOrderTable";
 import type { WorkOrderRow } from "../../util/Models";
 import { fetchBomsByIds } from "../../util/records";
 import { recordImageSrc } from "../../util/recordImage";
 import ErrorBanner from "../../components/ErrorBanner";
+import { useThemeClasses } from "../../util/misc/useThemeClasses";
 
 
 export function WorkOrdersPage() {
-    const { isLight } = useThemeSync();
+    const theme = useThemeClasses();
     const [searchQuery, setSearchQuery] = useState("");
     const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
@@ -70,34 +70,27 @@ export function WorkOrdersPage() {
         });
     }, [searchQuery, workOrders]);
 
-    const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
-    const cardBg = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
-    const inputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400" : "bg-zinc-900 border-zinc-800 text-zinc-100 placeholder-zinc-500";
-    const textHeading = isLight ? "text-zinc-900" : "text-white";
     // Written out in full: Tailwind only generates classes it finds as literal text.
-    const hoverHeading = isLight ? "hover:text-zinc-900" : "hover:text-white";
-    const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
     const textSubdued = "text-zinc-600"; // the same in both themes
-    const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
 
     return (
-        <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${pageBg}`}>
+        <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
             <div className="max-w-6xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className={`text-2xl font-bold tracking-tight ${textHeading}`}>Work Orders</h1>
-                        <p className={`text-xs ${textMuted}`}>Manage and search work orders by name, catalog #, BOM, or owner.</p>
+                        <h1 className={`text-2xl font-bold tracking-tight ${theme.textHeading}`}>Work Orders</h1>
+                        <p className={`text-xs ${theme.textMuted}`}>Manage and search work orders by name, catalog #, BOM, or owner.</p>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className={`text-xs ${textMuted} font-mono`}>
-                            Results: <span className={`${textValue} font-bold`}>{filteredWorkOrders.length}</span>
+                        <div className={`text-xs ${theme.textMuted} font-mono`}>
+                            Results: <span className={`${theme.textValue} font-bold`}>{filteredWorkOrders.length}</span>
                         </div>
                         
                     </div>
                 </div>
 
                 <div className="relative">
-                    <div className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${textMuted}`}>
+                    <div className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${theme.textMuted}`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -107,12 +100,12 @@ export function WorkOrdersPage() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search by work order name, catalog #, BOM name, or owner..."
-                        className={`w-full border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-md ${inputBg}`}
+                        className={`w-full border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-md ${theme.input}`}
                     />
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery("")}
-                            className={`absolute inset-y-0 right-0 pr-3.5 flex items-center ${textMuted} ${hoverHeading} text-xs font-semibold`}
+                            className={`absolute inset-y-0 right-0 pr-3.5 flex items-center ${theme.textMuted} ${theme.hoverHeading} text-xs font-semibold`}
                         >
                             Clear
                         </button>
@@ -128,14 +121,14 @@ export function WorkOrdersPage() {
 
             <div className="max-w-6xl mx-auto">
                 {loading ? (
-                    <div className={`${cardBg} border rounded-xl p-12 text-center`}>
-                        <p className={`${textMuted} text-sm font-medium`}>Loading work orders...</p>
+                    <div className={`${theme.card} border rounded-xl p-12 text-center`}>
+                        <p className={`${theme.textMuted} text-sm font-medium`}>Loading work orders...</p>
                     </div>
                 ) : filteredWorkOrders.length > 0 ? (
                     <WorkOrderTable workOrders={filteredWorkOrders} />
                 ) : (
-                    <div className={`${cardBg} border rounded-xl p-12 text-center space-y-2`}>
-                        <p className={`${textMuted} text-sm font-medium`}>
+                    <div className={`${theme.card} border rounded-xl p-12 text-center space-y-2`}>
+                        <p className={`${theme.textMuted} text-sm font-medium`}>
                             {searchQuery ? `No work orders found matching "${searchQuery}"` : "No work orders available."}
                         </p>
                         <p className={`${textSubdued} text-xs`}>

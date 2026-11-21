@@ -18,6 +18,7 @@ import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
+import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -143,6 +144,7 @@ export default function BomDetailsPage() {
 
   // The app's theme toggle (like every other page), not the OS setting.
   const { isLight } = useThemeSync();
+  const theme = useThemeClasses();
 
   const [rows, setRows] = useState<BomTableRow[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -318,11 +320,9 @@ export default function BomDetailsPage() {
     }
   };
 
-  const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
-  const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
 
   return (
-    <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
+    <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
       {mainBomData && (
         <MainBomDataUI bom={mainBomData} />
@@ -339,7 +339,7 @@ export default function BomDetailsPage() {
       )}
 
       <div className="flex items-center gap-3 mb-3">
-        <span className={`text-sm ${loadingText}`}>View:</span>
+        <span className={`text-sm ${theme.textMuted}`}>View:</span>
         <div className={`inline-flex rounded-lg border overflow-hidden ${isLight ? "border-zinc-300" : "border-zinc-700"}`} role="group" aria-label="BOM view">
           {BOM_VIEWS.map((v) => (
             <button
@@ -359,14 +359,14 @@ export default function BomDetailsPage() {
           ))}
         </div>
         {/* Right of the view buttons, under the title card. */}
-        <label className={`ml-auto flex items-center gap-2 cursor-pointer text-sm ${loadingText}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
+        <label className={`ml-auto flex items-center gap-2 cursor-pointer text-sm ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
           <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
           Show size
         </label>
       </div>
 
       {loading ? (
-        <div className={`p-8 text-center ${loadingText}`}>Loading BOM data...</div>
+        <div className={`p-8 text-center ${theme.textMuted}`}>Loading BOM data...</div>
       ) : (
         <div 
           onClick={handleTableClick}

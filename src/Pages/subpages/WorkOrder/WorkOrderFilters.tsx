@@ -3,6 +3,7 @@ import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import { isFinishedRow, isPurchasedRow, toggleIn, type WorkOrderFilterState } from "./useWorkOrderFilters";
+import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 
 /** The filter card above the work-order table; `children` go at its bottom right (the PDF export). */
 export default function WorkOrderFilters({ rows, filters, shownCount, children }: {
@@ -12,17 +13,16 @@ export default function WorkOrderFilters({ rows, filters, shownCount, children }
     children?: ReactNode;
 }) {
     const { isLight } = useThemeSync();
-    const filterCard = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
-    const filterLabel = isLight ? "text-zinc-600" : "text-zinc-400";
+    const theme = useThemeClasses();
     const chipOn = "bg-blue-600 border-blue-600 text-white";
     const chipOff = isLight
         ? "border-zinc-300 text-zinc-700 hover:bg-zinc-100"
         : "border-zinc-700 text-zinc-300 hover:bg-zinc-800";
 
     return (
-        <div className={`mb-3 rounded-xl border p-3 space-y-2 text-xs ${filterCard}`}>
+        <div className={`mb-3 rounded-xl border p-3 space-y-2 text-xs ${theme.card}`}>
             <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`w-36 shrink-0 font-semibold ${filterLabel}`}>Manufacturing method</span>
+                <span className={`w-36 shrink-0 font-semibold ${theme.textLabel}`}>Manufacturing method</span>
                 {MANUFACTURING_METHODS.map((m) => {
                     const count = rows.filter((r) => r.manufacturingMethod === m).length;
                     return (
@@ -39,7 +39,7 @@ export default function WorkOrderFilters({ rows, filters, shownCount, children }
                 })}
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`w-36 shrink-0 font-semibold ${filterLabel}`}>Priority</span>
+                <span className={`w-36 shrink-0 font-semibold ${theme.textLabel}`}>Priority</span>
                 {PRIORITIES.map((p) => {
                     const count = rows.filter((r) => r.Priority === p).length;
                     return (
@@ -57,7 +57,7 @@ export default function WorkOrderFilters({ rows, filters, shownCount, children }
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                    <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
+                    <label className={`flex items-center gap-2 cursor-pointer ${theme.textLabel}`}>
                         <input
                             type="checkbox"
                             checked={filters.hidePurchased}
@@ -65,7 +65,7 @@ export default function WorkOrderFilters({ rows, filters, shownCount, children }
                         />
                         Hide purchased & standard parts ({rows.filter(isPurchasedRow).length})
                     </label>
-                    <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
+                    <label className={`flex items-center gap-2 cursor-pointer ${theme.textLabel}`}>
                         <input
                             type="checkbox"
                             checked={filters.hideFinished}
@@ -75,7 +75,7 @@ export default function WorkOrderFilters({ rows, filters, shownCount, children }
                     </label>
                 </div>
                 <div className="flex items-center gap-3">
-                    <span className={filterLabel}>
+                    <span className={theme.textLabel}>
                         Showing {shownCount} of {rows.length} parts
                     </span>
                     {filters.rowFilter && (

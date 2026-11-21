@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useParams } from "react-router-dom";
 import { fetchFromApi } from "../../../util/ApiService";
-import { useThemeSync } from "../../../util/misc/useThemeSync";
 import Table from "../../../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
@@ -22,6 +21,7 @@ import WorkOrderFilters from "./WorkOrderFilters";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
+import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -40,7 +40,7 @@ const SAVED_PART_FIELDS = [
 
 export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
-    const { isLight } = useThemeSync();
+    const theme = useThemeClasses();
 
     // The work order and its rows from the live BOM (useWorkOrderRows.ts). Its
     // CNC groups go to useCncGroups (below, as it needs the rows) once loaded.
@@ -245,13 +245,9 @@ export default function WorkOrderDetailsPage() {
         }
     };
 
-    const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
-    const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
-    const filterCard = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
-    const filterLabel = isLight ? "text-zinc-600" : "text-zinc-400";
 
     return (
-        <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
+        <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
             {workOrderData && (
                 <WorkOrderDataUI workOrder={workOrderData} />
@@ -259,10 +255,10 @@ export default function WorkOrderDetailsPage() {
             {/* Under the title card: the note on the left, "Show size" on the right. */}
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mt-3 mb-3">
                 {/* Rows and quantities are built from the live BOM, not a snapshot (B9). */}
-                <p className={`text-xs ${loadingText}`}>
+                <p className={`text-xs ${theme.textMuted}`}>
                     Parts and quantities follow the assembly&apos;s current BOM: publishing it again updates this work order.
                 </p>
-                <label className={`flex items-center gap-2 cursor-pointer text-sm ${filterLabel}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
+                <label className={`flex items-center gap-2 cursor-pointer text-sm ${theme.textLabel}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
                     <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
                     Show size
                 </label>
@@ -280,9 +276,9 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {loading ? (
-                <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
+                <div className={`p-8 text-center ${theme.textMuted}`}>Fetching Work Order parts...</div>
             ) : workOrderData && !workOrderData.bomID ? (
-                <div className={`p-8 text-center ${loadingText}`}>This work order isn&apos;t linked to an assembly, so it has no parts to show.</div>
+                <div className={`p-8 text-center ${theme.textMuted}`}>This work order isn&apos;t linked to an assembly, so it has no parts to show.</div>
             ) : (
                 <>
                 {rows.length > 0 && (
@@ -303,15 +299,15 @@ export default function WorkOrderDetailsPage() {
                     </WorkOrderFilters>
                 )}
                 {rows.length > 0 && (suggestions.length > 0 || mergeSelection.length > 0 || cncGroups.length > 0 || unsizedCount > 0) && (
-                    <div className={`mb-3 rounded-xl border p-3 space-y-1.5 text-xs ${filterCard}`}>
+                    <div className={`mb-3 rounded-xl border p-3 space-y-1.5 text-xs ${theme.card}`}>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             <span
-                                className={`font-semibold ${filterLabel}`}
+                                className={`font-semibold ${theme.textLabel}`}
                                 title="Parts with the same thickness (smallest side of their size, to 0.1 mm) and material can be cut in one CNC run. Merged parts sit together and share one Links cell (for the G-code)."
                             >
                                 CNC merge
                             </span>
-                            <span className={filterLabel}>
+                            <span className={theme.textLabel}>
                                 {cncGroups.length > 0 ? `${cncGroups.length} merged job${cncGroups.length === 1 ? "" : "s"}. ` : ""}
                                 Right-click a part to select it for a merge by hand, or to remove it from its job.
                                 {unsizedCount > 0 ? ` ${unsizedCount} part${unsizedCount === 1 ? " has" : "s have"} no saved size (publish the BOM again from the extension) and can only be merged by hand.` : ""}
@@ -328,7 +324,7 @@ export default function WorkOrderDetailsPage() {
                                     Merge {sug.partIDs.length}
                                 </button>
                                 <span className="font-semibold">{sug.label}:</span>
-                                <span className={filterLabel}>{sug.names.join(", ")}</span>
+                                <span className={theme.textLabel}>{sug.names.join(", ")}</span>
                             </div>
                         ))}
                         {mergeSelection.length > 0 && (
@@ -345,7 +341,7 @@ export default function WorkOrderDetailsPage() {
                                 <button type="button" onClick={() => setMergeSelection([])} className="font-semibold text-blue-500 hover:underline">
                                     Clear
                                 </button>
-                                <span className={filterLabel}>
+                                <span className={theme.textLabel}>
                                     {rows.filter((r) => r.partID && mergeSelection.includes(r.partID)).map((r) => r.name).join(", ")}
                                 </span>
                             </div>

@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { recordImageSrc } from "../../util/recordImage";
 import { openExternal } from "../../util/openExternal";
 import ImageLightbox from "../../components/ImageLightbox";
+import { useThemeClasses } from "../../util/misc/useThemeClasses";
 
 /** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
 const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
@@ -15,6 +16,7 @@ const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "mater
 /** `onSaved`: called with the part as saved, so the page behind can show the new values. */
 const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => void }> = ({ part, onSaved }) => {
     const { isLight } = useThemeSync();
+    const theme = useThemeClasses();
     const navigate = useNavigate();
 
     // Bought parts (a vendor, Onshape Standard Content, or marked standard in the
@@ -110,24 +112,20 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
     const avatarUrl = recordImageSrc(formData as any);
 
     // Dynamic theme classes
-    const containerBg = isLight ? "bg-white border-zinc-300 text-zinc-900 shadow-xl" : "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-2xl";
-    const headerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
-    const imageBoxBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
     const labelColor = isLight ? "text-zinc-600" : "text-zinc-500";
     const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:ring-blue-600/50" : "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:ring-blue-500/50";
     const cardBg = isLight ? "bg-zinc-50 border-zinc-200" : "bg-zinc-950 border-zinc-800/80";
     const subInputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 focus:ring-blue-600/50" : "bg-zinc-900 border-zinc-800 text-zinc-100 focus:ring-blue-500/50";
-    const textAreaColor = isLight ? "text-zinc-800" : "text-zinc-200";
     const commentsColor = isLight ? "text-zinc-700 italic" : "text-zinc-300 italic";
 
     return (
-        <div className={`w-full max-w-4xl border rounded-2xl p-6 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto transition-colors duration-200 ${containerBg}`}>
+        <div className={`w-full max-w-4xl border rounded-2xl p-6 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto transition-colors duration-200 ${theme.raisedCard}`}>
             {/* Header */}
-            <div className={`flex items-start justify-between gap-4 border-b pb-5 ${headerBorder}`}>
+            <div className={`flex items-start justify-between gap-4 border-b pb-5 ${theme.border}`}>
                 <div className="flex items-center gap-5 w-full">
                     <div 
                         onClick={() => setEnlargedImageSrc(avatarUrl || "FAILED")}
-                        className={`w-24 h-24 shrink-0 border rounded-xl overflow-hidden flex items-center justify-center shadow-inner cursor-pointer hover:opacity-80 transition-opacity ${imageBoxBg}`}
+                        className={`w-24 h-24 shrink-0 border rounded-xl overflow-hidden flex items-center justify-center shadow-inner cursor-pointer hover:opacity-80 transition-opacity ${theme.imageBox}`}
                         title="Click to enlarge image"
                     >
                         {avatarUrl ? (
@@ -336,7 +334,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                         onChange={handleChange}
                         disabled={locked}
                         placeholder="Detailed description of the part..."
-                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${textAreaColor}`}
+                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${theme.textValue}`}
                     />
                 </div>
 
@@ -358,7 +356,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
 
                 {/* Footer Actions */}
                 {/* Onshape opens from its card, next to the STL / Parasolid downloads. */}
-                <div className={`flex flex-col sm:flex-row items-center justify-end gap-4 pt-3 border-t ${headerBorder}`}>
+                <div className={`flex flex-col sm:flex-row items-center justify-end gap-4 pt-3 border-t ${theme.border}`}>
                     {/* The note is on the wrapper: a disabled button gets no hover in some browsers. */}
                     <div
                         className="flex items-center gap-3 w-full sm:w-auto"
@@ -385,7 +383,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                     onClick={() => setIsBomModalOpen(false)}
                 >
                     <div 
-                        className={`w-full max-w-lg border rounded-2xl p-6 shadow-2xl space-y-4 ${containerBg}`}
+                        className={`w-full max-w-lg border rounded-2xl p-6 shadow-2xl space-y-4 ${theme.raisedCard}`}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between border-b pb-3 border-zinc-800">

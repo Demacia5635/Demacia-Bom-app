@@ -1,27 +1,22 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthenticatedImage } from "../../components/AuthenticatedImage";
-import { useThemeSync } from "../../util/misc/useThemeSync";
 import type { WorkOrderRow } from "../../util/Models";
 import { recordImageSrc } from "../../util/recordImage";
 import ImageLightbox from "../../components/ImageLightbox";
+import { useThemeClasses } from "../../util/misc/useThemeClasses";
 
 export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workOrders }) => {
     const navigate = useNavigate();
-    const { isLight } = useThemeSync();
+    const theme = useThemeClasses();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
-    const tableBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
-    const headerBg = isLight ? "bg-zinc-100 text-zinc-700" : "bg-zinc-950 text-zinc-300";
-    const rowHover = isLight ? "hover:bg-zinc-50" : "hover:bg-zinc-800/50";
-    const borderCol = isLight ? "border-zinc-200" : "border-zinc-800";
-    const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
 
     return (
-        <div className={`${tableBg} border rounded-xl overflow-hidden shadow-md`}>
+        <div className={`${theme.cardWithText} border rounded-xl overflow-hidden shadow-md`}>
             <table className="w-full text-left border-collapse">
                 <thead>
-                    <tr className={`${headerBg} border-b ${borderCol} text-xs font-semibold uppercase tracking-wider`}>
+                    <tr className={`${theme.tableHeader} border-b ${theme.border} text-xs font-semibold uppercase tracking-wider`}>
                         <th className="py-3.5 px-4 w-24">Image</th>
                         <th className="py-3.5 px-4">Work Order Name</th>
                         <th className="py-3.5 px-4">Catalog Number</th>
@@ -38,7 +33,7 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workO
                             <tr
                                 key={wo.id}
                                 onClick={() => navigate(`/workOrder/${wo.id}`)}
-                                className={`${rowHover} cursor-pointer transition-colors`}
+                                className={`${theme.rowHover} cursor-pointer transition-colors`}
                             >
                                 <td 
                                     className="py-3 px-4"
@@ -58,20 +53,20 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workO
                                                 className="w-full h-full object-cover"
                                             />
                                         ) : (
-                                            <span className={`${textMuted} text-[10px] font-mono`}>NO IMG</span>
+                                            <span className={`${theme.textMuted} text-[10px] font-mono`}>NO IMG</span>
                                         )}
                                     </div>
                                 </td>
                                 <td className="py-3 px-4 font-medium text-sm">
                                     {wo.name || "Unnamed Work Order"}
                                 </td>
-                                <td className={`py-3 px-4 text-sm ${textMuted}`}>
+                                <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
                                     {wo.catalogNumber || "N/A"}
                                 </td>
-                                <td className={`py-3 px-4 text-sm ${textMuted}`}>
+                                <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
                                     {wo.bomName || "N/A"}
                                 </td>
-                                <td className={`py-3 px-4 text-sm ${textMuted}`}>
+                                <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
                                     {wo.workOrderOwner || "N/A"}
                                 </td>
                             </tr>

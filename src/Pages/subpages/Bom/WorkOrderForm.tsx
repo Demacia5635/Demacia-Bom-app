@@ -6,6 +6,7 @@ import { catalogTree, loadBomTree, workOrderLines, type BomTree } from "../../..
 import { isPurchasedPart, type PartModel, type WorkOrderModel, type WorkOrderPartModel } from "../../../util/Models";
 import { checkCatalogTree } from "../../../util/catalogNumbers";
 import ErrorBanner from "../../../components/ErrorBanner";
+import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 
 /**
  * A made part's manufacturing method from the files it keeps (the STL /
@@ -40,6 +41,7 @@ interface WorkOrderFormProps {
 
 export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkOrderFormProps) {
     const { isLight } = useThemeSync();
+    const theme = useThemeClasses();
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState<WorkOrderFormData>({
@@ -178,8 +180,6 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
 
     // Dynamic theme classes
     const formBg = isLight ? "bg-white border-zinc-300 text-zinc-900 shadow-xl" : "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-xl";
-    const headingColor = isLight ? "text-zinc-900" : "text-white";
-    const labelColor = isLight ? "text-zinc-600" : "text-zinc-400";
     const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:ring-blue-600/50 focus:border-blue-600" : "bg-zinc-950 border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:ring-blue-500/50 focus:border-blue-500";
     const cancelBtnClass = isLight ? "bg-zinc-300 hover:bg-zinc-400 text-zinc-800 focus:ring-zinc-400" : "bg-zinc-600 hover:bg-zinc-500 text-white focus:ring-zinc-400";
 
@@ -188,7 +188,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
             onSubmit={handleSubmit}
             className={`max-w-xl mx-auto border rounded-2xl p-6 space-y-5 transition-colors duration-200 ${formBg}`}
         >
-            <h2 className={`text-xl font-bold tracking-tight mb-4 ${headingColor}`}>
+            <h2 className={`text-xl font-bold tracking-tight mb-4 ${theme.textHeading}`}>
                 Work Order Details
             </h2>
 
@@ -203,7 +203,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
                 <div className="space-y-1.5">
                     <label
                         htmlFor="name"
-                        className={`block text-xs font-semibold uppercase tracking-wider ${labelColor}`}
+                        className={`block text-xs font-semibold uppercase tracking-wider ${theme.textLabel}`}
                     >
                         Name
                     </label>
@@ -222,7 +222,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
                 <div className="space-y-1.5">
                     <label
                         htmlFor="workOrderOwner"
-                        className={`block text-xs font-semibold uppercase tracking-wider ${labelColor}`}
+                        className={`block text-xs font-semibold uppercase tracking-wider ${theme.textLabel}`}
                     >
                         Work Order Owner
                     </label>
@@ -243,7 +243,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
             <div className="space-y-1.5">
                 <label
                     htmlFor="description"
-                    className={`block text-xs font-semibold uppercase tracking-wider ${labelColor}`}
+                    className={`block text-xs font-semibold uppercase tracking-wider ${theme.textLabel}`}
                 >
                     Description
                 </label>
@@ -262,7 +262,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
             <div className="space-y-1.5">
                 <label
                     htmlFor="comments"
-                    className={`block text-xs font-semibold uppercase tracking-wider ${labelColor}`}
+                    className={`block text-xs font-semibold uppercase tracking-wider ${theme.textLabel}`}
                 >
                     Comments
                 </label>

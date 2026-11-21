@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import ErrorBanner from "../../components/ErrorBanner";
+import { useThemeClasses } from "../../util/misc/useThemeClasses";
 
 interface TelemetryEvent {
   _id: string;
@@ -64,6 +65,7 @@ function sumCounts(events: TelemetryEvent[]): Record<string, number> {
 
 export default function TelemetryPage() {
   const { isLight } = useThemeSync();
+  const theme = useThemeClasses();
   const [events, setEvents] = useState<TelemetryEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,21 +130,17 @@ export default function TelemetryPage() {
       .sort((a, b) => Object.values(b.counts).reduce((x, y) => x + y, 0) - Object.values(a.counts).reduce((x, y) => x + y, 0));
   }, [shown]);
 
-  const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
-  const cardBg = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
   const inputBg = isLight ? "bg-white border-zinc-300 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
-  const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
-  const rowBorder = isLight ? "border-zinc-200" : "border-zinc-800";
-  const headCell = `px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide ${textMuted}`;
+  const headCell = `px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide ${theme.textMuted}`;
   const cell = "px-3 py-2 text-sm whitespace-nowrap";
 
   return (
-    <div className={`min-h-screen p-6 transition-colors duration-200 ${pageBg}`}>
+    <div className={`min-h-screen p-6 transition-colors duration-200 ${theme.page}`}>
       <div className="max-w-7xl mx-auto space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Onshape footprint</h1>
-            <p className={`text-xs ${textMuted}`}>
+            <p className={`text-xs ${theme.textMuted}`}>
               Requests the BOM Chrome extension made to Onshape, by operation and user. The server and this website
               don't call Onshape.
             </p>
@@ -174,24 +172,24 @@ export default function TelemetryPage() {
 
         {/* Totals per kind of Onshape request */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div className={`border rounded-xl p-3 ${cardBg}`}>
-            <div className={`text-xs ${textMuted}`}>Onshape requests</div>
+          <div className={`border rounded-xl p-3 ${theme.card}`}>
+            <div className={`text-xs ${theme.textMuted}`}>Onshape requests</div>
             <div className="text-2xl font-bold">{totalRequests.toLocaleString()}</div>
-            <div className={`text-xs ${textMuted}`}>{shown.length.toLocaleString()} operations</div>
+            <div className={`text-xs ${theme.textMuted}`}>{shown.length.toLocaleString()} operations</div>
           </div>
           {KINDS.filter((k) => totals[k.key]).map((k) => (
-            <div key={k.key} className={`border rounded-xl p-3 ${cardBg}`}>
-              <div className={`text-xs ${textMuted}`}>{k.label}</div>
+            <div key={k.key} className={`border rounded-xl p-3 ${theme.card}`}>
+              <div className={`text-xs ${theme.textMuted}`}>{k.label}</div>
               <div className="text-2xl font-bold">{(totals[k.key] ?? 0).toLocaleString()}</div>
             </div>
           ))}
         </div>
 
         {/* Per user */}
-        <div className={`border rounded-xl overflow-x-auto ${cardBg}`}>
+        <div className={`border rounded-xl overflow-x-auto ${theme.card}`}>
           <table className="w-full">
             <thead>
-              <tr className={`border-b ${rowBorder}`}>
+              <tr className={`border-b ${theme.border}`}>
                 <th className={headCell}>User</th>
                 <th className={headCell}>Operations</th>
                 <th className={headCell}>Requests</th>
@@ -203,19 +201,19 @@ export default function TelemetryPage() {
             </thead>
             <tbody>
               {perUser.map((u) => (
-                <tr key={u.name} className={`border-b last:border-0 ${rowBorder}`}>
+                <tr key={u.name} className={`border-b last:border-0 ${theme.border}`}>
                   <td className={`${cell} font-medium`}>{u.name}</td>
                   <td className={cell}>{u.operations}</td>
                   <td className={cell}>{Object.values(u.counts).reduce((a, b) => a + b, 0)}</td>
                   {KINDS.map((k) => (
-                    <td key={k.key} className={`${cell} ${u.counts[k.key] ? "" : textMuted}`}>{u.counts[k.key] ?? 0}</td>
+                    <td key={k.key} className={`${cell} ${u.counts[k.key] ? "" : theme.textMuted}`}>{u.counts[k.key] ?? 0}</td>
                   ))}
-                  <td className={`${cell} ${textMuted}`}>{u.last ? new Date(u.last).toLocaleString() : ""}</td>
+                  <td className={`${cell} ${theme.textMuted}`}>{u.last ? new Date(u.last).toLocaleString() : ""}</td>
                 </tr>
               ))}
               {perUser.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={KINDS.length + 4} className={`${cell} text-center ${textMuted}`}>No activity in this range.</td>
+                  <td colSpan={KINDS.length + 4} className={`${cell} text-center ${theme.textMuted}`}>No activity in this range.</td>
                 </tr>
               )}
             </tbody>
@@ -223,10 +221,10 @@ export default function TelemetryPage() {
         </div>
 
         {/* Every operation, newest first */}
-        <div className={`border rounded-xl overflow-x-auto ${cardBg}`}>
+        <div className={`border rounded-xl overflow-x-auto ${theme.card}`}>
           <table className="w-full">
             <thead>
-              <tr className={`border-b ${rowBorder}`}>
+              <tr className={`border-b ${theme.border}`}>
                 <th className={headCell}>When</th>
                 <th className={headCell}>User</th>
                 <th className={headCell}>Operation</th>
@@ -241,16 +239,16 @@ export default function TelemetryPage() {
             </thead>
             <tbody>
               {shown.map((e) => (
-                <tr key={e._id} className={`border-b last:border-0 ${rowBorder}`}>
-                  <td className={`${cell} ${textMuted}`}>{new Date(e.at).toLocaleString()}</td>
+                <tr key={e._id} className={`border-b last:border-0 ${theme.border}`}>
+                  <td className={`${cell} ${theme.textMuted}`}>{new Date(e.at).toLocaleString()}</td>
                   <td className={cell}>{e.user || "(unknown)"}</td>
                   <td className={`${cell} font-medium`}>{e.action}</td>
                   <td className={cell} title={e.documentID}>{e.assembly}</td>
                   <td className={cell}>{e.total}</td>
                   {KINDS.map((k) => (
-                    <td key={k.key} className={`${cell} ${e.counts?.[k.key] ? "" : textMuted}`}>{e.counts?.[k.key] ?? 0}</td>
+                    <td key={k.key} className={`${cell} ${e.counts?.[k.key] ? "" : theme.textMuted}`}>{e.counts?.[k.key] ?? 0}</td>
                   ))}
-                  <td className={`${cell} ${textMuted}`}>{formatDuration(e.durationMs)}</td>
+                  <td className={`${cell} ${theme.textMuted}`}>{formatDuration(e.durationMs)}</td>
                   <td className={cell} title={e.error}>
                     {e.ok ? (
                       <span className="text-green-500">{e.failed > 0 ? `OK (${e.failed} failed)` : "OK"}</span>
@@ -263,7 +261,7 @@ export default function TelemetryPage() {
             </tbody>
           </table>
         </div>
-        <p className={`text-xs ${textMuted}`}>Showing up to 2,000 most recent operations in the selected range.</p>
+        <p className={`text-xs ${theme.textMuted}`}>Showing up to 2,000 most recent operations in the selected range.</p>
       </div>
     </div>
   );
