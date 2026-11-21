@@ -15,6 +15,7 @@ import Highlight from "../../components/Highlight";
 import { useSearchShortcut } from "../../components/useSearchShortcut";
 import { usePartInAddress } from "../../components/usePartInAddress";
 import CopyButton from "../../components/CopyButton";
+import { SkeletonCards } from "../../components/Skeleton";
 
 /** A search result: a part, or a sub-assembly (an assembly some other assembly uses). */
 type SearchItem =
@@ -171,9 +172,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
             {/* Results Grid */}
             <div className="max-w-6xl mx-auto">
                 {loading ? (
-                    <div className={`${cardBg} border rounded-xl p-12 text-center`}>
-                        <p className={`${theme.textMuted} text-sm font-medium`}>Loading {standard ? "standard parts" : "parts"}...</p>
-                    </div>
+                    <SkeletonCards label={standard ? "Loading standard parts…" : "Loading parts…"} />
                 ) : error ? (
                     <ErrorBanner title="Error loading parts" className="p-4 rounded-xl">
                         <ApiErrorText error={error} />

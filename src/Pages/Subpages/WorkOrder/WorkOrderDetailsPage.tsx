@@ -25,6 +25,7 @@ import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 import { showToast } from "../../../util/toast";
 import { usePartInAddress } from "../../../components/usePartInAddress";
 import SaveStatus from "../../../components/SaveStatus";
+import { SkeletonTable } from "../../../components/Skeleton";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -283,7 +284,7 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {loading ? (
-                <div className={`p-8 text-center ${theme.textMuted}`}>Fetching Work Order parts...</div>
+                <SkeletonTable label="Loading the work order's parts…" columns={9} />
             ) : workOrderData && !workOrderData.bomID ? (
                 <div className={`p-8 text-center ${theme.textMuted}`}>This work order isn&apos;t linked to an assembly, so it has no parts to show.</div>
             ) : (

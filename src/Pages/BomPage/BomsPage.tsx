@@ -8,6 +8,7 @@ import ErrorBanner, { ApiErrorText } from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import { matchesSearch, searchPattern } from "../../util/search";
 import { useSearchShortcut } from "../../components/useSearchShortcut";
+import { SkeletonList } from "../../components/Skeleton";
 
 export type BomSummary = Omit<BomModel, 'description' | 'comments' | 'onshapeURL' | 'onshapeID' | 'parts' | 'subAssemblies' | 'createdAt'>;
 
@@ -55,7 +56,12 @@ export default function BomsPage() {
   );
 
   if (loading) {
-    return <div className={`p-8 text-center min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50 text-zinc-500" : "bg-zinc-950 text-zinc-400"}`}>Loading BOMs...</div>;
+    return (
+      <div className={`p-8 max-w-7xl mx-auto min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50" : "bg-zinc-950 text-zinc-100"}`}>
+        <h1 className={`text-2xl font-bold mb-6 ${textHeading}`}>Boms</h1>
+        <SkeletonList label="Loading BOMs…" />
+      </div>
+    );
   }
 
   return (

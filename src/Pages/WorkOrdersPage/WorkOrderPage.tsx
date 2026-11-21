@@ -7,6 +7,7 @@ import { recordImageSrc } from "../../util/recordImage";
 import ErrorBanner from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import { useSearchShortcut } from "../../components/useSearchShortcut";
+import { SkeletonList } from "../../components/Skeleton";
 
 
 export function WorkOrdersPage() {
@@ -129,9 +130,7 @@ export function WorkOrdersPage() {
 
             <div className="max-w-6xl mx-auto">
                 {loading ? (
-                    <div className={`${theme.card} border rounded-xl p-12 text-center`}>
-                        <p className={`${theme.textMuted} text-sm font-medium`}>Loading work orders...</p>
-                    </div>
+                    <SkeletonList label="Loading work orders…" />
                 ) : filteredWorkOrders.length > 0 ? (
                     <WorkOrderTable workOrders={filteredWorkOrders} />
                 ) : (

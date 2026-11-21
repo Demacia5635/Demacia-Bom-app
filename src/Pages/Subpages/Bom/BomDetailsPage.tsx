@@ -22,6 +22,7 @@ import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 import { showToast } from "../../../util/toast";
 import { usePartInAddress } from "../../../components/usePartInAddress";
 import SaveStatus from "../../../components/SaveStatus";
+import { SkeletonTable } from "../../../components/Skeleton";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -373,7 +374,7 @@ export default function BomDetailsPage() {
       </div>
 
       {loading ? (
-        <div className={`p-8 text-center ${theme.textMuted}`}>Loading BOM data...</div>
+        <SkeletonTable label="Loading the BOM…" columns={9} />
       ) : (
         <div 
           onClick={handleTableClick}
