@@ -2,6 +2,7 @@ import { Suspense, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Appbar } from "./Appbar";
 import { Sidebar } from "./Sidebar";
+import Toasts from "./Toasts";
 import { useThemeSync } from "../util/misc/useThemeSync";
 import '../css/table.css';
 
@@ -28,6 +29,7 @@ export default function MainLayout() {
                     <Outlet />
                 </Suspense>
             </main>
+            <Toasts />
         </div>
     );
 }

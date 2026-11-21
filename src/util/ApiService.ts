@@ -1,4 +1,5 @@
 import { apiUrl, serverUrl } from "./backendHost";
+import { showToast } from "./toast";
 
 // apiUrl lives with BACKEND_HOST; still importable from here (the extension uses it).
 export { apiUrl } from "./backendHost";
@@ -84,7 +85,7 @@ export async function downloadDriveFile(fileId: string, filename: string): Promi
     await downloadFile(`/api/drive/file/id/${encodeURIComponent(fileId)}`, filename);
   } catch (err: any) {
     console.error("Failed to download file:", err);
-    alert(`Download failed: ${err?.message || "an unexpected error occurred."}`);
+    showToast(`Download failed: ${err?.message || "an unexpected error occurred."}`, "error");
   }
 }
 

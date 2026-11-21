@@ -22,6 +22,7 @@ import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
+import { showToast } from "../../../util/toast";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -237,11 +238,11 @@ export default function WorkOrderDetailsPage() {
                     setSelectedSubBom(subBom);
                     return;
                 }
-                window.alert(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`);
+                showToast(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`, "info");
                 return;
             }
             console.error("Failed to fetch part data for modal portal", err);
-            window.alert(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`);
+            showToast(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`, "error");
         }
     };
 

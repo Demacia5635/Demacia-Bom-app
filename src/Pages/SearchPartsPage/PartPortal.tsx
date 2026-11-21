@@ -9,6 +9,7 @@ import { recordImageSrc } from "../../util/recordImage";
 import { openExternal } from "../../util/openExternal";
 import ImageLightbox from "../../components/ImageLightbox";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
+import { showToast } from "../../util/toast";
 
 /** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
 const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
@@ -98,11 +99,11 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                 setLinkedBoms(matchingBoms);
                 setIsBomModalOpen(true);
             } else {
-                alert("This part is not currently linked to any BOM assemblies.");
+                showToast("This part is not currently linked to any BOM assemblies.", "info");
             }
         } catch (err) {
             console.error("Failed to fetch BOM list for linked assembly lookup:", err);
-            alert("Could not retrieve linked BOMs. Check console for details.");
+            showToast("Could not retrieve linked BOMs. Check console for details.", "error");
         } finally {
             setIsCheckingBoms(false);
         }

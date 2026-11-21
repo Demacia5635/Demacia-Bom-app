@@ -19,6 +19,7 @@ import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
+import { showToast } from "../../../util/toast";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -299,16 +300,16 @@ export default function BomDetailsPage() {
           setSelectedSubBom(await fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(subBomId)}`));
         } catch (bomErr) {
           console.error("Failed to fetch sub-assembly data", bomErr);
-          window.alert(`Couldn't load "${row.name || subBomId}".`);
+          showToast(`Couldn't load "${row.name || subBomId}".`, "error");
         }
         return;
       }
       if (err?.statusCode === 404) {
-        window.alert(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`);
+        showToast(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`, "info");
         return;
       }
       console.error("Failed to fetch part data for modal portal", err);
-      window.alert(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`);
+      showToast(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`, "error");
     }
   };
 
