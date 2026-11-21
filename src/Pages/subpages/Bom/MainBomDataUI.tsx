@@ -8,6 +8,8 @@ import { useThemeSync } from "../../../util/misc/useThemeSync";
 
 const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
   const [isCreatingWO, setCreatingWO] = useState(false);
+  // While the work order is being created, a click on the backdrop doesn't close the form.
+  const [isCreatingBusy, setCreatingBusy] = useState(false);
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
   
   // The app's theme toggle (like every other page), not the OS setting.
@@ -102,7 +104,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
       
       {isCreatingWO && createPortal(
         <div
-          onClick={() => setCreatingWO(false)}
+          onClick={() => { if (!isCreatingBusy) setCreatingWO(false); }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
         >
           <div onClick={(e) => e.stopPropagation()}>
@@ -110,6 +112,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
               bomId={resolvedBomId}
               avatarID={bom.avatarID}
               onCancel={() => setCreatingWO(false)}
+              onBusyChange={setCreatingBusy}
             />
           </div>
         </div>,

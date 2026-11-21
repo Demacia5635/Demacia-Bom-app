@@ -34,9 +34,11 @@ interface WorkOrderFormProps {
     bomId: string;
     avatarID?: string;
     onCancel?: () => void;
+    /** Told when creating starts and ends, so the dialog around it can't be closed meanwhile. */
+    onBusyChange?: (busy: boolean) => void;
 }
 
-export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps) {
+export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkOrderFormProps) {
     const { isLight } = useThemeSync();
     const navigate = useNavigate();
 
@@ -167,6 +169,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
         e.preventDefault();
         setError(null);
         setLoading(true);
+        onBusyChange?.(true);
 
         try {
             const id = Date.now().toString();
@@ -199,6 +202,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             setError(err.message || "An unexpected error occurred during work order creation.");
         } finally {
             setLoading(false);
+            onBusyChange?.(false);
         }
     };
 
