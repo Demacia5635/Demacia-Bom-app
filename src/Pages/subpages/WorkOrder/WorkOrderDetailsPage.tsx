@@ -12,7 +12,6 @@ import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import SubAssemblySummary from "../Bom/SubAssemblySummary";
 import { recordImageSrc } from "../../../util/recordImage";
 import { fetchPartsByIds } from "../../../util/records";
-import { printPartsPdf } from "../../../util/exportPartsPdf";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
 import { toCncGroups } from "./cncGroups";
@@ -23,6 +22,7 @@ import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave
 import { useCncGroups } from "./useCncGroups";
 import { toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
 import WorkOrderFilters from "./WorkOrderFilters";
+import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -352,47 +352,12 @@ export default function WorkOrderDetailsPage() {
     const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
 
     // ---- Export the shown parts (image, name, quantity) to PDF ----
-    const tableAreaRef = useRef<HTMLDivElement>(null);
-    /** null when idle; otherwise images loaded so far. */
-    const [pdfProgress, setPdfProgress] = useState<{ loaded: number; total: number } | null>(null);
-
-    const handleExportPdf = async () => {
-        const shownBomName = bomName?.workOrderID === workOrderID ? bomName?.name : undefined;
-        // The rows as the table shows them: filtered and in its sort order.
-        const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
-            .map(rowFromElement)
-            .filter((r): r is WorkOrderTableRow => !!r);
-        if (shownRows.length === 0) {
-            window.alert("No parts are shown, so there's nothing to export.");
-            return;
-        }
-
-        const filterLines = filters.describe();
-
-        setPdfProgress({ loaded: 0, total: 0 });
-        try {
-            await printPartsPdf({
-                title: workOrderData?.name || "Work order",
-                subtitleLines: [
-                    shownBomName ? `Assembly: ${shownBomName}` : "",
-                    filterLines.length > 0 ? `Filters: ${filterLines.join(" · ")}` : "All parts",
-                    `Exported ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Jerusalem" })}`,
-                ],
-                rows: shownRows.map((r) => ({
-                    name: r.name,
-                    catalogNumber: r.catalogNumber,
-                    quantity: r.quantityTotal,
-                    imageSrc: r.avatar,
-                })),
-                onProgress: (loaded, total) => setPdfProgress({ loaded, total }),
-            });
-        } catch (err: any) {
-            console.error("PDF export failed:", err);
-            window.alert(`Couldn't export the PDF: ${err?.message || err}`);
-        } finally {
-            setPdfProgress(null);
-        }
-    };
+    const { tableAreaRef, pdfProgress, exportPdf: handleExportPdf } = useWorkOrderPdfExport({
+        rowFromElement,
+        title: workOrderData?.name || "Work order",
+        assemblyName: bomName?.workOrderID === workOrderID ? bomName?.name : undefined,
+        filterLines: filters.describe(),
+    });
 
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
