@@ -82,6 +82,7 @@ The server makes one query per level, then one for all the parts. A sub-assembly
 | Route | Body | Reply |
 |---|---|---|
 | `GET /all` | | Every work order, oldest first. `?bomID=` keeps only the work orders of that assembly (also with paging). See [Lists](#lists). |
+| `GET /summary` | | Every work order with its progress (below). |
 | `GET /id/:id` | | The work order, or `404`. |
 | `POST /id/:id` | The work order's fields | Creates or updates it: `201` or `200`. `parts` is used only on create (deduplicated by `partID`, first wins); `cncGroups` is ignored. Both change only through the routes below. |
 | `POST /id/:id/part` | `{ partID, changes: { field: value } }` | Changes one part of the work order (it is added if missing). Returns that part. Editable fields: `statusCode`, `Priority`, `manufacturingMethod`, `productionGCOwner`, `productionMakingOwner`, `comments`, `links`, `approxArrivalDate`, `quantityMade`. |
@@ -96,6 +97,30 @@ How the CNC-group route behaves:
 - **A `groupID` with no `partIDs`:** changes only the links. If someone else removed the group meanwhile, the reply is `409`.
 
 The whole change is a single atomic update, so people merging at the same time don't overwrite each other.
+
+### `GET /api/db/workOrder/summary`
+
+Every work order, oldest first, with its progress counted from its assembly's **live** BOM, the same way the work-order page does:
+
+```json
+[{
+  "id": "...", "name": "...", "owner": "...", "createdAt": "...", "updatedAt": "...", "bomID": "...",
+  "lines": 40, "trackedParts": 35, "madeParts": 28, "finishedParts": 12,
+  "madeQty": 90, "finishedQty": 31, "totalQty": 120,
+  "byStatus": { "In Planning": 10, "Finished Manufacturing": 12, "Untracked": 5 }
+}]
+```
+
+- **Lines:** every part, with each quantity multiplied through its sub-assemblies. A bought sub-assembly (marked standard, or with a vendor) is one line.
+- **A line's status:** the stored one (old numeric codes become names; the default is "In Planning"). A bought sub-assembly with no stored entry is "Untracked".
+- **`trackedParts`:** lines that aren't "Untracked".
+- **`madeParts`:** lines the team makes, which the bar divides by. A line is excluded if it's purchased (Standard Content, marked standard, has a vendor, or its method is "Purchased") or "Untracked".
+- **`finishedParts`:** made lines whose status is "Finished Manufacturing" or whose priority is "Finished".
+- **`*Qty`:** the same counts, as total quantities.
+- **`byStatus`:** counts all lines.
+- **Errors:** a work order whose tree can't be built (no assembly, a missing assembly, an assembly that contains itself) has `error` with the page's message and no counts.
+
+The whole list costs one query for the work orders, one per BOM level for all of them together, and one for the parts.
 
 ## Lists
 
