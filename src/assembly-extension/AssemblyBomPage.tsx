@@ -49,6 +49,7 @@ import {
 import BomToolbar from "./BomToolbar";
 import BomHeader from "./BomHeader";
 import { bomPageUrl } from "./websiteLinks";
+import { useServerStatus } from "./useServerStatus";
 import {
   catalogNumberInName,
   changedFields,
@@ -140,6 +141,8 @@ export default function AssemblyBomPage() {
   const [cachedAt, setCachedAt] = useState<number | null>(null);
   /** When the tree on screen was read from Onshape (for "Loaded 5 min ago"). */
   const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  /** Our server's status dot (checked on open and before Publish). */
+  const { status: serverStatus, check: checkServer } = useServerStatus();
   /** When the tree on screen was loaded from Onshape (kept when edits update the saved copy). Set by every load. */
   const treeSavedAtRef = useRef<number>(0);
   /** The tree on screen, for handlePublish when it isn't handed a freshly loaded one. */
@@ -997,6 +1000,8 @@ export default function AssemblyBomPage() {
           rootIsPublished={rootIsPublished}
           websiteUrl={rootBomDB?.id ? bomPageUrl(rootBomDB.id) : null}
           loadedAt={loading ? null : loadedAt}
+          serverStatus={serverStatus}
+          onCheckServer={checkServer}
           topProblem={topProblem}
           topNumber={topAssembly.number}
           theme={theme}
@@ -1007,6 +1012,7 @@ export default function AssemblyBomPage() {
           pendingEditCount={pendingEditCount}
           onRefresh={handleRefresh}
           onPublish={() => {
+            checkServer(); // shown in the header while the dialog is open
             setPublishError(null);
             setSavedRecords(null); // checked again for this dialog
             setPublishOpen(true);

@@ -2,6 +2,8 @@ import type { usePanelThemeSetting } from "../extension/panel/theme";
 import { openExternal } from "../util/openExternal";
 import { describeAge } from "./treeCache";
 import { useNow } from "./useNow";
+import ServerStatusDot from "./ServerStatusDot";
+import type { ServerStatus } from "./useServerStatus";
 
 /**
  * The top of the panel: the assembly's name, description and status notes,
@@ -13,6 +15,8 @@ export default function BomHeader({
   rootIsPublished,
   websiteUrl,
   loadedAt,
+  serverStatus,
+  onCheckServer,
   topProblem,
   topNumber,
   theme,
@@ -31,6 +35,8 @@ export default function BomHeader({
   websiteUrl: string | null;
   /** When the tree on screen was read from Onshape; null while loading. */
   loadedAt: number | null;
+  serverStatus: ServerStatus;
+  onCheckServer: () => void;
   /** Why the top assembly's catalog number would stop a work order, if it would. */
   topProblem: string | undefined;
   topNumber: string;
@@ -48,7 +54,10 @@ export default function BomHeader({
   return (
     <div className="assembly-bom-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
       <div>
-        <h1 className="assembly-bom-title text-2xl font-bold">{displayName}</h1>
+        <h1 className="assembly-bom-title text-2xl font-bold">
+          {displayName}
+          <ServerStatusDot status={serverStatus} onCheck={onCheckServer} />
+        </h1>
         {description && (
           <p className="assembly-bom-subtitle text-zinc-500 text-sm mt-1">{description}</p>
         )}
