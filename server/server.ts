@@ -1,9 +1,23 @@
 import dns from 'node:dns';
 import type { Server } from 'node:http';
 import mongoose from 'mongoose';
-import { PORT } from './config';
+import { PORT, SERVER_VERSION, allowedOrigins, google } from './config';
 import app from './app';
 import { connect } from './db/connection';
+import { TELEMETRY_TTL_SECONDS } from './models/TelemetryEvent';
+
+/** One line with the settings in use, for Render's logs. Never secrets. */
+function settingsSummary(): string {
+  const set = (value: string | undefined) => (value ? "set" : "MISSING");
+  return [
+    `[settings] v${SERVER_VERSION}`,
+    `port ${PORT}`,
+    `NODE_ENV ${process.env.NODE_ENV || "(not set)"}`,
+    `origins ${allowedOrigins.join(", ") || "(none)"}`,
+    `Drive folders: image ${set(google.imageFolderId)}, STL ${set(google.stlFolderId)}, Parasolid ${set(google.parasolidFolderId)}`,
+    `telemetry kept ${Math.round(TELEMETRY_TTL_SECONDS / 86_400)} days`,
+  ].join(" | ");
+}
 
 dns.setDefaultResultOrder("ipv4first");
 
@@ -47,6 +61,7 @@ async function startServer(): Promise<void> {
   try {
     server = app.listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
+      console.log(settingsSummary());
     });
     await connect();
   } catch (error) {
