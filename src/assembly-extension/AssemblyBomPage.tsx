@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Table, { type RowMenuItem } from "../components/Table";
+import Table, { type ExpandToggleStyle, type RowMenuItem } from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import { useOnshapeClient, useOnshapeContext } from "../extension/onshapeHostShim";
@@ -1305,6 +1305,15 @@ export default function AssemblyBomPage() {
     return out;
   }, [rows]);
 
+  /** The expand button of a part row that opens its copies: blue and round, unlike an assembly's. */
+  const copiesToggle = useCallback(
+    (row: AssemblyBomRow): ExpandToggleStyle | undefined =>
+      !row.isAssembly && row.copies?.length
+        ? { className: "expand-toggle-copies", title: `Show the ${row.copies.length} copies of this part`, closed: "▸", open: "▾" }
+        : undefined,
+    []
+  );
+
   /** Right-click menu: fixing a wrong guess of the copy check. */
   const rowMenu = useCallback(
     (row: AssemblyBomRow): RowMenuItem[] | undefined => {
@@ -2149,6 +2158,7 @@ export default function AssemblyBomPage() {
           <Table
             data={tableRows}
             rowMenu={rowMenu}
+            expandToggle={copiesToggle}
             columnsData={columns}
             setData={(newData) => handleTableEdit(newData as AssemblyBomRow[])}
             newRowFunction={undefined}

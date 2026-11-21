@@ -35,7 +35,14 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
   });
 
   return [
-    { key: "avatar", label: "Avatar", type: "image", isDisabled: isStandardContent },
+    {
+      key: "avatar",
+      label: "Avatar",
+      type: "image",
+      isDisabled: isStandardContent,
+      // A part modeled several times in one Part Studio, listed as one row.
+      badge: (row: AssemblyBomRow) => (row.copies?.length && !row.copyOf ? `×${row.copies.length} copies` : undefined),
+    },
     editable("name", "Name", "string"),
     // Parts named only by catalog number (spacers...) can be told apart by size.
     ...(showSize ? [{ key: "size", label: "Size", type: "string", isDisabled: () => true } satisfies ColumnConfig] : []),
