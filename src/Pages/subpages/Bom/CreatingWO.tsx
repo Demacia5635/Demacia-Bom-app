@@ -155,8 +155,8 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
                 ...(method ? { manufacturingMethod: method } : {}),
                 productionGCOwner: "",
                 productionMakingOwner: "",
-                updatedAt: new Date(),
-                createdAt: new Date(),
+                updatedAt: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
             });
         }
         return collectedParts;
@@ -194,8 +194,8 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
                 parts: parts,
                 avatarID: avatarID,
                 comments: formData.comments,
-                createdAt: new Date(),
-                updatedAt: new Date(),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
             };
 
             // Same server as every other request (localhost:5050 when run locally).

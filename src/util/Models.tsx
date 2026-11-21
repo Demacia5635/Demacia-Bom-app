@@ -22,8 +22,14 @@ export interface BomModel {
   filesModelVersion?: string;
   /** Marked as a standard (bought) part in the extension: its insides aren't used. */
   markedStandard?: boolean;
-  updatedAt?: Date;
-  createdAt?: Date;
+  projectCatalogNumber?: string;
+  /** Older image fields (recordImage.ts); new records use avatarID. */
+  driveFileId?: string;
+  imageUrl?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
 }
 
 export interface PartModel {
@@ -58,8 +64,16 @@ export interface PartModel {
   wantParasolid?: boolean;
   /** Model version the saved thumbnail/STL/Parasolid were made from. */
   filesModelVersion?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  links?: string;
+  /** Production type id (server/db/enum.ts). */
+  productionType?: number;
+  /** Older image fields (recordImage.ts); new records use avatarID. */
+  driveFileId?: string;
+  imageUrl?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
 }
 
 /**
@@ -93,8 +107,10 @@ export interface WorkorderPartModel {
   comments?: string;
   links?: string;
   approxArrivalDate?: string;
-  updatedAt?: Date;
-  createdAt?: Date;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
 }
 
 /** A work order as stored (server/models/WorkOrder.ts). */
@@ -109,8 +125,10 @@ export interface WorkorderModel {
   cncGroups?: { id: string; partIDs: string[]; links?: string }[];
   avatarID?: string;
   comments?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
 }
 
 /**

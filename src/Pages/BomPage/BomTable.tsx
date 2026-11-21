@@ -74,8 +74,7 @@ const BomRow: React.FC<BomRowProps> = ({
           // All sub-assemblies in one request.
           const records = await fetchBomsByIds(fullBom.subAssemblies.map((sub) => sub.bomID));
           const subBoms = fullBom.subAssemblies.map((sub) => {
-              // Older records also carry driveFileId / imageUrl (not in BomModel).
-              const subBomRecord = (records.get(sub.bomID) ?? null) as (BomModel & { driveFileId?: string; imageUrl?: string }) | null;
+              const subBomRecord = records.get(sub.bomID) ?? null;
               return {
                 id: sub.bomID,
                 name: subBomRecord?.name || sub.bomID,
