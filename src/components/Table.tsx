@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthenticatedImage } from "./AuthenticatedImage";
 import DraftInput from "./table/DraftInput";
+import { useStickyFit } from "./table/useStickyFit";
+import { useSyncedHScroll } from "./table/useSyncedHScroll";
 import { filterMatches, groupChildren, mergedCellSpans, renderKeys, visibleRows } from "./table/visibleRows";
 
 export interface RowData {
@@ -93,9 +95,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         return () => window.removeEventListener('scroll', hide, true);
     }, [problemTip]);
 
-    const wrapperRef = useRef<HTMLDivElement>(null);
-    const bottomScrollRef = useRef<HTMLDivElement>(null);
-    const [tableWidth, setTableWidth] = useState<number>(0);
+    // Bottom scrollbar synced with the table (table/useSyncedHScroll.ts).
+    const { wrapperRef, bottomScrollRef, tableWidth } = useSyncedHScroll();
     const [autoLastColWidth, setAutoLastColWidth] = useState<number | null>(null);
 
     // Only the user's column order is state; the columns themselves always come
@@ -123,27 +124,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     }, [columnsData, columnOrder]);
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(initialSort ?? null);
 
-    // Sticky header: the table must scroll inside its own box for the header to
-    // stay pinned, so the box is sized to reach the bottom of the window.
-    const [fitHeight, setFitHeight] = useState<number | null>(null);
-    useEffect(() => {
-        if (!stickyHeader) return;
-        const fit = () => {
-            const wrapper = wrapperRef.current;
-            if (!wrapper) return;
-            const top = wrapper.getBoundingClientRect().top + window.scrollY;
-            // Leave room for the synced horizontal scrollbar under the table.
-            setFitHeight(Math.max(200, window.innerHeight - top - 24));
-        };
-        fit();
-        window.addEventListener('resize', fit);
-        const ro = new ResizeObserver(fit);
-        if (wrapperRef.current?.parentElement) ro.observe(wrapperRef.current.parentElement);
-        return () => {
-            window.removeEventListener('resize', fit);
-            ro.disconnect();
-        };
-    }, [stickyHeader]);
+    // Sticky header: the box is sized to reach the bottom of the window (table/useStickyFit.ts).
+    const fitHeight = useStickyFit(wrapperRef, stickyHeader);
 
     // Unchanged state when already closed: this runs on every scroll and click,
     // and a new object each time re-rendered the whole table.
@@ -161,49 +143,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         return () => window.removeEventListener('pointerdown', handlePointerDown, true);
     }, [contextMenu.visible]);
 
-    // Synchronize horizontal scrolling between the main table wrapper and the bottom scrollbar
-    useEffect(() => {
-        const wrapper = wrapperRef.current;
-        const bottomScroll = bottomScrollRef.current;
-        if (!wrapper || !bottomScroll) return;
-
-        const handleWrapperScroll = () => {
-            if (bottomScroll.scrollLeft !== wrapper.scrollLeft) {
-                bottomScroll.scrollLeft = wrapper.scrollLeft;
-            }
-        };
-
-        const handleBottomScroll = () => {
-            if (wrapper.scrollLeft !== bottomScroll.scrollLeft) {
-                wrapper.scrollLeft = bottomScroll.scrollLeft;
-            }
-        };
-
-        wrapper.addEventListener('scroll', handleWrapperScroll);
-        bottomScroll.addEventListener('scroll', handleBottomScroll);
-
-        return () => {
-            wrapper.removeEventListener('scroll', handleWrapperScroll);
-            bottomScroll.removeEventListener('scroll', handleBottomScroll);
-        };
-    }, []);
-
-    // Track table content width for the synced bottom scrollbar spacer. The
-    // <table> is always mounted and the observer follows its size, so it's
-    // created once (not again after every edit).
-    useEffect(() => {
-        const table = wrapperRef.current?.querySelector('table');
-        if (!table) return;
-
-        const updateWidth = () => {
-            setTableWidth(table.scrollWidth);
-        };
-
-        updateWidth();
-        const observer = new ResizeObserver(updateWidth);
-        observer.observe(table);
-        return () => observer.disconnect();
-    }, []);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -246,7 +185,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         const ro = new ResizeObserver(recompute);
         ro.observe(wrapper);
         return () => ro.disconnect();
-    }, [columns, columnWidths, defaultColWidth, minLastColWidth]);
+    }, [columns, columnWidths, defaultColWidth, minLastColWidth, wrapperRef]);
 
     const handleResizeStart = (e: React.PointerEvent, key: string) => {
         e.stopPropagation();
