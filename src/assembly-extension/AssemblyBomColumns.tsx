@@ -17,7 +17,13 @@ export type CellProblem = (row: AssemblyBomRow, key: string) => string | undefin
  * in the database yet: what Publish BOM writes there.
  * `showSize` adds the read-only Size column (bounding box) after Name.
  */
-export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defaultEngineer = "", showSize = false): ColumnConfig[] {
+export default function buildAssemblyBomColumns(
+  cellProblem?: CellProblem,
+  defaultEngineer = "",
+  showSize = false,
+  /** "↺" on an edited row: puts its cells back to their saved (or loaded) values. */
+  onRevertRow?: (row: AssemblyBomRow) => void
+): ColumnConfig[] {
   /** Editable column: disabled for Standard Content, marked while it has an unpublished change. */
   const editable = (key: string, label: string, type: "string" | "number"): ColumnConfig => ({
     key,
@@ -31,6 +37,20 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
   return [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: isLockedRow },
     editable("name", "Name", "string"),
+    // Shown only on edited rows (AssemblyBomPage.css hides the disabled ones).
+    ...(onRevertRow
+      ? [
+          {
+            key: "revert",
+            label: "↺",
+            type: "button",
+            buttonText: "↺",
+            width: 44,
+            isDisabled: (row: AssemblyBomRow) => !row.modified?.length,
+            onButtonClick: onRevertRow,
+          } satisfies ColumnConfig,
+        ]
+      : []),
     // Parts named only by catalog number (spacers...) can be told apart by size.
     ...(showSize ? [{ key: "size", label: "Size", type: "string", isDisabled: () => true } satisfies ColumnConfig] : []),
     editable("description", "Description", "string"),

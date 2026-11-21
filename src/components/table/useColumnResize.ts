@@ -32,7 +32,7 @@ export function useColumnResize(
 
           const othersWidth = columns
               .slice(0, -1)
-              .reduce((sum, c) => sum + (columnWidths[c.key] || defaultColWidth), 0);
+              .reduce((sum, c) => sum + (columnWidths[c.key] || c.width || defaultColWidth), 0);
 
           const available = wrapper.clientWidth - othersWidth;
           setAutoLastColWidth(Math.max(minLastColWidth, available));

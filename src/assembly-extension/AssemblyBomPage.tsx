@@ -61,7 +61,7 @@ import { useOnshapeChangeWatch } from "./useOnshapeChangeWatch";
 import { notifyPublishEnded } from "./publishNotify";
 import { useEditHistory } from "./useEditHistory";
 import ShortcutsHelp from "./ShortcutsHelp";
-import { isTyping, SEARCH_INPUT_ID } from "./shortcuts";
+import { isTyping, SEARCH_INPUT_ID, SHORTCUTS } from "./shortcuts";
 import {
   catalogNumberInName,
   changedFields,
@@ -383,18 +383,6 @@ export default function AssemblyBomPage() {
   /** "Show size": the Size column, filled from Onshape (remembered in this browser). */
   const [showSize, setShowSize] = usePersistentToggle("showSize");
 
-  // Rebuilt when the problems change (after edits): cheap, the table only
-  // re-reads its column list.
-  const columns = useMemo(
-    () =>
-      buildAssemblyBomColumns(
-        (row, key) => workOrderProblems.get(row.id)?.get(key),
-        onshapeUserName,
-        showSize
-      ),
-    [workOrderProblems, onshapeUserName, showSize]
-  );
-
   /** Sub-assemblies whose insides are being loaded after their standard mark was removed. */
   const [subtreeLoads, setSubtreeLoads] = useState(0);
 
@@ -655,6 +643,46 @@ export default function AssemblyBomPage() {
   }, [hideStandardParts, hideStandardAssemblies]);
   const standardPartCount = useMemo(() => rows.filter((r) => !r.isAssembly && isHiddenByStandardToggle(r)).length, [rows]);
   const standardAssemblyCount = useMemo(() => rows.filter((r) => r.isAssembly && r.markedStandard).length, [rows]);
+
+  /**
+   * Puts edited rows back to their saved values (or, for items not saved yet,
+   * what was loaded): the rows with these IDs, or every edited row. Goes
+   * through the normal edit, so it can be undone and a standard mark's
+   * insides come back.
+   */
+  const revertRows = useCallback(
+    (ids: ReadonlySet<string> | null) => {
+      const next = rows.map((r) =>
+        !r.modified?.length || (ids && !ids.has(r.id)) ? r : ({ ...r, ...(r.baseline ?? r.loaded ?? {}) } as AssemblyBomRow)
+      );
+      handleTableEdit(next);
+    },
+    [rows, handleTableEdit]
+  );
+  const revertRow = useCallback((row: AssemblyBomRow) => revertRows(new Set([row.id])), [revertRows]);
+
+  // Rebuilt when the problems change (after edits): cheap, the table only
+  // re-reads its column list.
+  const columns = useMemo(
+    () =>
+      buildAssemblyBomColumns(
+        (row, key) => workOrderProblems.get(row.id)?.get(key),
+        onshapeUserName,
+        showSize,
+        // Only called on a click, not while rendering (it reads refs then).
+        // eslint-disable-next-line react/refs
+        revertRow
+      ),
+    [workOrderProblems, onshapeUserName, showSize, revertRow]
+  );
+  /** Items with edits (each counted once, wherever it's used). */
+  const editedItemCount = useMemo(() => new Set(rows.filter((r) => r.modified?.length).map((r) => r.id)).size, [rows]);
+  const [confirmRevertAll, setConfirmRevertAll] = useState(false);
+  /** "Revert all": asks first when more than 5 items were edited. */
+  const onRevertAll = useCallback(() => {
+    if (editedItemCount > 5) setConfirmRevertAll(true);
+    else revertRows(null);
+  }, [editedItemCount, revertRows]);
 
   /** Expand all / Collapse all (kept in the saved copy like any other expand). */
   const setAllExpanded = useCallback(
@@ -1060,7 +1088,7 @@ export default function AssemblyBomPage() {
   /** Keyboard shortcuts (shortcuts.ts). Dialogs handle their own keys while open. */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (publishOpen || discardEdits || showShortcuts) return;
+      if (publishOpen || discardEdits || showShortcuts || confirmRevertAll) return;
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl && !e.altKey && e.key.toLowerCase() === "f") {
         const search = document.getElementById(SEARCH_INPUT_ID) as HTMLInputElement | null;
@@ -1087,7 +1115,7 @@ export default function AssemblyBomPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [publishOpen, discardEdits, showShortcuts, busy, rows.length, handleRefresh, openPublish, history]);
+  }, [publishOpen, discardEdits, showShortcuts, confirmRevertAll, busy, rows.length, handleRefresh, openPublish, history]);
 
   if (!rootKey) {
     return (
@@ -1225,6 +1253,8 @@ export default function AssemblyBomPage() {
             canRedo={history.canRedo && !busy}
             onUndo={history.undo}
             onRedo={history.redo}
+            editedItemCount={busy ? 0 : editedItemCount}
+            onRevertAll={onRevertAll}
           />
           <Table
             data={rows}
@@ -1271,6 +1301,24 @@ export default function AssemblyBomPage() {
                   `Close this dialog and press Refresh BOM first.` +
                   (pendingEditCount > 0 ? ` Your unpublished edits in this copy will be lost on Refresh.` : "")
             }
+          />
+        )}
+
+        {confirmRevertAll && (
+          <ConfirmModal
+            title="Revert all edits?"
+            message={
+              <p>
+                Every edited cell of {editedItemCount} items goes back to its saved value (or, for items not saved
+                yet, to what was loaded). You can undo this with {SHORTCUTS.undo}.
+              </p>
+            }
+            confirmLabel="Revert all"
+            onCancel={() => setConfirmRevertAll(false)}
+            onConfirm={() => {
+              setConfirmRevertAll(false);
+              revertRows(null);
+            }}
           />
         )}
 

@@ -28,6 +28,8 @@ export default function BomToolbar({
   canRedo,
   onUndo,
   onRedo,
+  editedItemCount,
+  onRevertAll,
 }: {
   search: string;
   setSearch: (value: string) => void;
@@ -53,6 +55,9 @@ export default function BomToolbar({
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  /** Items with unpublished edits (0 while busy: the button is off). */
+  editedItemCount: number;
+  onRevertAll: () => void;
 }) {
   return (
     <div className="assembly-bom-toolbar mb-2 flex flex-wrap items-center gap-2">
@@ -89,6 +94,15 @@ export default function BomToolbar({
         aria-label="Redo"
       >
         ↷
+      </button>
+      <button
+        type="button"
+        className="bom-toolbar-btn"
+        onClick={onRevertAll}
+        disabled={editedItemCount === 0}
+        title={`Put every edited cell back to its saved value (${SHORTCUTS.undo} undoes it). Each edited row also has a ↺ button.`}
+      >
+        ↺ Revert all
       </button>
       {problemCount > 0 ? (
         <>

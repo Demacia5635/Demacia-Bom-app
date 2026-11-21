@@ -401,3 +401,18 @@ body.light-theme-active .bom-toolbar-btn:hover:not(:disabled) {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* The table's "↺" column (revert an edited row): a plain icon, only on edited rows. */
+.assembly-bom-page td[data-col-key="revert"] button {
+  background: transparent;
+  color: inherit;
+  padding: 0 6px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.assembly-bom-page td[data-col-key="revert"] button:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.25);
+}
+.assembly-bom-page td[data-col-key="revert"] button:disabled {
+  visibility: hidden;
+}

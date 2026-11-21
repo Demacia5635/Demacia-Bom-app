@@ -39,6 +39,8 @@ export interface ColumnConfig<T extends RowData = any> {
     key: string;
     label: string;
     type: 'string' | 'number' | 'select' | 'boolean' | 'button' | 'image';
+    /** Starting width in px (until the user resizes it); default: the table's defaultColWidth. */
+    width?: number;
     buttonText?: string;
     onButtonClick?: (row: T) => void;
     options?: string[];
@@ -197,7 +199,7 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     /** Width of the column at `idx` (the last one stretches to fill the table). */
     const colWidth = (col: ColumnConfig, idx: number): number => {
         const isLast = idx === columns.length - 1;
-        return columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
+        return columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : col.width ?? defaultColWidth);
     };
 
     // Frozen columns stick to the left; each one's offset is the width of those before it.
