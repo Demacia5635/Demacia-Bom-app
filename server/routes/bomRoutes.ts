@@ -7,6 +7,9 @@ router.get('/all', bomController.getAllBoms);
 // Read-only batch lookup: { ids: [...] } -> the assemblies that exist.
 router.post('/ids', bomController.getBomsByIds);
 
+// The BOM with all its sub-assemblies and parts, in one request.
+router.get('/tree/:id', bomController.getBomTree);
+
 router.get('/id/:id', bomController.getBomByID);
 router.post('/id/:id', bomController.upsertBomByID);
 router.delete('/id/:id', bomController.deleteBomByID);
