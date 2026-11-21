@@ -380,7 +380,9 @@ const retrackRow = (row: AssemblyBomRow): AssemblyBomRow => ({ ...row, modified:
 /**
  * Starts every request the tree walk will need, in parallel: each
  * sub-assembly's Onshape BOM and database record, and each part's record.
- * Failures are left in the cache for the walk to report as before.
+ * The insides of a sub-assembly the walk won't open (marked standard, or
+ * from a vendor) are skipped. A failure is dropped from the cache, so the
+ * walk asks again and reports it if it fails again.
  */
 async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new Set<string>()): Promise<void> {
   await Promise.all(
@@ -394,7 +396,10 @@ async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new S
       seen.add(keyString(key));
       const sub = await src.onshapeBom(key).catch(() => null);
       if (!sub) return;
-      await Promise.all([src.dbBom(key, bomIdOf(sub, key)).catch(() => {}), prefetchTree(sub, src, seen)]);
+      // Same test as the walk (resolveBomNode): a bought item's insides aren't loaded.
+      const record = await src.dbBom(key, bomIdOf(sub, key)).catch(() => null);
+      if (record?.markedStandard || record?.vendor || sub.bomSource?.element?.vendor) return;
+      await prefetchTree(sub, src, seen);
     })
   );
 }
