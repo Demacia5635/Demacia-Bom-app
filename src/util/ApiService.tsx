@@ -146,7 +146,9 @@ export async function downloadFile(
   link.click();
 
   document.body.removeChild(link);
-  window.URL.revokeObjectURL(objectUrl);
+  // Not straight away: some browsers start the download after click() returns,
+  // and would cancel it if the URL were already gone.
+  setTimeout(() => window.URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 /**
