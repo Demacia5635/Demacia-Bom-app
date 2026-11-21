@@ -1,6 +1,39 @@
 import { NextFunction, Request, Response } from "express";
 import { GoogleDriveService, folderForUpload, isTeamFolder } from "../services/driveService";
 
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+// Blobs without a type are sent as application/octet-stream.
+const CAD_TYPES = (...types: string[]) => [...types, "application/octet-stream"];
+/** File types the team uploads: thumbnails, STL and Parasolid. Extension -> allowed MIME types. */
+const UPLOAD_TYPES: Record<string, string[]> = {
+  png: IMAGE_TYPES,
+  jpg: IMAGE_TYPES,
+  jpeg: IMAGE_TYPES,
+  webp: IMAGE_TYPES,
+  stl: CAD_TYPES("model/stl", "application/sla", "application/vnd.ms-pki.stl"),
+  x_t: CAD_TYPES("application/x-parasolid"),
+  x_b: CAD_TYPES("application/x-parasolid"),
+};
+
+/**
+ * Runs before the upload body is read: anything but an allowed extension with
+ * a MIME type that fits it gets 415, so it's never buffered.
+ */
+export function checkUploadType(
+  req: Request<{ fileName: string; mimeType: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  const extension = /\.([a-z0-9_]+)$/.exec(req.params.fileName.toLowerCase())?.[1] ?? "";
+  const mimeType = req.params.mimeType.split(";")[0].trim().toLowerCase();
+  if (!UPLOAD_TYPES[extension]?.includes(mimeType)) {
+    return res.status(415).json({
+      message: "Only PNG, JPEG or WebP images, STL and Parasolid (.x_t, .x_b) files can be uploaded",
+    });
+  }
+  return next();
+}
+
 export async function checkConnection(
   client: GoogleDriveService,
   req: Request,

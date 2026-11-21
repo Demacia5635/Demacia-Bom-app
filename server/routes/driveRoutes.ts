@@ -28,7 +28,8 @@ router.get(
 );
 router.post(
   "/file/name/:fileName/mime/:mimeType",
-  express.raw({ type: "*/*", limit: "50mb" }),
+  driveController.checkUploadType,
+  express.raw({ type: "*/*", limit: "20mb" }),
   async (req, res, next) =>
     await driveController.uploadFile(drive, req, res, next),
 );
