@@ -54,6 +54,14 @@ function rootBomSummary(bom: OnshapeBomTable | null | undefined) {
   return bom ? { id: bom.id, name: bom.name, description: bom.description || "", partNumber: bom.partNumber || "" } : null;
 }
 
+/**
+ * The BOM ID used in record and row IDs: Onshape's BOM table ID, or the
+ * element ID when Onshape gives none. Use it everywhere so they all agree.
+ */
+function bomIdOf(bom: Pick<OnshapeBomTable, "id"> | null | undefined, key: Pick<OnshapeKey, "elementID">): string {
+  return bom?.id || key.elementID;
+}
+
 /** Cells the user may edit (saved to the database on Publish BOM). */
 const EDITABLE_FIELDS = [
   "name",
@@ -370,7 +378,7 @@ async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new S
       seen.add(keyString(key));
       const sub = await src.onshapeBom(key).catch(() => null);
       if (!sub) return;
-      await Promise.all([src.dbBom(key, sub.id || key.elementID).catch(() => {}), prefetchTree(sub, src, seen)]);
+      await Promise.all([src.dbBom(key, bomIdOf(sub, key)).catch(() => {}), prefetchTree(sub, src, seen)]);
     })
   );
 }
@@ -652,7 +660,7 @@ export default function AssemblyBomPage() {
       src: TreeSources = directSources
     ): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
       const onshapeBom = await src.onshapeBom(key);
-      const bomID = onshapeBom.id || key.elementID;
+      const bomID = bomIdOf(onshapeBom, key);
 
       const dbBom = await recordOrNull(src.dbBom(key, bomID));
       const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${bomID}`;
@@ -1330,7 +1338,7 @@ export default function AssemblyBomPage() {
       setPublishing(true);
       setPublishError(null);
 
-      const rootID = rootBomDB?.id || `${rootKey.documentID}_${rootKey.wvmType}_${rootKey.wvmID}_${rootKey.elementID}_${rootOnshapeBom?.id}` || "wrong id";
+      const rootID = rootBomDB?.id || `${rootKey.documentID}_${rootKey.wvmType}_${rootKey.wvmID}_${rootKey.elementID}_${bomIdOf(rootOnshapeBom, rootKey)}`;
 
       const rootRowId = ROOT_PARENT;
 
@@ -1787,7 +1795,7 @@ export default function AssemblyBomPage() {
           filesModelVersion: !rootUnchanged && !rootAvatar ? "" : versions.tree ?? "",
           onshapeID: {
             ...rootKey,
-            bomID: rootOnshapeBom.id
+            bomID: bomIdOf(rootOnshapeBom, rootKey),
           },
           onshapeURL: onshapeUrlOf(rootKey),
         });
