@@ -50,7 +50,8 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                 className={`fixed inset-0 bg-black/70 z-40 transition-opacity duration-300 
                             ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}
             />
-            <aside className={`h-full fixed top-0 left-0 bottom-0 w-64 border-r shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${asideBg} ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            {/* inert while closed: its buttons can't be reached with Tab off-screen. */}
+            <aside inert={!isOpen} className={`h-full fixed top-0 left-0 bottom-0 w-64 border-r shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${asideBg} ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 
                 {/* Header */}
                 <div className={`h-12 flex items-center justify-between px-4 border-b ${headerBg}`}>
