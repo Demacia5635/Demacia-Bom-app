@@ -68,6 +68,8 @@ interface PublishBomModalProps {
   submitting?: boolean;
   /** Why the last publish failed; shown above the buttons until the next try. */
   error?: string | null;
+  /** Why Publish can't run right now (e.g. a saved copy); shown, and Publish is disabled. */
+  blockedReason?: string | null;
 }
 
 export default function PublishBomModal({
@@ -82,6 +84,7 @@ export default function PublishBomModal({
   checks = [],
   checking = false,
   error = null,
+  blockedReason = null,
 }: PublishBomModalProps) {
   const [name, setName] = useState(initialValues.name ?? "");
   const [description, setDescription] = useState(initialValues.description ?? "");
@@ -95,7 +98,8 @@ export default function PublishBomModal({
 
   const needsAck = checks.some((c) => c.kind !== "note");
   const combines = checks.some((c) => c.kind === "combine");
-  const canSubmit = name.trim().length > 0 && catalogNumber.trim().length > 0 && (!needsAck || acknowledged);
+  const canSubmit =
+    !blockedReason && name.trim().length > 0 && catalogNumber.trim().length > 0 && (!needsAck || acknowledged);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,6 +237,12 @@ export default function PublishBomModal({
                   {item.name}: {item.step}
                 </div>
               ))}
+            </div>
+          )}
+
+          {!submitting && blockedReason && (
+            <div className="publish-progress publish-progress-failed" role="alert">
+              {blockedReason}
             </div>
           )}
 

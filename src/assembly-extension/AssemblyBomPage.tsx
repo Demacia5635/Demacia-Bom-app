@@ -1909,14 +1909,17 @@ export default function AssemblyBomPage() {
     if (editedItems.length > 0) {
       const names = editedItems.slice(0, 5).map((r) => `• ${r.name}`).join("\n");
       const more = editedItems.length > 5 ? `\n…and ${editedItems.length - 5} more` : "";
+      // A saved copy can't be published (it must be refreshed first), so there
+      // is no way to keep its edits.
+      const keep = cachedAt === null ? "Publish BOM first to keep them. " : "";
       const ok = window.confirm(
-        `Refresh BOM will discard your unpublished edits to ${editedItems.length} item${editedItems.length === 1 ? "" : "s"}:\n\n` +
-          `${names}${more}\n\nPublish BOM first to keep them. Discard and refresh?`
+        `Refresh BOM will discard your unpublished edits to ${editedItems.length} item${editedItems.length === 1 ? "" : "s"}. ` +
+          `They will be lost:\n\n${names}${more}\n\n${keep}Discard and refresh?`
       );
       if (!ok) return;
     }
     loadTree();
-  }, [loadTree]);
+  }, [loadTree, cachedAt]);
 
   if (!rootKey) {
     return (
@@ -2194,6 +2197,15 @@ export default function AssemblyBomPage() {
             checks={publishChecks}
             checking={savedRecords === null}
             error={publishError}
+            // A saved copy may be days old: Onshape can have changed since, so
+            // it must be refreshed before it is published.
+            blockedReason={
+              cachedAt === null
+                ? null
+                : `This is a saved copy from ${describeAge(cachedAt)}. Onshape may have changed since then, so it can't be published. ` +
+                  `Close this dialog and press Refresh BOM first.` +
+                  (pendingEditCount > 0 ? ` Your unpublished edits in this copy will be lost on Refresh.` : "")
+            }
           />
         )}
 
