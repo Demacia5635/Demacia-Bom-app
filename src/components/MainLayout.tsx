@@ -3,8 +3,7 @@ import { Outlet } from "react-router-dom";
 import { Appbar } from "./Appbar";
 import { Sidebar } from "./Sidebar";
 import { useThemeSync } from "../util/misc/useThemeSync";
-import '../css/DarkMode.css';
-import '../css/LightMode.css';
+import '../css/table.css';
 
 export default function MainLayout() {
     const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);

@@ -14,7 +14,7 @@ const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!r
 
 /**
  * Colour of each status / method / priority value (classes styled in
- * DarkMode.css and LightMode.css). Values not listed stay uncoloured.
+ * css/table.css). Values not listed stay uncoloured.
  */
 const VALUE_COLOURS: Record<string, string> = {
     'In Planning': 'status-bg-orange',
