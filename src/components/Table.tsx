@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useColumnResize } from "./table/useColumnResize";
+import { clearTableLayout, readTableLayout, writeTableLayout } from "./table/tableLayout";
 import ProblemTip from "./table/ProblemTip";
 import TableCell from "./table/TableCell";
 import { useProblemTip } from "./table/useProblemTip";
@@ -79,9 +80,19 @@ interface TableParam<T extends RowData> {
     rowFilter?: (row: T) => boolean;
     /** Rows this returns true for are left out (with anything under them); expanding works as usual. */
     hideRow?: (row: T) => boolean;
+    /**
+     * Remember this table's column widths, order, sort and hidden columns in
+     * this browser under this name, and offer "Columns…" and "Reset columns"
+     * in the header menu (QW7/QW8). Left out, nothing is remembered.
+     */
+    storageKey?: string;
 }
 
-export function Table<T extends RowData>({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }: TableParam<T>) {
+export function Table<T extends RowData>({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow, storageKey }: TableParam<T>) {
+    // The remembered layout, read once (table/tableLayout.ts).
+    const [savedLayout] = useState(() => readTableLayout(storageKey));
+    const [hiddenColumns, setHiddenColumns] = useState<ReadonlySet<string>>(() => new Set(savedLayout.hidden ?? []));
+    const [showColumnsList, setShowColumnsList] = useState(false);
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
 
@@ -98,6 +109,9 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     // The columns in the user's order, and dragging them (table/useColumnReorder.ts).
     const {
         columns,
+        allColumns,
+        columnOrder,
+        setColumnOrder,
         moveColumn,
         draggedIdx,
         isHandleDragging,
@@ -107,8 +121,8 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
         handleDrop,
         resetDragState,
         getDropIndicatorClass,
-    } = useColumnReorder(columnsData, () => closeContextMenu());
-    const [sortConfig, setSortConfig] = useState<SortConfig | null>(initialSort ?? null);
+    } = useColumnReorder(columnsData, () => closeContextMenu(), { initialOrder: savedLayout.order, hidden: hiddenColumns });
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>(savedLayout.sort !== undefined ? savedLayout.sort : initialSort ?? null);
 
     // Sticky header: the box is sized to reach the bottom of the window (table/useStickyFit.ts).
     const fitHeight = useStickyFit(wrapperRef, stickyHeader);
@@ -143,7 +157,46 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
 
     // Column widths: dragged, fitted, and the last one filling the table (table/useColumnResize.ts).
     const { columnWidths, setColumnWidths, autoLastColWidth, handleResizeStart } =
-        useColumnResize(columns, wrapperRef, defaultColWidth, minLastColWidth);
+        useColumnResize(columns, wrapperRef, defaultColWidth, minLastColWidth, savedLayout.widths);
+
+    // The table's visible width, for narrow screens (below).
+    const [wrapperWidth, setWrapperWidth] = useState(0);
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+        const ro = new ResizeObserver(() => setWrapperWidth(wrapper.clientWidth));
+        ro.observe(wrapper);
+        return () => ro.disconnect();
+    }, [wrapperRef]);
+    // On a narrow table (a phone) the frozen columns share at most half its
+    // width, so the other half is left for the columns that scroll (QW25).
+    const narrowFrozenWidth = frozenColumns > 0 && wrapperWidth > 0 && wrapperWidth < 640
+        ? Math.max(64, Math.floor(wrapperWidth / 2 / frozenColumns))
+        : null;
+
+    // Remember the layout as it changes (only with a storageKey).
+    useEffect(() => {
+        if (!storageKey) return;
+        writeTableLayout(storageKey, { widths: columnWidths, order: columnOrder, sort: sortConfig, hidden: [...hiddenColumns] });
+    }, [storageKey, columnWidths, columnOrder, sortConfig, hiddenColumns]);
+
+    const toggleColumn = (key: string) =>
+        setHiddenColumns((current) => {
+            const next = new Set(current);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+
+    /** Back to the table as the page defines it: widths, order, sort, all columns shown. */
+    const resetColumns = () => {
+        if (storageKey) clearTableLayout(storageKey);
+        setColumnWidths({});
+        setColumnOrder(columnsData.map((c) => c.key));
+        setSortConfig(initialSort ?? null);
+        setHiddenColumns(new Set());
+        closeContextMenu();
+    };
 
 
 
@@ -178,9 +231,9 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     };
 
     const handleAddRow = (parentId: string | null = null) => {
-        const newId = Date.now().toString();
         if (!newRowFunction) return;
-        const newRow = newRowFunction(newId, parentId);
+        // Random, so two rows added in the same millisecond can't share an id.
+        const newRow = newRowFunction(crypto.randomUUID(), parentId);
 
         let newData = [...data, newRow];
         if (parentId !== null) newData = newData.map(row => row.id === parentId ? { ...row, isExpanded: true } : row);
@@ -197,7 +250,8 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     /** Width of the column at `idx` (the last one stretches to fill the table). */
     const colWidth = (col: ColumnConfig, idx: number): number => {
         const isLast = idx === columns.length - 1;
-        return columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
+        const width = columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
+        return narrowFrozenWidth !== null && idx < frozenColumns && !isLast ? Math.min(width, narrowFrozenWidth) : width;
     };
 
     // Frozen columns stick to the left; each one's offset is the width of those before it.
@@ -254,6 +308,7 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     const handleContextMenu = (e: React.MouseEvent, key: string) => {
         e.preventDefault();
         const originalIndex = columns.findIndex(c => c.key === key);
+        setShowColumnsList(false);
         setContextMenu({ visible: true, x: e.clientX, y: e.clientY, columnIndex: originalIndex });
     };
 
@@ -340,6 +395,8 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                             {columns.map((col, index) => (
                                 <th
                                     key={col.key}
+                                    data-col-key={col.key}
+                                    aria-sort={sortConfig?.key === col.key ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : undefined}
                                     draggable={isHandleDragging}
                                     onDragStart={(e) => handleDragStart(e, index)}
                                     onDragOver={(e) => handleDragOver(e, index)}
@@ -357,14 +414,15 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                                             title="Sort by this column"
                                         >
                                             <span className="th-text">{col.label}</span>
-                                            <span className="sort-indicator">
+                                            <span className="sort-indicator" aria-hidden="true">
                                                 {sortConfig?.key === col.key ? (sortConfig!.direction === 'asc' ? '▲' : '▼') : '⇅'}
                                             </span>
                                         </button>
-                                        <div className="grid-drag-handle" draggable onMouseDown={() => setIsHandleDragging(true)} onMouseUp={() => setIsHandleDragging(false)}>⋮⋮</div>
+                                        <div className="grid-drag-handle" aria-hidden="true" draggable onMouseDown={() => setIsHandleDragging(true)} onMouseUp={() => setIsHandleDragging(false)}>⋮⋮</div>
                                     </div>
                                     <div
                                         className="col-resize-handle"
+                                        aria-hidden="true"
                                         onPointerDown={(e) => handleResizeStart(e, col.key)}
                                         onDoubleClick={(e) => handleResizeDoubleClick(e, col.key, col.label)}
                                     />
@@ -421,7 +479,7 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
             {/* Synced Bottom Horizontal Scrollbar */}
             <div
                 ref={bottomScrollRef}
-                className="overflow-x-auto sticky bottom-0 z-20 bg-zinc-900/40 backdrop-blur-sm border-t border-zinc-800/60"
+                className="table-hscroll overflow-x-auto sticky bottom-0 z-20 bg-zinc-900/40 backdrop-blur-sm border-t border-zinc-800/60"
                 style={{ height: '14px', marginTop: '2px' }}
             >
                 <div style={{ width: `${tableWidth}px`, height: '1px' }} />
@@ -431,6 +489,33 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                 <div ref={contextMenuRef} className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => { if (contextMenu.columnIndex > 0) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex - 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === 0}>Move Left</button>
                     <button onClick={() => { if (contextMenu.columnIndex < columns.length - 1) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex + 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === columns.length - 1}>Move Right</button>
+                    {storageKey && (
+                        <>
+                            <button onClick={() => setShowColumnsList((open) => !open)} aria-expanded={showColumnsList}>
+                                Columns… {showColumnsList ? "▴" : "▾"}
+                            </button>
+                            {showColumnsList && (
+                                <div role="group" aria-label="Shown columns" className="max-h-64 overflow-y-auto px-2 pb-1">
+                                    {allColumns.map((col) => {
+                                        const shown = !hiddenColumns.has(col.key);
+                                        return (
+                                            <label key={col.key} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer whitespace-nowrap">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={shown}
+                                                    // The last shown column can't be hidden.
+                                                    disabled={shown && columns.length === 1}
+                                                    onChange={() => toggleColumn(col.key)}
+                                                />
+                                                {col.label}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <button onClick={resetColumns}>Reset columns</button>
+                        </>
+                    )}
                 </div>
             )}
         </div>

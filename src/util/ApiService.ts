@@ -1,4 +1,5 @@
 import { apiUrl, serverUrl } from "./backendHost";
+import { showToast } from "./toast";
 
 // apiUrl lives with BACKEND_HOST; still importable from here (the extension uses it).
 export { apiUrl } from "./backendHost";
@@ -21,6 +22,18 @@ export class ApiRequestError extends Error implements ApiError {
   }
 }
 
+/** Who saves, sent as X-Updated-By on writes (stored as the record's updatedBy). */
+let updatedBy: string | null = null;
+
+/**
+ * Names who fetchFromApi's writes come from (the server stores it as
+ * `updatedBy`): the website calls setUpdatedBy("website") once. Unset, no
+ * header is sent; a call's own X-Updated-By header wins.
+ */
+export function setUpdatedBy(name: string | null): void {
+  updatedBy = name;
+}
+
 export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
 
@@ -37,6 +50,8 @@ export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "x-client-secret": secret,
+        // Header values can't carry non-ASCII (Hebrew names): URL-encoded, as the server expects.
+        ...(updatedBy && (options.method ?? "GET").toUpperCase() !== "GET" ? { "X-Updated-By": encodeURIComponent(updatedBy) } : {}),
         ...options.headers, // Merge custom headers
       },
     });
@@ -84,7 +99,7 @@ export async function downloadDriveFile(fileId: string, filename: string): Promi
     await downloadFile(`/api/drive/file/id/${encodeURIComponent(fileId)}`, filename);
   } catch (err: any) {
     console.error("Failed to download file:", err);
-    alert(`Download failed: ${err?.message || "an unexpected error occurred."}`);
+    showToast(`Download failed: ${err?.message || "an unexpected error occurred."}`, "error");
   }
 }
 

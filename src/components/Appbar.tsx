@@ -1,4 +1,5 @@
 import { SidebarIcon } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync"; // Adjust relative path if Appbar is in a different folder
 
 // The running build's version (vite.config.js). Not defined in the extension's
@@ -20,13 +21,13 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
     const versionColor = isLight ? "text-zinc-500" : "text-gray-400";
 
     return (
-        <header className={`h-12 border-b px-4 flex items-center justify-between sticky top-0 z-35 transition-colors duration-200 ${headerBg}`}>
+        <header className={`print:hidden h-12 border-b px-4 flex items-center justify-between sticky top-0 z-35 transition-colors duration-200 ${headerBg}`}>
             <div className="w-10 flex items-center">
                 {isSidebar && (
                     <button
                         onClick={onOpenDrawer}
                         aria-label="Open Sidebar"
-                        className={`p-1 rounded-md transition-colors focus:outline-none ${buttonHover}`}>
+                        className={`p-2 sm:p-1 rounded-md transition-colors focus:outline-none ${buttonHover}`}>
                         <SidebarIcon className="w-5 h-5" />
                     </button>
                 )}
@@ -35,7 +36,8 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
             <h1 className={`text-base font-bold tracking-wider flex items-baseline gap-2 whitespace-nowrap ${titleColor}`}>
                 {title}
                 {APP_VERSION && (
-                    <span className={`text-xs font-medium tracking-normal ${versionColor}`}>v{APP_VERSION}</span>
+                    // Opens "What's new" (every version's update log).
+                    <Link to="/whatsnew" title="What's new" className={`text-xs font-medium tracking-normal hover:underline hover:text-blue-500 ${versionColor}`}>v{APP_VERSION}</Link>
                 )}
             </h1>
 
@@ -44,7 +46,7 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
                     type="button"
                     onClick={toggleTheme}
                     aria-label="Toggle Theme"
-                    className={`p-1.5 rounded-md text-sm transition-colors ${buttonHover}`}
+                    className={`p-2 sm:p-1.5 rounded-md text-sm transition-colors ${buttonHover}`}
                 >
                     {isLight ? "🌙" : "☀️"}
                 </button>

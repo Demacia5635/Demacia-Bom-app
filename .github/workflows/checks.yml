@@ -1,0 +1,53 @@
+# Checks every push (any branch) and every pull request to MASTER: types,
+# lint, unit tests, and the website and extension builds. Publishing the
+# website is deploy.yml's job; this one only reports problems.
+name: Checks
+
+on:
+  push:
+  pull_request:
+    branches: [MASTER]
+
+# A newer push to the same branch replaces a run still going.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22 # the build tool (Vite 8) needs Node 20.19+ / 22.12+
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Build the website
+        env:
+          # The build stops without it (vite.config.js); a placeholder is
+          # enough to check that it builds when the secret isn't available.
+          VITE_CLIENT_URL: ${{ secrets.VITE_CLIENT_URL || 'https://example.invalid' }}
+        run: npm run build
+
+      - name: Build the extension (Chrome)
+        run: npm run build:extension
+
+      - name: Build the extension (Firefox)
+        run: npm run build:extension:firefox

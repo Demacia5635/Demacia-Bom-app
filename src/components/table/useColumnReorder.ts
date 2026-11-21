@@ -5,8 +5,15 @@ import type { ColumnConfig } from "../Table";
  * A Table's columns in the user's order, and moving them: by dragging a
  * header by its handle, or with moveColumn (the header menu). `onDragBegin`
  * runs when a drag starts (Table closes its header menu).
+ * `initialOrder`: a remembered order (QW7). `hidden`: keys not shown (QW8):
+ * `columns` leaves them out, and moves happen among the shown columns while
+ * hidden ones keep their place in the order; `allColumns` has them all.
  */
-export function useColumnReorder(columnsData: ColumnConfig[], onDragBegin: () => void) {
+export function useColumnReorder(
+  columnsData: ColumnConfig[],
+  onDragBegin: () => void,
+  options: { initialOrder?: string[]; hidden?: ReadonlySet<string> } = {}
+) {
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
   const [isHandleDragging, setIsHandleDragging] = useState<boolean>(false);
@@ -15,8 +22,8 @@ export function useColumnReorder(columnsData: ColumnConfig[], onDragBegin: () =>
   // from the current columnsData prop, so later changes to it (labels,
   // callbacks, added/removed columns) take effect. Pass a stable array
   // (module constant or useMemo): effects below depend on `columns`.
-  const [columnOrder, setColumnOrder] = useState<string[]>(() => columnsData.map(c => c.key));
-  const columns = useMemo(() => {
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => options.initialOrder ?? columnsData.map(c => c.key));
+  const allColumns = useMemo(() => {
       const byKey = new Map(columnsData.map(c => [c.key, c] as const));
       // Removed columns drop out without leaving a gap.
       const order = columnOrder.filter(k => byKey.has(k));
@@ -34,13 +41,20 @@ export function useColumnReorder(columnsData: ColumnConfig[], onDragBegin: () =>
       });
       return order.map(k => byKey.get(k)!);
   }, [columnsData, columnOrder]);
+  const hidden = options.hidden;
+  const columns = useMemo(
+      () => (hidden && hidden.size > 0 ? allColumns.filter(c => !hidden.has(c.key)) : allColumns),
+      [allColumns, hidden]
+  );
 
+  /** Moves a shown column from one shown position to another; hidden columns stay where they are. */
   const moveColumn = (fromIdx: number, toIdx: number) => {
       if (toIdx < 0 || toIdx >= columns.length) return;
-      const updatedColumns = [...columns];
-      const [movedItem] = updatedColumns.splice(fromIdx, 1);
-      updatedColumns.splice(toIdx, 0, movedItem);
-      setColumnOrder(updatedColumns.map(c => c.key));
+      const shownKeys = columns.map(c => c.key);
+      const [moved] = shownKeys.splice(fromIdx, 1);
+      shownKeys.splice(toIdx, 0, moved);
+      let next = 0;
+      setColumnOrder(allColumns.map(c => (hidden?.has(c.key) ? c.key : shownKeys[next++])));
   };
 
 
@@ -73,6 +87,9 @@ export function useColumnReorder(columnsData: ColumnConfig[], onDragBegin: () =>
 
   return {
     columns,
+    allColumns,
+    columnOrder,
+    setColumnOrder,
     moveColumn,
     draggedIdx,
     isHandleDragging,

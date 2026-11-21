@@ -4,16 +4,29 @@ import { createPortal } from "react-dom";
 import { WorkOrderForm } from "./WorkOrderForm";
 import { recordImageSrc } from "../../../util/recordImage";
 import RecordHeaderCard from "../../../components/RecordHeaderCard";
+import { CatalogNumber } from "../../../components/CopyButton";
+import HeaderTotals from "../../../components/HeaderTotals";
+
+const PUBLISHED = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+/** "21/11/26, 14:05" in Israel time, or "" for no / a bad date. */
+function formatPublished(iso: string | undefined): string {
+  const d = iso ? new Date(iso) : null;
+  return d && !Number.isNaN(d.getTime()) ? PUBLISHED.format(d) : "";
+}
 
 const ACTION_BUTTON = "px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md w-full lg:w-auto text-center";
 
 /** The BOM page's header: the assembly, "Create Work Order" and its Onshape link. */
-const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
+/** `totals`: distinct parts and the total quantity for one assembly (when the tree has loaded). */
+const MainBomDataUI: React.FC<{ bom: BomModel; totals?: { parts: number; quantity: number } }> = ({ bom, totals }) => {
   const [isCreatingWO, setCreatingWO] = useState(false);
   // While the work order is being created, a click on the backdrop doesn't close the form.
   const [isCreatingBusy, setCreatingBusy] = useState(false);
 
   const resolvedBomId = bom.id || (bom as any)._id;
+  const publishedAt = formatPublished(bom.updatedAt);
 
   return (
     <div>
@@ -23,8 +36,10 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
         title={bom.name || "Unnamed Assembly"}
         description={bom.description}
         facts={[
-          { label: "Catalog No", value: bom.catalogNumber || "N/A" },
+          { label: "Catalog No", value: <CatalogNumber value={bom.catalogNumber} onHover={false} /> },
           { label: "Engineer", value: bom.engineer || "N/A" },
+          // When the BOM was last saved, and by whom once the server records it (QW22).
+          ...(publishedAt ? [{ label: "Last published", value: bom.updatedBy ? `${publishedAt} by ${bom.updatedBy}` : publishedAt }] : []),
         ]}
         actions={
           <>
@@ -38,15 +53,23 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
             )}
           </>
         }
+        middle={totals && (
+          <HeaderTotals
+            items={[
+              { value: totals.parts, label: totals.parts === 1 ? "part" : "parts", title: "Distinct parts in the whole assembly (a bought sub-assembly counts as one)" },
+              { value: totals.quantity, label: "total quantity", title: "Pieces of all parts for one assembly" },
+            ]}
+          />
+        )}
         comments={bom.comments}
       />
 
       {isCreatingWO && createPortal(
         <div
           onClick={() => { if (!isCreatingBusy) setCreatingWO(false); }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
         >
-          <div onClick={(e) => e.stopPropagation()}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xl max-h-full overflow-y-auto overscroll-contain">
             <WorkOrderForm
               bomId={resolvedBomId}
               avatarID={bom.avatarID}

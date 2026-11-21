@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { printPartsPdf } from "../../../util/exportPartsPdf";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
+import { showToast } from "../../../util/toast";
 
 interface PdfExportOptions {
   /** The row a table <tr> shows. */
@@ -28,7 +29,7 @@ export function useWorkOrderPdfExport({ rowFromElement, title, assemblyName, fil
       .map(rowFromElement)
       .filter((r): r is WorkOrderTableRow => !!r);
     if (shownRows.length === 0) {
-      window.alert("No parts are shown, so there's nothing to export.");
+      showToast("No parts are shown, so there's nothing to export.", "info");
       return;
     }
 
@@ -45,13 +46,14 @@ export function useWorkOrderPdfExport({ rowFromElement, title, assemblyName, fil
           name: r.name,
           catalogNumber: r.catalogNumber,
           quantity: r.quantityTotal,
+          size: r.size,
           imageSrc: r.avatar,
         })),
         onProgress: (loaded, total) => setPdfProgress({ loaded, total }),
       });
     } catch (err: any) {
       console.error("PDF export failed:", err);
-      window.alert(`Couldn't export the PDF: ${err?.message || err}`);
+      showToast(`Couldn't export the PDF: ${err?.message || err}`, "error");
     } finally {
       setPdfProgress(null);
     }

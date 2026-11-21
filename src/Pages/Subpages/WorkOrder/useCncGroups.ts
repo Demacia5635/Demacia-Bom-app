@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchFromApi } from "../../../util/ApiService";
+import { trackSaveEnd, trackSaveStart } from "../../../util/saveTracker";
 import type { WorkOrderModel } from "../../../util/Models";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, toCncGroups, type CncGroup } from "./cncGroups";
@@ -93,12 +94,14 @@ export function useCncGroups(workOrderID: string | undefined, rows: WorkOrderTab
       // Links as shown: a part already in a job brings that job's links.
       const memberRows = displayRows.filter((r) => r.partID && members.includes(r.partID));
       setGroupSaving(true);
+      trackSaveStart("cnc:merge");
       const ok = await saveCncGroup(
           base
               ? { groupID: base.id, partIDs: members }
               : { partIDs: members, links: combinedLinks(memberRows) }
       );
       setGroupSaving(false);
+      trackSaveEnd("cnc:merge", ok);
       if (ok) setMergeSelection([]);
   };
 
@@ -109,19 +112,24 @@ export function useCncGroups(workOrderID: string | undefined, rows: WorkOrderTab
       setGroupSaving(true);
       // Also drops parts no longer in the BOM (see mergeParts).
       const inBom = new Set(rows.map((r) => r.partID));
-      await saveCncGroup({ groupID: group.id, partIDs: group.partIDs.filter((p) => p !== row.partID && inBom.has(p)) });
+      trackSaveStart("cnc:remove");
+      const ok = await saveCncGroup({ groupID: group.id, partIDs: group.partIDs.filter((p) => p !== row.partID && inBom.has(p)) });
+      trackSaveEnd("cnc:remove", ok);
       setGroupSaving(false);
   };
 
   /** A merged Links cell was edited: shown at once, saved to the group shortly after. */
   const queueGroupLinks = (groupID: string, links: string) => {
+      trackSaveStart(`cnc:${groupID}`);
       setCncGroups((groups) => groups.map((g) => (g.id === groupID ? { ...g, links } : g)));
       const timers = groupLinkTimersRef.current;
       const pending = timers.get(groupID);
       if (pending) clearTimeout(pending);
       timers.set(groupID, setTimeout(() => {
           timers.delete(groupID);
-          void saveCncGroup({ groupID, links });
+          void saveCncGroup({ groupID, links }).then((ok) => {
+              if (!timers.has(groupID)) trackSaveEnd(`cnc:${groupID}`, ok);
+          });
       }, 600));
   };
 

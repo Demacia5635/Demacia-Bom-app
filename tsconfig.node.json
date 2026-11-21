@@ -22,5 +22,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.js", "vite.extension.config.ts", "vite.extension.firefox.config.ts"]
+  "include": ["vite.config.js", "vitest.config.ts", "vite.extension.config.ts", "vite.extension.firefox.config.ts"]
 }

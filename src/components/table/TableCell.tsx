@@ -56,6 +56,8 @@ export default function TableCell<T extends RowData>({
                         className="expand-toggle"
                         onClick={(e) => onToggleExpand(row.id, e)}
                         disabled={filtering}
+                        aria-label={row.open ? 'Collapse' : 'Expand'}
+                        aria-expanded={row.open}
                         title={filtering ? 'Clear the search to expand or collapse' : undefined}
                     >
                         {row.open ? '▼' : '▶'}

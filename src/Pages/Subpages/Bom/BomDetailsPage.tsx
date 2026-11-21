@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef, type MouseEvent } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState, useRef, type MouseEvent } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import Table from "../../../components/Table";
 import { fetchFromApi, type ApiError } from "../../../util/ApiService";
 import type { BomModel, PartModel } from "../../../util/Models";
@@ -9,7 +9,7 @@ import SubAssemblySummary from "./SubAssemblySummary";
 import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/SearchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
-import { loadBomTree, type BomTree } from "../../../util/bomTree";
+import { loadBomTree, workOrderLines, type BomTree } from "../../../util/bomTree";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
@@ -19,6 +19,15 @@ import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
+import { showToast } from "../../../util/toast";
+import { usePartInAddress } from "../../../components/usePartInAddress";
+import SaveStatus from "../../../components/SaveStatus";
+import { SkeletonTable } from "../../../components/Skeleton";
+import BomWorkOrders from "./BomWorkOrders";
+import { bomPath, readTrail } from "../../../util/bomTrail";
+import BomBreadcrumbs from "./BomBreadcrumbs";
+import BomUsedIn from "./BomUsedIn";
+import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -140,6 +149,9 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
 
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
+  // The assemblies above this one you came through (?trail=), for the breadcrumbs.
+  const [searchParams] = useSearchParams();
+  const trail = readTrail(searchParams);
   const navigate = useNavigate();
 
   // The app's theme toggle (like every other page), not the OS setting.
@@ -154,11 +166,25 @@ export default function BomDetailsPage() {
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
 
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
+  // ?part=<id> opens that part's Part Portal, and the address follows it (shareable link).
+  usePartInAddress(selectedPart, setSelectedPart);
   /** "Show Part Data" of a made sub-assembly (only a BOM record): read-only summary. */
   const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
   const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<BomTableRow>();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [tree, setTree] = useState<BomTree | null>(null);
+  const tableAreaRef = useRef<HTMLDivElement>(null);
+  // The header's totals: distinct parts and pieces for one assembly (QW11).
+  const treeTotals = useMemo(() => {
+    if (!tree) return undefined;
+    try {
+      const { totals } = workOrderLines(tree);
+      return { parts: totals.size, quantity: [...totals.values()].reduce((a, b) => a + b, 0) };
+    } catch {
+      return undefined; // a BOM that contains itself: the table says what's wrong
+    }
+  }, [tree]);
   const [view, setView] = useState<BomView>(savedView);
   /** "Show size" checkbox, shared with the work-order page (remembered in this browser). */
   const [showSize, setShowSize] = useState(readShowSize);
@@ -168,6 +194,7 @@ export default function BomDetailsPage() {
   // fields: the rest of the record (e.g. a newer publish from the extension) is
   // left as it is. A failed save is shown, and retried with the part's next edit.
   const queuePartSave = useDebouncedFieldSave({
+    trackAs: "part",
     save: (partId, changes) =>
       fetchFromApi(`/db/part/id/${encodeURIComponent(partId)}`, { method: "POST", body: JSON.stringify(changes) }),
     onSaved: (partId) => setSaveErrors(({ [partId]: _done, ...rest }) => rest),
@@ -263,6 +290,12 @@ export default function BomDetailsPage() {
     return rowId == null ? undefined : rows.find((r) => r.id === rowId);
   };
 
+  // The pictures of the rows as shown (filter and sort), for ← / → in the viewer.
+  const shownImages = () =>
+      [...new Set(Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+          .map((tr) => rowOfElement(tr)?.avatar || "")
+          .filter(Boolean))];
+
   const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const cellEl = target.closest(".table-td, td");
@@ -275,6 +308,7 @@ export default function BomDetailsPage() {
     if (clickedRow) {
       // By column, not position: columns can be dragged into another order.
       if (cellEl.getAttribute("data-col-key") === "avatar") {
+        setLightboxImages(shownImages());
         setEnlargedImageSrc(clickedRow.avatar || "FAILED");
       }
     }
@@ -299,16 +333,16 @@ export default function BomDetailsPage() {
           setSelectedSubBom(await fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(subBomId)}`));
         } catch (bomErr) {
           console.error("Failed to fetch sub-assembly data", bomErr);
-          window.alert(`Couldn't load "${row.name || subBomId}".`);
+          showToast(`Couldn't load "${row.name || subBomId}".`, "error");
         }
         return;
       }
       if (err?.statusCode === 404) {
-        window.alert(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`);
+        showToast(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`, "info");
         return;
       }
       console.error("Failed to fetch part data for modal portal", err);
-      window.alert(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`);
+      showToast(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`, "error");
     }
   };
 
@@ -316,16 +350,27 @@ export default function BomDetailsPage() {
     closeContextMenu();
     const subBomId = row.subBomId;
     if (subBomId) {
-      navigate(`/bom/${subBomId}`);
+      // The row's id is its path from this BOM ("sub-<this>/<a>/<sub>"): the
+      // assemblies on the way become the next page's breadcrumbs.
+      const path = row.id.startsWith("sub-") ? row.id.slice(4).split("/") : [bomId ?? ""];
+      navigate(bomPath(subBomId, [...trail, ...path.slice(0, -1)].filter(Boolean)));
     }
   };
 
 
   return (
-    <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
+    <div className={`p-4 sm:p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
+      {mainBomData && <BomBreadcrumbs trail={trail} current={mainBomData} />}
       {mainBomData && (
-        <MainBomDataUI bom={mainBomData} />
+        <MainBomDataUI bom={mainBomData} totals={treeTotals} />
+      )}
+      {/* Where it's used (QW3) and its work orders (QW4), each a link. */}
+      {bomId && mainBomData && (
+        <div className="mt-4">
+          <BomUsedIn bomId={bomId} />
+          <BomWorkOrders bomId={bomId} />
+        </div>
       )}
       {Object.keys(saveErrors).length > 0 && (
         <ErrorBanner title="Changes not saved" className="mb-6 p-4 rounded-lg">
@@ -338,7 +383,7 @@ export default function BomDetailsPage() {
         </ErrorBanner>
       )}
 
-      <div className="flex items-center gap-3 mb-3">
+      <div className="print:hidden flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
         <span className={`text-sm ${theme.textMuted}`}>View:</span>
         <div className={`inline-flex rounded-lg border overflow-hidden ${isLight ? "border-zinc-300" : "border-zinc-700"}`} role="group" aria-label="BOM view">
           {BOM_VIEWS.map((v) => (
@@ -348,7 +393,7 @@ export default function BomDetailsPage() {
               title={v.title}
               aria-pressed={view === v.key}
               onClick={() => changeView(v.key)}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 view === v.key
                   ? "bg-blue-600 text-white"
                   : isLight ? "bg-white text-zinc-700 hover:bg-zinc-100" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
@@ -358,19 +403,34 @@ export default function BomDetailsPage() {
             </button>
           ))}
         </div>
-        {/* Right of the view buttons, under the title card. */}
-        <label className={`ml-auto flex items-center gap-2 cursor-pointer text-sm ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
+        {/* Right of the view buttons, under the title card: save status, then "Show size". */}
+        <span className="ml-auto"><SaveStatus /></span>
+        {/* The table as shown (rows, columns, order) for Excel (QW9). */}
+        <button
+          type="button"
+          disabled={loading || rows.length === 0}
+          onClick={() => {
+            if (!tableAreaRef.current) return;
+            downloadTableCsv(tableAreaRef.current, showSize ? BomColumns : COLUMNS_WITHOUT_SIZE, rowOfElement, safeFileName(mainBomData?.name || "BOM", "csv"));
+          }}
+          title="Save the rows and columns shown below as a CSV file (opens in Excel)"
+          className={`rounded-lg border px-3 py-1 text-xs font-semibold whitespace-nowrap ${theme.border} ${theme.textValue} hover:bg-zinc-500/10 disabled:opacity-50`}
+        >
+          Export CSV
+        </button>
+        <label className={`flex items-center gap-2 cursor-pointer text-sm whitespace-nowrap ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
           <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
           Show size
         </label>
       </div>
 
       {loading ? (
-        <div className={`p-8 text-center ${theme.textMuted}`}>Loading BOM data...</div>
+        <SkeletonTable label="Loading the BOM…" columns={9} />
       ) : (
-        <div 
+        <div
+          ref={tableAreaRef}
           onClick={handleTableClick}
-          onContextMenuCapture={handleTableContextMenuCapture} 
+          onContextMenuCapture={handleTableContextMenuCapture}
           className="relative cursor-pointer"
         >
           <Table
@@ -378,6 +438,7 @@ export default function BomDetailsPage() {
             columnsData={showSize ? BomColumns : COLUMNS_WITHOUT_SIZE}
             setData={handleTableDataChange}
             newRowFunction={undefined}
+            storageKey="bom-page"
             initialSort={{ key: "catalogNumber", direction: "asc" }}
             // Like Excel's freeze panes: header row + avatar and name stay visible.
             stickyHeader
@@ -421,7 +482,7 @@ export default function BomDetailsPage() {
         </RecordDialog>
       )}
 
-      <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
+      <ImageLightbox src={enlargedImageSrc} images={lightboxImages} onClose={() => setEnlargedImageSrc(null)} />
     </div>
   );
 }

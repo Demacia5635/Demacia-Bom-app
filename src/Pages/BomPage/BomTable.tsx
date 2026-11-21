@@ -8,16 +8,20 @@ import type { BomModel } from "../../util/Models";
 import { recordImageSrc } from "../../util/recordImage";
 import { fetchBomsByIds } from "../../util/records";
 import ImageLightbox from "../../components/ImageLightbox";
+import { bomPath } from "../../util/bomTrail";
 
 interface BomRowProps {
   bom: BomSummary;
   level?: number;
+  /** The assemblies above this row (for the BOM page's breadcrumbs). */
+  trail?: string[];
   onImageClick: (e: MouseEvent, src: string) => void;
 }
 
 const BomRow: React.FC<BomRowProps> = ({
   bom,
   level = 0,
+  trail = [],
   onImageClick,
 }) => {
   const navigate = useNavigate();
@@ -98,11 +102,11 @@ const BomRow: React.FC<BomRowProps> = ({
   return (
     <>
       <tr
-        onClick={() => navigate(`/bom/${bom.id}`)}
+        onClick={() => navigate(bomPath(bom.id, trail))}
         className={`${theme.rowHover} cursor-pointer transition-colors border-b ${theme.border}`}
       >
         <td
-          className="py-3 px-4"
+          className="py-3 px-2 sm:px-4"
           onClick={(e) => {
             e.stopPropagation();
             onImageClick(e, imageSrc || "FAILED");
@@ -110,7 +114,7 @@ const BomRow: React.FC<BomRowProps> = ({
         >
           <div
             className="w-12 h-12 rounded-lg overflow-hidden border border-zinc-300 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-950 flex items-center justify-center shrink-0 hover:opacity-80 transition-opacity"
-            style={{ marginLeft: `${level * 24}px` }}
+            style={{ marginLeft: `${level * 16}px` }}
             title="Click to enlarge image"
           >
             {imageSrc ? (
@@ -124,14 +128,14 @@ const BomRow: React.FC<BomRowProps> = ({
             )}
           </div>
         </td>
-        <td className="py-3 px-4 font-medium text-sm">
+        <td className="py-3 px-2 sm:px-4 font-medium text-sm">
           <div className="flex items-center gap-2">
             {/* Show expand arrow ONLY if sub-assemblies exist */}
             {hasSubAssemblies ? (
               <button
                 type="button"
                 onClick={handleToggleExpand}
-                className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+                className="p-2 -m-1 sm:p-1 sm:m-0 rounded hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
                 title="Toggle Subassemblies"
               >
                 {loading ? "⏳" : isExpanded ? "▼" : "▶"}
@@ -139,10 +143,13 @@ const BomRow: React.FC<BomRowProps> = ({
             ) : (
               <span className="w-5" /> // Alignment spacer when no arrow
             )}
-            <span>{bom.name || "Unnamed BOM"}</span>
+            <span className="min-w-0">
+              <span className="break-words">{bom.name || "Unnamed BOM"}</span>
+              {bom.engineer && <span className={`sm:hidden block text-xs font-normal ${theme.textMuted}`}>{bom.engineer}</span>}
+            </span>
           </div>
         </td>
-        <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
+        <td className={`py-3 px-2 sm:px-4 text-sm hidden sm:table-cell ${theme.textMuted}`}>
           {bom.engineer || "N/A"}
         </td>
       </tr>
@@ -153,6 +160,7 @@ const BomRow: React.FC<BomRowProps> = ({
             key={`${bom.id}-${subBom.id}`}
             bom={subBom}
             level={level + 1}
+            trail={[...trail, bom.id]}
             onImageClick={onImageClick}
           />
         ))}
@@ -160,7 +168,8 @@ const BomRow: React.FC<BomRowProps> = ({
   );
 };
 
-export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
+/** `emptyText`: shown when there are no rows (e.g. a search found nothing). */
+export const BomTable: React.FC<{ boms: BomSummary[]; emptyText?: string }> = ({ boms, emptyText }) => {
   const theme = useThemeClasses();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
@@ -187,16 +196,16 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className={`${theme.tableHeader} border-b ${theme.border} text-xs font-semibold uppercase tracking-wider`}>
-            <th className="py-3.5 px-4 w-24">Image</th>
-            <th className="py-3.5 px-4">Assembly Name</th>
-            <th className="py-3.5 px-4">Engineer</th>
+            <th className="py-3.5 px-2 sm:px-4 w-16 sm:w-24">Image</th>
+            <th className="py-3.5 px-2 sm:px-4">Assembly Name</th>
+            <th className="py-3.5 px-2 sm:px-4 hidden sm:table-cell">Engineer</th>
           </tr>
         </thead>
         <tbody>
           {rootBoms.length === 0 && (
             <tr>
               <td colSpan={3} className={`py-8 text-center text-sm ${theme.textMuted}`}>
-                No BOMs published yet. Publish one from the BOM extension in Onshape.
+                {emptyText ?? "No BOMs published yet. Publish one from the BOM extension in Onshape."}
               </td>
             </tr>
           )}
@@ -211,7 +220,11 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
       </table>
 
       {/* Enlarged Image Preview Overlay Modal Portal */}
-      <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
+      <ImageLightbox
+        src={enlargedImageSrc}
+        images={[...new Set(rootBoms.map((bom) => recordImageSrc(bom as any)).filter(Boolean))]}
+        onClose={() => setEnlargedImageSrc(null)}
+      />
     </div>
   );
 };

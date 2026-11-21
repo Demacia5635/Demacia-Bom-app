@@ -16,12 +16,17 @@ import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 import { useCncGroups } from "./useCncGroups";
-import { toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
+import { isFinishedRow, isPurchasedRow, toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
 import WorkOrderFilters from "./WorkOrderFilters";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
+import { showToast } from "../../../util/toast";
+import { usePartInAddress } from "../../../components/usePartInAddress";
+import SaveStatus from "../../../components/SaveStatus";
+import { SkeletonTable } from "../../../components/Skeleton";
+import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -50,10 +55,13 @@ export default function WorkOrderDetailsPage() {
     );
 
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
+    // ?part=<id> opens that part's Part Portal, and the address follows it (shareable link).
+    usePartInAddress(selectedPart, setSelectedPart);
     // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
     const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
     const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<WorkOrderTableRow>();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+    const [lightboxImages, setLightboxImages] = useState<string[]>([]);
 
     /** Edits waiting to be saved, per row (merged until the save goes out). */
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -91,6 +99,7 @@ export default function WorkOrderDetailsPage() {
      */
     // Keyed by row; `name` only labels a failure message.
     const queueRowSave = useDebouncedFieldSave<{ updatedAt?: string } | null>({
+        trackAs: "row",
         save: (rowId, changes) =>
             fetchFromApi<{ updatedAt?: string } | null>(
                 `/db/workOrder/id/${encodeURIComponent(workOrderID!)}/part`,
@@ -190,6 +199,16 @@ export default function WorkOrderDetailsPage() {
 
     // ---- Filters for the people making the parts (remembered in this browser) ----
     const filters = useWorkOrderFilters();
+    // The header's totals (QW11): made = not purchased and tracked, as the filters count them.
+    const rowTotals = useMemo(() => {
+        const made = rows.filter((r) => !isPurchasedRow(r) && r.statusCode !== "Untracked");
+        return {
+            parts: rows.length,
+            quantity: rows.reduce((sum, r) => sum + (r.quantityTotal || 0), 0),
+            made: made.length,
+            finished: made.filter(isFinishedRow).length,
+        };
+    }, [rows]);
     const { rowFilter } = filters;
     const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
 
@@ -200,6 +219,12 @@ export default function WorkOrderDetailsPage() {
         assemblyName: bomName?.workOrderID === workOrderID ? bomName?.name : undefined,
         filterLines: filters.describe(),
     });
+
+    // The pictures of the rows as shown (filter and sort), for ← / → in the viewer.
+    const shownImages = () =>
+        [...new Set(Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+            .map((tr) => rowFromElement(tr)?.avatar || "")
+            .filter(Boolean))];
 
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
@@ -214,6 +239,7 @@ export default function WorkOrderDetailsPage() {
         // By column, not position: columns can be dragged into another order,
         // and merged Links cells leave some rows with fewer cells.
         if (clickedRow && cellEl.getAttribute("data-col-key") === "avatar") {
+            setLightboxImages(shownImages());
             setEnlargedImageSrc(clickedRow.avatar || "FAILED");
         }
     };
@@ -237,20 +263,20 @@ export default function WorkOrderDetailsPage() {
                     setSelectedSubBom(subBom);
                     return;
                 }
-                window.alert(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`);
+                showToast(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`, "info");
                 return;
             }
             console.error("Failed to fetch part data for modal portal", err);
-            window.alert(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`);
+            showToast(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`, "error");
         }
     };
 
 
     return (
-        <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
+        <div className={`p-4 sm:p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
             {workOrderData && (
-                <WorkOrderDataUI workOrder={workOrderData} />
+                <WorkOrderDataUI workOrder={workOrderData} totals={loading ? undefined : rowTotals} />
             )}
             {/* Under the title card: the note on the left, "Show size" on the right. */}
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mt-3 mb-3">
@@ -258,6 +284,7 @@ export default function WorkOrderDetailsPage() {
                 <p className={`text-xs ${theme.textMuted}`}>
                     Parts and quantities follow the assembly&apos;s current BOM: publishing it again updates this work order.
                 </p>
+                <span className="ml-auto"><SaveStatus /></span>
                 <label className={`flex items-center gap-2 cursor-pointer text-sm ${theme.textLabel}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
                     <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
                     Show size
@@ -276,13 +303,25 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {loading ? (
-                <div className={`p-8 text-center ${theme.textMuted}`}>Fetching Work Order parts...</div>
+                <SkeletonTable label="Loading the work order's parts…" columns={9} />
             ) : workOrderData && !workOrderData.bomID ? (
                 <div className={`p-8 text-center ${theme.textMuted}`}>This work order isn&apos;t linked to an assembly, so it has no parts to show.</div>
             ) : (
                 <>
                 {rows.length > 0 && (
                     <WorkOrderFilters rows={rows} filters={filters} shownCount={shownCount}>
+                        <button
+                            type="button"
+                            disabled={shownCount === 0}
+                            onClick={() => {
+                                if (!tableAreaRef.current) return;
+                                downloadTableCsv(tableAreaRef.current, showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE, rowFromElement, safeFileName(workOrderData?.name || "Work order", "csv"));
+                            }}
+                            title="Save the parts shown below (their columns, in order) as a CSV file (opens in Excel)"
+                            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${theme.border} ${theme.textValue} hover:bg-zinc-500/10 disabled:opacity-50 disabled:cursor-default`}
+                        >
+                            Export CSV
+                        </button>
                         <button
                             type="button"
                             onClick={handleExportPdf}
@@ -358,6 +397,7 @@ export default function WorkOrderDetailsPage() {
                         data={displayRows}
                         columnsData={showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE}
                         newRowFunction={undefined}
+                        storageKey="work-order"
                         setData={handleTableDataChange}
                         // Like Excel's freeze panes: header row + avatar and name stay visible.
                         stickyHeader
@@ -425,7 +465,7 @@ export default function WorkOrderDetailsPage() {
               </RecordDialog>
             )}
 
-            <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
+            <ImageLightbox src={enlargedImageSrc} images={lightboxImages} onClose={() => setEnlargedImageSrc(null)} />
         </div>
     );
 }

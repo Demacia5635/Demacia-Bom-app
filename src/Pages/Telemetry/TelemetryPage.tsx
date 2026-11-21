@@ -10,6 +10,7 @@ import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import ErrorBanner from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
+import TelemetryCharts from "./TelemetryCharts";
 
 interface TelemetryEvent {
   _id: string;
@@ -135,7 +136,7 @@ export default function TelemetryPage() {
   const cell = "px-3 py-2 text-sm whitespace-nowrap";
 
   return (
-    <div className={`min-h-screen p-6 transition-colors duration-200 ${theme.page}`}>
+    <div className={`min-h-screen p-4 sm:p-6 transition-colors duration-200 ${theme.page}`}>
       <div className="max-w-7xl mx-auto space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -145,7 +146,7 @@ export default function TelemetryPage() {
               don't call Onshape.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select value={range} onChange={(e) => { setRange(e.target.value); startLoading(); }} className={`border rounded-lg px-3 py-2 text-sm ${inputBg}`}>
               {RANGES.map((r) => (
                 <option key={r.key} value={r.key}>{r.label}</option>
@@ -184,6 +185,9 @@ export default function TelemetryPage() {
             </div>
           ))}
         </div>
+
+        {/* Charts (QW28): requests per day by kind, per user, failures per day. */}
+        <TelemetryCharts days={RANGES.find((r) => r.key === range)?.days ?? null} events={shown} userPicked={user !== ALL_USERS} />
 
         {/* Per user */}
         <div className={`border rounded-xl overflow-x-auto ${theme.card}`}>

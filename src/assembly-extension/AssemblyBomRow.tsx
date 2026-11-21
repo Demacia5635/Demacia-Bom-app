@@ -1,4 +1,4 @@
-import type BomTableRow from "../Pages/subpages/Bom/BomTableRow";
+import type BomTableRow from "../Pages/Subpages/Bom/BomTableRow";
 
 /**
  * Whether the item has a database record:
