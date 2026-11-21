@@ -583,11 +583,3 @@ body.light-theme-active .table-td.cell-frozen.cell-disabled,
 .table-page-container.theme-light .table-td.cell-frozen.cell-disabled {
   background-color: var(--bg-surface-disabled, #f1f5f9);
 }
-
-/* Table image label (see DarkMode.css) */
-body.light-theme-active .table-image-badge,
-.table-page-container.theme-light .table-image-badge {
-  background-color: #dbeafe;
-  color: #1d4ed8;
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5);
-}

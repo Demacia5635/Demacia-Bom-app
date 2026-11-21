@@ -109,11 +109,8 @@ export interface ColumnConfig {
      * An edit there changes only the first row; the page applies it to the rest.
      */
     mergeKey?: (row: RowData & any) => string | undefined;
-    /** Image columns: a small label over the top-left corner of the image (e.g. "×4 copies"). */
-    badge?: (row: RowData & any) => string | undefined;
     apiPath?: string | ((value: any) => string);
 }
-
 
 interface TableParam {
     data: (RowData & any)[],
@@ -846,27 +843,14 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                             {col.buttonText || "Action"}
                                                         </button>
                                                     ) : col.type === 'image' ? (
-                                                        (() => {
-                                                            const image = (
-                                                                <div className="w-8 h-8 rounded overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 my-1">
-                                                                    <AuthenticatedImage
-                                                                        src={row[col.key]}
-                                                                        alt={col.label || "Image"}
-                                                                        className="w-full h-full object-cover" />
-                                                                </div>
-                                                            );
-                                                            const badge = col.badge?.(row);
-                                                            if (!badge) return image;
-                                                            // Like the SUB-ASSEMBLY label on the parts search page, over the image's corner.
-                                                            return (
-                                                                <div className="relative shrink-0">
-                                                                    {image}
-                                                                    <span className="table-image-badge">
-                                                                        {badge}
-                                                                    </span>
-                                                                </div>
-                                                            );
-                                                        })()
+                                                        (() => (
+                                                            <div className="w-8 h-8 rounded overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 my-1">
+                                                                <AuthenticatedImage
+                                                                    src={row[col.key]}
+                                                                    alt={col.label || "Image"}
+                                                                    className="w-full h-full object-cover" />
+                                                            </div>
+                                                        ))()
 
                                                     ) : col.type === 'boolean' ? (
                                                         <input

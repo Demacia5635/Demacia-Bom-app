@@ -597,23 +597,3 @@ body:not(.light-theme-active) .context-menu .delete-btn:hover {
   background-color: #ef4444 !important;
   color: #ffffff !important;
 }
-
-/* Label over a table image's top-left corner (e.g. "×4 copies" in the BOM extension), like the SUB-ASSEMBLY label on the parts search page */
-.table-image-badge {
-  position: absolute;
-  top: -2px;
-  left: -6px;
-  z-index: 1;
-  pointer-events: none;
-  white-space: nowrap;
-  padding: 0 4px;
-  border-radius: 4px;
-  font-size: 9px;
-  line-height: 14px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background-color: #172554;
-  color: #60a5fa;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5);
-}
