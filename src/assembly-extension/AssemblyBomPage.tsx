@@ -62,6 +62,14 @@ function bomIdOf(bom: Pick<OnshapeBomTable, "id"> | null | undefined, key: Pick<
   return bom?.id || key.elementID;
 }
 
+/**
+ * The assembly's name from its Onshape BOM name ("BOM of <assembly>"), without
+ * the prefix. "" when there is no name, so callers can fall back with `||`.
+ */
+function assemblyNameOf(bom: Pick<OnshapeBomTable, "name"> | null | undefined): string {
+  return (bom?.name ?? "").replace(/^\s*BOM of\b\s*/i, "").trim();
+}
+
 /** Cells the user may edit (saved to the database on Publish BOM). */
 const EDITABLE_FIELDS = [
   "name",
@@ -689,7 +697,7 @@ export default function AssemblyBomPage() {
         isAssembly: true,
         // Always Onshape's current thumbnail; the saved one is replaced on Publish BOM.
         avatar: getOnshapeThumbnailSrc(key),
-        name: parentItem?.name || onshapeBom.name.slice(6) || dbBom?.name || key.elementID,
+        name: parentItem?.name || assemblyNameOf(onshapeBom) || dbBom?.name || key.elementID,
         catalogNumber: pick("partNumber", dbBom?.catalogNumber, onshapeBom.partNumber || ""),
         revision: "-",
         description: onshapeBom.description || pick("description", dbBom?.description),
@@ -949,7 +957,7 @@ export default function AssemblyBomPage() {
           cached.rootBom ? ({ ...cached.rootBom, headers: [], items: [] } as OnshapeBomTable) : null
         );
         setCachedAt(cached.savedAt);
-        setTelemetryAssembly(cached.rootBom?.name?.slice(6) || cached.rootBomDB?.name || "", rootKey.documentID, rootKey.elementID);
+        setTelemetryAssembly(assemblyNameOf(cached.rootBom) || cached.rootBomDB?.name || "", rootKey.documentID, rootKey.elementID);
         treeSavedAtRef.current = cached.savedAt;
         setLoading(false);
         // Images of unchanged models come from the image store; only changed ones render.
@@ -987,7 +995,7 @@ export default function AssemblyBomPage() {
       setRootBomDB(dbBom);
       setRootIsPublished(Boolean(dbBom));
       setRootOnshapeBom(rootNode.onshapeBom ?? null);
-      setTelemetryAssembly(rootNode.onshapeBom?.name?.slice(6) || dbBom?.name || "", rootKey.documentID, rootKey.elementID);
+      setTelemetryAssembly(assemblyNameOf(rootNode.onshapeBom) || dbBom?.name || "", rootKey.documentID, rootKey.elementID);
       visitedBomIds.add(assemblyKeyId(rootKey));
 
       // The root BOM is multi-level, so its item count covers the whole tree
@@ -1049,7 +1057,7 @@ export default function AssemblyBomPage() {
    */
   /** The top assembly's name and catalog number (Onshape first; a name that is a number fills an empty one). */
   const topAssembly = useMemo(() => {
-    const name = rootOnshapeBom?.name.slice(6) || rootBomDB?.name || "Assembly";
+    const name = assemblyNameOf(rootOnshapeBom) || rootBomDB?.name || "Assembly";
     const number = rootOnshapeBom?.partNumber || rootBomDB?.catalogNumber || catalogNumberInName(name) || "";
     return { name, number };
   }, [rootOnshapeBom, rootBomDB]);
@@ -1944,7 +1952,7 @@ export default function AssemblyBomPage() {
   }
 
   // Onshape first; the database only for what Onshape doesn't have.
-  const displayName = rootOnshapeBom?.name.slice(6) || rootBomDB?.name || "Assembly";
+  const displayName = assemblyNameOf(rootOnshapeBom) || rootBomDB?.name || "Assembly";
   const pendingEditCount = rows.reduce((n, r) => n + (r.modified?.length ?? 0), 0);
 
   return (
