@@ -393,7 +393,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                                 onClick={() => setIsBomModalOpen(false)}
                                 className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
                             >
-                                ✕ Close
+                                <span aria-hidden="true">✕</span> Close
                             </button>
                         </div>
                         <p className={`text-xs ${isLight ? "text-zinc-600" : "text-zinc-400"}`}>

@@ -10,6 +10,9 @@ export default function ImageLightbox({ src, onClose }: { src: string | null; on
   if (!src) return null;
   return createPortal(
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Enlarged image"
       className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
       onClick={onClose}
     >
@@ -19,7 +22,7 @@ export default function ImageLightbox({ src, onClose }: { src: string | null; on
           onClick={onClose}
           className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md"
         >
-          ✕ Close
+          <span aria-hidden="true">✕</span> Close
         </button>
         {src === "FAILED" ? (
           <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">

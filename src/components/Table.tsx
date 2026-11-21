@@ -340,6 +340,7 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                             {columns.map((col, index) => (
                                 <th
                                     key={col.key}
+                                    aria-sort={sortConfig?.key === col.key ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : undefined}
                                     draggable={isHandleDragging}
                                     onDragStart={(e) => handleDragStart(e, index)}
                                     onDragOver={(e) => handleDragOver(e, index)}
@@ -357,14 +358,15 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                                             title="Sort by this column"
                                         >
                                             <span className="th-text">{col.label}</span>
-                                            <span className="sort-indicator">
+                                            <span className="sort-indicator" aria-hidden="true">
                                                 {sortConfig?.key === col.key ? (sortConfig!.direction === 'asc' ? '▲' : '▼') : '⇅'}
                                             </span>
                                         </button>
-                                        <div className="grid-drag-handle" draggable onMouseDown={() => setIsHandleDragging(true)} onMouseUp={() => setIsHandleDragging(false)}>⋮⋮</div>
+                                        <div className="grid-drag-handle" aria-hidden="true" draggable onMouseDown={() => setIsHandleDragging(true)} onMouseUp={() => setIsHandleDragging(false)}>⋮⋮</div>
                                     </div>
                                     <div
                                         className="col-resize-handle"
+                                        aria-hidden="true"
                                         onPointerDown={(e) => handleResizeStart(e, col.key)}
                                         onDoubleClick={(e) => handleResizeDoubleClick(e, col.key, col.label)}
                                     />
