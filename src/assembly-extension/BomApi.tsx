@@ -37,7 +37,7 @@ export async function postToApi<T>(endpoint: string, body: unknown): Promise<T> 
     if (text) {
       try {
         parsedData = JSON.parse(text);
-      } catch (e) {
+      } catch {
         if (text.trim().startsWith("<")) {
           throw {
             message: `Server returned HTML. Endpoint '${endpoint}' may be missing.`,
@@ -78,7 +78,7 @@ async function fetchJsonFromApi<T>(endpoint: string): Promise<T> {
     if (text) {
       try {
         parsedData = JSON.parse(text);
-      } catch (e) {
+      } catch {
         if (text.trim().startsWith("<")) {
           throw {
             message: `Server returned HTML. Endpoint '${endpoint}' may be missing.`,
