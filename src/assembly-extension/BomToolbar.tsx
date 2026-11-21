@@ -1,3 +1,5 @@
+import { goToProblemCell } from "./problemNavigation";
+
 /**
  * The row of controls above the BOM table: search, the work-order problems
  * button, Expand / Collapse all, and the view toggles.
@@ -58,20 +60,40 @@ export default function BomToolbar({
         />
       </div>
       {problemCount > 0 ? (
-        <button
-          type="button"
-          className={`bom-toolbar-btn bom-problems-btn ${problemsOnly ? "bom-problems-btn-active" : ""}`}
-          onClick={() => onToggleProblemsOnly()}
-          aria-pressed={problemsOnly}
-          title={
-            problemsOnly
-              ? "Showing only parts that would stop a work order. Click to show everything."
-              : "Items with values that would stop a work order (catalog number that fits its assembly and is unique, material, engineer). " +
-                "Marked in red; hover a cell for details. Click to show only those parts."
-          }
-        >
-          ⚠ {problemCount} problem{problemCount === 1 ? "" : "s"}
-        </button>
+        <>
+          <button
+            type="button"
+            className={`bom-toolbar-btn bom-problems-btn ${problemsOnly ? "bom-problems-btn-active" : ""}`}
+            onClick={() => onToggleProblemsOnly()}
+            aria-pressed={problemsOnly}
+            title={
+              problemsOnly
+                ? "Showing only parts that would stop a work order. Click to show everything."
+                : "Items with values that would stop a work order (catalog number that fits its assembly and is unique, material, engineer). " +
+                  "Marked in red; hover a cell for details. Click to show only those parts."
+            }
+          >
+            ⚠ {problemCount} problem{problemCount === 1 ? "" : "s"}
+          </button>
+          <button
+            type="button"
+            className="bom-toolbar-btn"
+            onClick={() => goToProblemCell(-1, document.querySelector(".assembly-bom-page") ?? document)}
+            title="Previous problem: scroll to the red cell before this one"
+            aria-label="Previous problem"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            className="bom-toolbar-btn"
+            onClick={() => goToProblemCell(1, document.querySelector(".assembly-bom-page") ?? document)}
+            title="Next problem: scroll to the next red cell"
+            aria-label="Next problem"
+          >
+            ›
+          </button>
+        </>
       ) : (
         hasRows && (
           <span className="bom-toolbar-note" title="Every made item has a valid, unique catalog number that fits its assembly, and every made part a material and an engineer">
