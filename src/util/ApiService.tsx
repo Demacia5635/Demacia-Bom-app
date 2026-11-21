@@ -427,30 +427,3 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
   return <img src={imageSrc} alt={alt} className={className} {...props} />;
 }
-
-export async function fetchFileBytes(url: string, mimeType?: string): Promise<Blob> {
-  const secret = import.meta.env.VITE_CLIENT_SECRET;
-  if (!secret) {
-    throw new Error("VITE_CLIENT_SECRET is missing from environment variables.");
-  }
-
-  let targetUrl = url;
-  if (url.startsWith("/api")) {
-    const cleanEndpoint = url.replace("/api", "");
-    targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
-  } else if (!url.startsWith("http")) {
-    targetUrl = `${BACKEND_HOST}${url.startsWith("/") ? url : `/${url}`}`;
-  }
-
-  const response = await fetch(targetUrl, {
-    headers: {
-      "x-client-secret": secret,
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-
-  return fileBlobFromResponse(response, mimeType);
-}

@@ -102,7 +102,6 @@ export interface ColumnConfig {
      * An edit there changes only the first row; the page applies it to the rest.
      */
     mergeKey?: (row: RowData & any) => string | undefined;
-    apiPath?: string | ((value: any) => string);
 }
 
 interface TableParam {
@@ -425,7 +424,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             const bVal = b[key];
 
             if (aVal === bVal) return 0;
-            if (aVal === null || aVal === undefined) return 1 * dir === 0 ? 0 : 1;
+            // Empty values last, in either direction.
+            if (aVal === null || aVal === undefined) return 1;
             if (bVal === null || bVal === undefined) return -1;
 
             if (typeof aVal === 'number' && typeof bVal === 'number') {

@@ -39,25 +39,6 @@ body.light-theme-active .table-page-container,
 }
 
 /* Base Layout & Typography */
-body.light-theme-active .table-header-section h2,
-.table-page-container.theme-light .table-header-section h2 {
-  margin: 0 0 8px 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text-heading);
-}
-
-body.light-theme-active .metadata-tag,
-.table-page-container.theme-light .metadata-tag {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  background-color: var(--bg-surface);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  display: inline-flex;
-  gap: 12px;
-}
 
 /* Controls & Buttons */
 body.light-theme-active .table-controls,
@@ -93,23 +74,6 @@ body.light-theme-active .table-controls button:active,
 .table-page-container.theme-light .table-controls button:active {
   background-color: var(--btn-primary-active);
   transform: translateY(1px);
-}
-
-body.light-theme-active .table-controls .btn-secondary,
-.table-page-container.theme-light .table-controls .btn-secondary {
-  background-color: var(--btn-secondary-bg);
-  color: var(--text-main);
-  border: 1px solid var(--border-color);
-}
-
-body.light-theme-active .table-controls .btn-secondary:hover,
-.table-page-container.theme-light .table-controls .btn-secondary:hover {
-  background-color: var(--bg-surface-hover);
-}
-
-body.light-theme-active .table-controls .btn-secondary:active,
-.table-page-container.theme-light .table-controls .btn-secondary:active {
-  background-color: var(--btn-secondary-active);
 }
 
 /* Table Structure & Scrolling */
@@ -416,60 +380,28 @@ body.light-theme-active .cell-select option,
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-orange),
-body.light-theme-active .table-td:has(.cell-select[value="In Planning"]),
-body.light-theme-active .table-td:has(.cell-select[value="In manufacturing"]),
-body.light-theme-active .table-td:has(.cell-select[value="Medium"]),
-body.light-theme-active .table-td:has(.cell-select[value="Manual"]),
-.table-page-container.theme-light .table-td:has(.cell-select.status-bg-orange),
-.table-page-container.theme-light .table-td:has(.cell-select[value="In Planning"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="In manufacturing"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Medium"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Manual"]) {
+.table-page-container.theme-light .table-td:has(.cell-select.status-bg-orange) {
   background-color: #ffedd5;
   color: #9a3412;
   font-weight: 700;
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-blue),
-body.light-theme-active .table-td:has(.cell-select[value="Manufacturing approved"]),
-body.light-theme-active .table-td:has(.cell-select[value="Untracked"]),
-body.light-theme-active .table-td:has(.cell-select[value="Milled"]),
-body.light-theme-active .table-td:has(.cell-select[value="Lathed"]),
-body.light-theme-active .table-td:has(.cell-select[value="CNC"]),
-body.light-theme-active .table-td:has(.cell-select[value="Printed"]),
-body.light-theme-active .table-td:has(.cell-select[value="Externally produced"]),
-.table-page-container.theme-light .table-td:has(.cell-select.status-bg-blue),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Manufacturing approved"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Untracked"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Milled"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Lathed"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="CNC"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Printed"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Externally produced"]) {
+.table-page-container.theme-light .table-td:has(.cell-select.status-bg-blue) {
   background-color: #dbeafe;
   color: #1e40af;
   font-weight: 700;
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-green),
-body.light-theme-active .table-td:has(.cell-select[value="Finished Manufacturing"]),
-body.light-theme-active .table-td:has(.cell-select[value="Finished"]),
-body.light-theme-active .table-td:has(.cell-select[value="Low"]),
-.table-page-container.theme-light .table-td:has(.cell-select.status-bg-green),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Finished Manufacturing"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Finished"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="Low"]) {
+.table-page-container.theme-light .table-td:has(.cell-select.status-bg-green) {
   background-color: #dcfce7;
   color: #166534;
   font-weight: 700;
 }
 
 body.light-theme-active .table-td:has(.cell-select.status-bg-red),
-body.light-theme-active .table-td:has(.cell-select[value="CATNUM Written"]),
-body.light-theme-active .table-td:has(.cell-select[value="High"]),
-.table-page-container.theme-light .table-td:has(.cell-select.status-bg-red),
-.table-page-container.theme-light .table-td:has(.cell-select[value="CATNUM Written"]),
-.table-page-container.theme-light .table-td:has(.cell-select[value="High"]) {
+.table-page-container.theme-light .table-td:has(.cell-select.status-bg-red) {
   background-color: #fee2e2;
   color: #991b1b;
   font-weight: 700;
@@ -477,7 +409,6 @@ body.light-theme-active .table-td:has(.cell-select[value="High"]),
 
 /* Context Menus - Light Mode */
 body.light-theme-active .context-menu,
-.theme-light .context-menu,
 .context-menu {
   position: fixed !important;
   background-color: #ffffff !important;
@@ -494,7 +425,6 @@ body.light-theme-active .context-menu,
 }
 
 body.light-theme-active .context-menu button,
-.theme-light .context-menu button,
 .context-menu button {
   background-color: transparent !important;
   border: none !important;
@@ -508,39 +438,15 @@ body.light-theme-active .context-menu button,
 }
 
 body.light-theme-active .context-menu button:hover:not(:disabled),
-.theme-light .context-menu button:hover:not(:disabled),
 .context-menu button:hover:not(:disabled) {
   background-color: #1e40af !important;
   color: #ffffff !important;
 }
 
 body.light-theme-active .context-menu button:disabled,
-.theme-light .context-menu button:disabled,
 .context-menu button:disabled {
   color: #94a3b8 !important;
   cursor: not-allowed !important;
-}
-
-body.light-theme-active .context-divider,
-.theme-light .context-divider,
-.context-divider {
-  height: 1px !important;
-  background-color: #0f172a !important;
-  margin: 4px 0 !important;
-}
-
-body.light-theme-active .context-menu .delete-btn,
-.theme-light .context-menu .delete-btn,
-.context-menu .delete-btn {
-  background-color: transparent !important;
-  color: #991b1b !important;
-}
-
-body.light-theme-active .context-menu .delete-btn:hover,
-.theme-light .context-menu .delete-btn:hover,
-.context-menu .delete-btn:hover {
-  background-color: #fee2e2 !important;
-  color: #991b1b !important;
 }
 /* ---- Frozen header row and left columns (Table stickyHeader / frozenColumns) ----
  * Light-theme versions: the rules above force "position: relative" and hide

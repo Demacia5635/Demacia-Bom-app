@@ -1,5 +1,4 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import './css/App.css';
 import { lazy } from 'react';
 import MainLayout from './components/MainLayout';
 
