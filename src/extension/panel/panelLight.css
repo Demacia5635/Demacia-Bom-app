@@ -1,0 +1,89 @@
+/*
+ * Light theme of the side panel (theme.ts sets body.light-theme-active).
+ * The shared Table's light styles come from css/LightMode.css; this file
+ * covers the panel itself: its background, the Table's colour variables
+ * (the web app sets them on .table-page-container, the panel on
+ * .assembly-bom-page), the dark Tailwind classes the panel's components use,
+ * and the dark-only parts of css/AssemblyBomPage.css. Unlayered, so these
+ * beat Tailwind's utilities. Dark mode is untouched.
+ */
+
+body.light-theme-active {
+  background-color: #fafafa;
+}
+
+/* PanelApp's <main> (bg-zinc-950 text-zinc-100). */
+body.light-theme-active main.bg-zinc-950 {
+  background-color: #fafafa;
+  color: #18181b;
+}
+
+/* Values from LightMode.css (.table-page-container), lighter border. */
+body.light-theme-active .assembly-bom-page {
+  --bg-main: #eef2f7;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #e2e8f0;
+  --bg-surface-disabled: #f1f5f9;
+  --bg-input-focus: #ffffff;
+  --text-main: #0b1622;
+  --text-heading: #020617;
+  --text-muted: #1e2d47;
+  --text-subdued: #334155;
+  --text-disabled: #94a3b8;
+  --border-color: #cbd5e1;
+  --btn-primary-bg: #1e40af;
+  --btn-primary-hover: #1e3a8a;
+  --btn-primary-active: #172554;
+  --btn-secondary-bg: #e2e8f0;
+  --btn-secondary-hover: #cbd5e1;
+  --btn-secondary-active: #94a3b8;
+  --shadow-color: rgba(0, 0, 0, 0.08);
+  --context-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+}
+
+/* ---- Tailwind colour classes used by the panel's components ------------- */
+
+body.light-theme-active .text-zinc-100 { color: #18181b; }
+body.light-theme-active .text-zinc-400,
+body.light-theme-active .text-zinc-500 { color: #52525b; }
+body.light-theme-active .text-amber-400 { color: #b45309; }
+body.light-theme-active .text-red-200 { color: #991b1b; }
+body.light-theme-active .border-zinc-800 { border-color: #e4e4e7; }
+body.light-theme-active .bg-zinc-800 { background-color: #f4f4f5; }
+body.light-theme-active .bg-zinc-900\/60 { background-color: #ffffff; }
+body.light-theme-active .bg-red-900\/50 { background-color: #fef2f2; }
+body.light-theme-active .border-red-500 { border-color: #fca5a5; }
+
+/* ---- css/AssemblyBomPage.css ------------------------------------------- */
+
+/* Its Tailwind dark: border follows the OS, not this setting. */
+body.light-theme-active .assembly-bom-header { border-color: #e4e4e7; }
+body.light-theme-active .assembly-bom-title { color: #18181b; }
+body.light-theme-active .assembly-bom-subtitle,
+body.light-theme-active .bom-toolbar-note,
+body.light-theme-active .publish-modal-header p,
+body.light-theme-active .publish-progress-step,
+body.light-theme-active .publish-preview-note { color: #52525b; }
+body.light-theme-active .assembly-bom-unpublished-hint,
+body.light-theme-active .publish-progress-failed { color: #b45309; }
+
+body.light-theme-active .publish-modal-overlay { background: rgba(24, 24, 27, 0.35); }
+body.light-theme-active .publish-modal {
+  background: #ffffff;
+  border-color: #e4e4e7;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+body.light-theme-active .publish-modal-header h2 { color: #18181b; }
+body.light-theme-active .publish-field span { color: #3f3f46; }
+body.light-theme-active .publish-field textarea,
+body.light-theme-active .publish-progress {
+  background: #ffffff;
+  border-color: #d4d4d8;
+  color: #18181b;
+}
+body.light-theme-active .publish-progress-track { background: #e4e4e7; }
+body.light-theme-active .publish-btn-secondary {
+  border-color: #d4d4d8;
+  color: #3f3f46;
+}
+body.light-theme-active .publish-btn-secondary:hover:not(:disabled) { background: #f4f4f5; }

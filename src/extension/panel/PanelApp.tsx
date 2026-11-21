@@ -14,6 +14,7 @@ import { Toasts } from "./toast";
 import { setOnshapeImageCache, setOnshapeImageListener } from "../../util/ApiService";
 import { recordOnshapeCall } from "../telemetry";
 import { getCachedImage, putCachedImage } from "../imageCache";
+import { PanelThemeContext, usePanelTheme } from "./theme";
 
 // Table images load straight from Onshape; count them for the footprint page (/tele).
 setOnshapeImageListener((url, ok) => recordOnshapeCall("GET", url, ok));
@@ -39,6 +40,7 @@ function BomForActiveTab({ loading, location }: { loading: boolean; location: On
 
 export default function PanelApp() {
   const { loading, location } = useOwnOnshapeTab();
+  const theme = usePanelTheme();
 
   // Direct Onshape calls go to whichever Onshape server this tab is on.
   // Set during render (idempotent) rather than in an effect: child effects,
@@ -46,6 +48,7 @@ export default function PanelApp() {
   if (location) setOnshapeServer(location.server);
 
   return (
+    <PanelThemeContext.Provider value={theme}>
     <OnshapeLocationProvider location={location}>
       <main className="min-h-screen bg-zinc-950 text-zinc-100">
         <OnshapeSignInCheck>
@@ -54,5 +57,6 @@ export default function PanelApp() {
       </main>
       <Toasts />
     </OnshapeLocationProvider>
+    </PanelThemeContext.Provider>
   );
 }

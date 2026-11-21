@@ -24,6 +24,7 @@ import { getElementMicroversions, getPartBoundingBox, getPartStudioMassPropertie
 import { combineCopies, studioKey, studioOf, studiosToCheck, type CombinedItem, type PartStudioRef } from "./sameParts";
 import { recombineRows, splitCopyRows } from "./copyRows";
 import { formatPartSize } from "../util/partSize";
+import { nextThemePreference, THEME_LABELS, usePanelThemeSetting } from "../extension/panel/theme";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
@@ -1099,6 +1100,8 @@ export default function AssemblyBomPage() {
   // Problems are read through a ref, so the columns are only rebuilt when the
   // default engineer changes, not on every edit.
   /** "Show size": the Size column, filled from Onshape (remembered in this browser). */
+  /** Light / dark / auto (theme.ts), set by the header's theme button. */
+  const themeSetting = usePanelThemeSetting();
   const [showSize, setShowSize] = useState(() => readToggle("showSize"));
   useEffect(() => writeToggle("showSize", showSize), [showSize]);
 
@@ -1966,6 +1969,17 @@ export default function AssemblyBomPage() {
           </div>
           
           <div className="flex items-center gap-4">
+            {themeSetting && (
+              <button
+                type="button"
+                className="bom-toolbar-btn"
+                onClick={() => themeSetting[1](nextThemePreference(themeSetting[0]))}
+                title={`Theme: ${THEME_LABELS[themeSetting[0]].name}. Click for ${THEME_LABELS[nextThemePreference(themeSetting[0])].name}.`}
+                aria-label={`Theme: ${THEME_LABELS[themeSetting[0]].name}`}
+              >
+                {THEME_LABELS[themeSetting[0]].icon}
+              </button>
+            )}
             <button
               type="button"
               className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
