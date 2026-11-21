@@ -1,6 +1,6 @@
 # Server: next version
 
-**Unreleased.** The commits below were merged into `MASTER` on 2026-11-21 (`606d8e7`), not pushed yet.
+**Unreleased.** The commits below were merged into `MASTER` on 2026-11-21 (`606d8e7`) and pushed on 2026-11-21 18:23. **Render must be redeployed by hand.**
 
 ## Fixes (from the code-review checklist)
 

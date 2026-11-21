@@ -1,6 +1,6 @@
 # Extension: next version
 
-**Not built yet.** Commits `ef4a751`, `b91e47c`, `f477d57`, `16e3963`, `7be21f1` and `3821d89` were pushed by 2026-11-21 15:48, `1039c40` on 16:27, and `3178eb4` and `b92855e` on 17:28. The checklist fixes below were merged into MASTER on 2026-11-21 (`2a88742`), not pushed yet. Replaces [v3.0.0](../3.0.0/v3.0.0.md).
+**Not built yet.** Commits `ef4a751`, `b91e47c`, `f477d57`, `16e3963`, `7be21f1` and `3821d89` were pushed by 2026-11-21 15:48, `1039c40` on 16:27, and `3178eb4` and `b92855e` on 17:28. The checklist fixes below were merged into MASTER on 2026-11-21 (`2a88742`) and pushed on 2026-11-21 18:23. Replaces [v3.0.0](../3.0.0/v3.0.0.md).
 
 (`ef4a751` was first logged as 3.1.0. That version was never built, so it's part of the next version.)
 
@@ -21,7 +21,7 @@
   - Never grouped: empty or placeholder catalog numbers ("-", "?", "TBD", "N/A", "none"…), default "Part N" names, and bought items (Standard Content, vendor, marked standard). Spaces around names and numbers, and upper/lower case, don't matter.
 - **Light mode.** The BOM header has the same theme button as the website: 🌙 while light (click for dark), ☀️ while dark (click for light). Until you first click it, the panel follows your browser's or computer's colour scheme, so **if yours is set to light, the panel turns light after updating.** Click 🌙 to make it dark; the panel then remembers your choice. Dark mode looks exactly as before. (`7be21f1`, `3821d89`)
 
-## Fixes from the code-review checklist (merged into MASTER on 2026-11-21, not pushed yet)
+## Fixes from the code-review checklist (merged into MASTER and pushed on 2026-11-21 18:23)
 
 - **One failed request no longer breaks the whole Refresh BOM.** A request to Onshape or the server that failed once is tried again the next time it's needed, instead of failing every later part of the load and every sub-assembly you open afterwards. (B12, `1b65342`)
 - **A failed Publish BOM tells you right away, in the Publish dialog, what went wrong and what to do.** Before, the error was hidden until the dialog closed, and was a raw message like "Failed to fetch". Now it names the step and item that failed, the likely cause (the BOM server or Onshape can't be reached, no permission in Onshape, an item was deleted or changed, too many requests, someone saved the same item at the same moment, an invalid value) and the next step (retry, Refresh BOM, check your Onshape access…), with the raw message as details. It's cleared when the dialog opens again or the BOM reloads. (B14, `2c1548c`, `f4c7249`)

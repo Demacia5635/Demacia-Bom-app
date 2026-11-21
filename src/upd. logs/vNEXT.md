@@ -1,6 +1,6 @@
 # Website: next version
 
-**Unreleased.** The commits below were merged into `MASTER` on 2026-11-21 (`22571a1`), not pushed yet.
+**Unreleased.** The commits below were merged into `MASTER` on 2026-11-21 (`22571a1`) and pushed on 2026-11-21 18:23; live on the website.
 
 ## New
 
