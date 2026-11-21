@@ -120,6 +120,11 @@ export default function WorkOrderDetailsPage() {
     const [groupSaving, setGroupSaving] = useState(false);
     /** Links edits of a merged cell waiting to be saved, per group. */
     const groupLinkTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+    // Every CNC-group request is numbered, so a late reply can't undo a newer one:
+    // the number of the newest reply shown, and of each group's newest Links save.
+    const cncRequestSeqRef = useRef(0);
+    const cncShownSeqRef = useRef(0);
+    const linksRequestSeqRef = useRef<Map<string, number>>(new Map());
 
     const parseStatusToString = (code: number | string | undefined): string => {
         if (code === 1 || code === '1' || code === 'In Planning') return 'In Planning';
@@ -303,20 +308,42 @@ export default function WorkOrderDetailsPage() {
      */
     const saveCncGroup = useCallback(async (group: { groupID?: string; partIDs?: string[]; links?: string }) => {
         if (!workOrderID) return false;
+
+        /**
+         * Shows the server's groups unless a newer reply is already shown. A
+         * group's Links still waiting to be saved, or saved by a newer request,
+         * keep what was typed rather than flicker back to older text.
+         */
+        const showServerGroups = (serverGroups: { id: string; partIDs?: string[]; links?: string }[] | undefined, seq: number) => {
+            if (seq < cncShownSeqRef.current) return;
+            cncShownSeqRef.current = seq;
+            setCncGroups((current) => {
+                const localLinks = new Map(current.map((g) => [g.id, g.links]));
+                return (serverGroups ?? []).map((g) => {
+                    const typedLater = groupLinkTimersRef.current.has(g.id) || (linksRequestSeqRef.current.get(g.id) ?? 0) > seq;
+                    const links = typedLater && localLinks.has(g.id) ? localLinks.get(g.id)! : g.links ?? "";
+                    return { id: g.id, partIDs: g.partIDs ?? [], links };
+                });
+            });
+        };
+
+        const seq = ++cncRequestSeqRef.current;
+        if (group.groupID && group.links !== undefined) linksRequestSeqRef.current.set(group.groupID, seq);
         try {
             const result = await fetchFromApi<{ cncGroups: CncGroup[] }>(
                 `/db/workOrder/id/${encodeURIComponent(workOrderID)}/cncGroup`,
                 { method: "POST", body: JSON.stringify(group) }
             );
-            setCncGroups((result?.cncGroups ?? []).map((g) => ({ id: g.id, partIDs: g.partIDs ?? [], links: g.links ?? "" })));
+            showServerGroups(result?.cncGroups, seq);
             return true;
         } catch (err: any) {
             console.error("Failed to save the CNC group:", err);
             setSaveError(`Couldn't save the CNC merge: ${err?.message || err}`);
             // Someone changed the groups meanwhile: show theirs instead of ours.
             if (err?.statusCode === 409) {
+                const reloadSeq = ++cncRequestSeqRef.current;
                 fetchFromApi<WorkorderModel>(`/db/workOrder/id/${encodeURIComponent(workOrderID)}`)
-                    .then((wo) => setCncGroups((wo?.cncGroups ?? []).map((g) => ({ id: g.id, partIDs: g.partIDs ?? [], links: g.links ?? "" }))))
+                    .then((wo) => showServerGroups(wo?.cncGroups, reloadSeq))
                     .catch(() => undefined);
             }
             return false;
