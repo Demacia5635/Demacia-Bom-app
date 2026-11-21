@@ -6,10 +6,10 @@ import { readFileSync } from 'node:fs';
 
 export const PORT = process.env.PORT || 5050;
 
-/** The server's version: the root package.json's (server versions follow it). */
+/** The server's own version, from server/package.json (the root package.json's version is the extension's). */
 export const SERVER_VERSION: string = (() => {
     try {
-        return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version ?? 'unknown';
+        return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version ?? 'unknown';
     } catch {
         return 'unknown';
     }
