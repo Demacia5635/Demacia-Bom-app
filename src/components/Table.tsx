@@ -362,18 +362,23 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             latestClientX = moveEvent.clientX;
         };
 
-        const onPointerUp = (upEvent: PointerEvent) => {
+        // Ends the resize once, however the pointer is let go: released, cancelled
+        // (touch scroll, alt-tab, the element removed) or its capture lost.
+        // Otherwise the column would keep following the pointer.
+        const END_EVENTS = ['pointerup', 'pointercancel', 'lostpointercapture'] as const;
+        const endResize = (endEvent: PointerEvent) => {
+            if (!isActive) return;
             isActive = false;
             if (rafId !== null) cancelAnimationFrame(rafId);
-            targetElement.releasePointerCapture(upEvent.pointerId);
             targetElement.removeEventListener('pointermove', onPointerMove);
-            targetElement.removeEventListener('pointerup', onPointerUp);
+            for (const type of END_EVENTS) targetElement.removeEventListener(type, endResize);
+            if (targetElement.hasPointerCapture(endEvent.pointerId)) targetElement.releasePointerCapture(endEvent.pointerId);
 
             setColumnWidths(prev => ({ ...prev, [key]: currentWidth }));
         };
 
         targetElement.addEventListener('pointermove', onPointerMove);
-        targetElement.addEventListener('pointerup', onPointerUp);
+        for (const type of END_EVENTS) targetElement.addEventListener(type, endResize);
         rafId = requestAnimationFrame(tick);
     };
 
