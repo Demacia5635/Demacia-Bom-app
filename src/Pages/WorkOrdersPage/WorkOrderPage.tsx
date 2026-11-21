@@ -6,6 +6,7 @@ import { fetchBomsByIds } from "../../util/records";
 import { recordImageSrc } from "../../util/recordImage";
 import ErrorBanner from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
+import { useSearchShortcut } from "../../components/useSearchShortcut";
 
 
 export function WorkOrdersPage() {
@@ -56,6 +57,9 @@ export function WorkOrdersPage() {
         getWorkOrders();
     }, []);
 
+    // "/" jumps to the search box, Esc clears it.
+    const { inputRef: searchInputRef, onKeyDown: onSearchKeyDown } = useSearchShortcut(() => setSearchQuery(""));
+
     const filteredWorkOrders = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
         if (!query) return workOrders;
@@ -97,9 +101,13 @@ export function WorkOrdersPage() {
                     </div>
                     <input
                         type="text"
+                        ref={searchInputRef}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search by work order name, catalog #, BOM name, or owner..."
+                        onKeyDown={onSearchKeyDown}
+                        aria-label="Search work orders"
+                        aria-keyshortcuts="/"
+                        placeholder="Search by work order name, catalog #, BOM name, or owner…   ( / )"
                         className={`w-full border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-md ${theme.input}`}
                     />
                     {searchQuery && (

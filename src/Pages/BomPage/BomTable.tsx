@@ -160,7 +160,8 @@ const BomRow: React.FC<BomRowProps> = ({
   );
 };
 
-export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
+/** `emptyText`: shown when there are no rows (e.g. a search found nothing). */
+export const BomTable: React.FC<{ boms: BomSummary[]; emptyText?: string }> = ({ boms, emptyText }) => {
   const theme = useThemeClasses();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
@@ -196,7 +197,7 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
           {rootBoms.length === 0 && (
             <tr>
               <td colSpan={3} className={`py-8 text-center text-sm ${theme.textMuted}`}>
-                No BOMs published yet. Publish one from the BOM extension in Onshape.
+                {emptyText ?? "No BOMs published yet. Publish one from the BOM extension in Onshape."}
               </td>
             </tr>
           )}
