@@ -28,6 +28,7 @@
 - **Every publish failure stays inside the Publish dialog,** including "someone published this again after your copy was loaded" and "items inside weren't saved", in the same plain words. (`24b2f35`)
 - **A saved copy must be refreshed before it can be published.** When the panel shows a copy saved in the browser ("Saved copy from 3 days ago"), Publish BOM is disabled and the dialog says to press Refresh BOM first, because Onshape may have changed since. If the copy has unpublished edits, it warns that they'll be lost on Refresh. Before, an old copy could be published over newer data. (B13, `ab6c8f1`)
 - On Firefox, a BOM sidebar opened from the sidebar menu follows the tab you switch to, instead of staying on the first one. (B11, `ebc3275`)
+- Opening or closing rows while Publish BOM runs is no longer undone when it finishes. (E1, `e133abe`)
 
 ## Removed
 

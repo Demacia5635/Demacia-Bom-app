@@ -11,6 +11,7 @@
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)
 - The clear buttons in the search boxes on the Search Parts and Work Orders pages change colour on hover again. (B17, `6b8be3c`)
 - **The work-order PDF shows the "Assembly:" line again.** (B18, `2a467a6`)
+- The BOM page's **Open CAD** button is greyed out when the part's Onshape link is incomplete, instead of opening a broken page. Part Portal's **Open Onshape** is greyed out when there's no link. (B19, `797038d`; B20, `ae281f3`)
 
 ## Not tested yet
 
