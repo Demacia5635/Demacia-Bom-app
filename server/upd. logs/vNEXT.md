@@ -5,7 +5,7 @@
 ## Before you deploy
 
 - Redeploy on Render by hand after merging.
-- **The first start builds one new database index** (work orders by creation time). It's small and builds by itself; no data changes.
+- **The first start builds two new database indexes** (work orders by creation time, and BOMs by the sub-assemblies they contain). They're small and build by themselves; no data changes.
 
 ## New
 
