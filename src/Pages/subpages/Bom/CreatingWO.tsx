@@ -101,12 +101,11 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
     }
 
     /**
-     * One work-order line per part, with its total quantity for one top
-     * assembly: each quantity multiplied by the quantities of the
-     * sub-assemblies above it, and added up when a part (or a whole
-     * sub-assembly) appears in several places. Same totals as the work-order
-     * page (WorkOrderDetailsPage), which reads them the same way. A bought
-     * sub-assembly is one purchased line, without the parts inside it.
+     * One work-order line per part under the assembly (a part used in several
+     * places once), the same parts the work-order page lists (it reads them
+     * with collectBomParts too). A bought sub-assembly is one purchased line,
+     * without the parts inside it. Quantities aren't stored: the page shows the
+     * BOM's current totals.
      */
     async function collectWorkOrderParts(targetBomId: string): Promise<WorkorderPartModel[]> {
         if (!targetBomId || targetBomId === "undefined") {
@@ -123,7 +122,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
         const partRecords = await fetchPartsByIds([...totals.keys()]);
 
         const collectedParts: WorkorderPartModel[] = [];
-        for (const [partID, quantityTotal] of totals) {
+        for (const partID of totals.keys()) {
             const partRecord: PartModel | null = partRecords.get(partID) ?? null;
 
             const catalogNumber = partRecord?.catalogNumber || "";
@@ -149,8 +148,8 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             const method = isPurchased ? "Purchased" : methodFromFiles(partRecord);
             collectedParts.push({
                 partID,
-                quantityTotal,
-                quantityMade: 0,
+                // No quantities: a work order follows its live BOM, and the
+                // work-order page always shows the BOM's current totals.
                 // Purchased parts aren't manufactured, so their progress isn't tracked.
                 statusCode: isPurchased ? "Untracked" : 0,
                 // Made parts: Printed / CNC from their STL / Parasolid tick.

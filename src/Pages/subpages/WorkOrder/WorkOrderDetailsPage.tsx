@@ -373,7 +373,9 @@ export default function WorkOrderDetailsPage() {
         const groups = cncGroupsRef.current;
         const touched = groups.filter((g) => g.partIDs.some((p) => partIDs.includes(p)));
         const base = touched.length === 1 ? touched[0] : undefined;
-        const members = [...new Set([...(base?.partIDs ?? []), ...partIDs])];
+        // Only parts still in the BOM: one removed from it since stays listed in its job otherwise.
+        const inBom = new Set(rows.map((r) => r.partID));
+        const members = [...new Set([...(base?.partIDs ?? []), ...partIDs])].filter((p) => inBom.has(p));
         if (members.length < 2) return;
         // Links as shown: a part already in a job brings that job's links.
         const memberRows = displayRows.filter((r) => r.partID && members.includes(r.partID));
@@ -392,7 +394,9 @@ export default function WorkOrderDetailsPage() {
         const group = cncGroupsRef.current.find((g) => row.partID && g.partIDs.includes(row.partID));
         if (!group) return;
         setGroupSaving(true);
-        await saveCncGroup({ groupID: group.id, partIDs: group.partIDs.filter((p) => p !== row.partID) });
+        // Also drops parts no longer in the BOM (see mergeParts).
+        const inBom = new Set(rows.map((r) => r.partID));
+        await saveCncGroup({ groupID: group.id, partIDs: group.partIDs.filter((p) => p !== row.partID && inBom.has(p)) });
         setGroupSaving(false);
     };
 
@@ -645,8 +649,12 @@ export default function WorkOrderDetailsPage() {
                     assemblyThumbnailURL={assemblyThumbnailUrl} 
                 />
             )}
-            {/* Under the title card, on the right. */}
-            <div className="flex justify-end -mt-3 mb-3">
+            {/* Under the title card: the note on the left, "Show size" on the right. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mt-3 mb-3">
+                {/* Rows and quantities are built from the live BOM, not a snapshot (B9). */}
+                <p className={`text-xs ${loadingText}`}>
+                    Parts and quantities follow the assembly&apos;s current BOM: publishing it again updates this work order.
+                </p>
                 <label className={`flex items-center gap-2 cursor-pointer text-sm ${filterLabel}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
                     <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
                     Show size

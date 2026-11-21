@@ -74,7 +74,13 @@ export function isPurchasedPart(
 
 export interface WorkorderPartModel {
   partID: string;
+  /**
+   * Not used: a work order follows its live BOM, so quantities come from the
+   * BOM (WorkOrderDetailsPage). Older work orders still have these stored, and
+   * the server schema defaults them; no longer sent on creation.
+   */
   quantityTotal?: number;
+  /** Not used (nothing records it); see quantityTotal. */
   quantityMade?: number;
   /** A number (older work orders) or a status name such as "In Planning" / "Untracked". */
   statusCode?: number | string;
