@@ -269,6 +269,11 @@ export default function WorkOrderDetailsPage() {
                 }
             } catch (err: any) {
                 console.error("Failed to save work order changes:", err);
+                // Kept for the next edit of this part, so a retry sends them again
+                // (newer edits made meanwhile win).
+                const next = pendingSavesRef.current.get(rowId);
+                if (next) next.changes = { ...pending.changes, ...next.changes };
+                else pendingSavesRef.current.set(rowId, { changes: pending.changes, timer: undefined });
                 setSaveError(`Couldn't save the change to "${rows.find((r) => r.id === rowId)?.name ?? partID}": ${err?.message || err}`);
             }
         }, 600);
