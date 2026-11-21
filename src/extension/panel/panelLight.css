@@ -77,3 +77,9 @@ body.light-theme-active .publish-checks { border-color: #f59e0b; }
 body.light-theme-active .publish-check-combine { color: #92400e; }
 body.light-theme-active .publish-check-warning { color: #b91c1c; }
 body.light-theme-active .publish-check-note { color: #52525b; }
+
+/* The "N rows selected" bar (SelectionEditBar). */
+body.light-theme-active .assembly-bom-selection-bar {
+  background-color: #ffffff;
+  border-color: #93c5fd;
+}

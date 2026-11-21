@@ -58,6 +58,7 @@ import BomHeader from "./BomHeader";
 import { bomPageUrl, partPageUrl } from "./websiteLinks";
 import { useRowContextMenu } from "../components/useRowContextMenu";
 import RowMenu from "./RowMenu";
+import SelectionEditBar, { type BulkField } from "./SelectionEditBar";
 import { suggestFix } from "./problemFixes";
 import { openExternal } from "../util/openExternal";
 import { useServerStatus } from "./useServerStatus";
@@ -76,6 +77,7 @@ import {
   fileRuleForMaterial,
   isExternalRow,
   isHiddenByStandardToggle,
+  isLockedRow,
   isStandardRow,
   retrackRow,
   stampOf,
@@ -683,6 +685,20 @@ export default function AssemblyBomPage() {
     },
     [rows, openRowMenu]
   );
+  /** Rows covered by the table's cell selection (the "N rows selected" bar shows for 2 or more). */
+  const [selectedRows, setSelectedRows] = useState<AssemblyBomRow[]>([]);
+  const selectedEditable = useMemo(() => selectedRows.filter((r) => !isLockedRow(r)), [selectedRows]);
+  /** Sets one cell on every selected row it applies to (a normal edit: Ctrl+Z undoes it). */
+  const setOnSelected = useCallback(
+    (field: BulkField, value: string | boolean) => {
+      const partsOnly = field !== "engineer"; // material and files are for parts
+      const ids = new Set(selectedEditable.filter((r) => !partsOnly || !r.isAssembly).map((r) => r.id));
+      if (ids.size === 0) return;
+      handleTableEdit(rows.map((r) => (ids.has(r.id) ? ({ ...r, [field]: value } as AssemblyBomRow) : r)));
+    },
+    [selectedEditable, rows, handleTableEdit]
+  );
+
   /** Puts `value` in the `field` cell of every use of the item (a normal edit). */
   const applyFix = useCallback(
     (row: AssemblyBomRow, field: string, value: string) => {
@@ -1304,6 +1320,14 @@ export default function AssemblyBomPage() {
             editedItemCount={busy ? 0 : editedItemCount}
             onRevertAll={onRevertAll}
           />
+          {selectedRows.length > 1 && (
+            <SelectionEditBar
+              rowCount={selectedRows.length}
+              editableCount={selectedEditable.length}
+              disabled={busy}
+              onSet={setOnSelected}
+            />
+          )}
           <div onContextMenuCapture={onTableContextMenu}>
           <Table
             data={rows}
@@ -1316,6 +1340,9 @@ export default function AssemblyBomPage() {
             frozenColumns={2}
             rowFilter={searchFilter}
             hideRow={hideRow}
+            // Excel-style: select cells, Ctrl+C / Ctrl+V / Ctrl+D, and the bar above for several rows.
+            cellSelection
+            onSelectionChange={setSelectedRows}
           />
           </div>
           {rowMenu && (
