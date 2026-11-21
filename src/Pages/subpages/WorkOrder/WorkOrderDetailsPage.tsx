@@ -235,7 +235,7 @@ export default function WorkOrderDetailsPage() {
                     } as any;
                 }
 
-                const existingWoPart = workOrderData?.parts?.find((p: any) => p.partID === partID);
+                const existingWoPart = workOrderData?.parts?.find((p) => p.partID === partID);
 
                 let avatarUrl = recordImageSrc(part);
 
@@ -249,7 +249,7 @@ export default function WorkOrderDetailsPage() {
                     avatar: avatarUrl,
                     // Empty until the part is first changed in this work order.
                     lastUpadte: formatIsraelTime(existingWoPart?.updatedAt),
-                    productionMakingOwner: (existingWoPart as any)?.productionMakingOwner || "",
+                    productionMakingOwner: existingWoPart?.productionMakingOwner || "",
                     catalogNumber: part?.catalogNumber || "",
                     name: partDisplayName(part, partID),
                     size: part?.size || "",
@@ -258,12 +258,13 @@ export default function WorkOrderDetailsPage() {
                     // A bought sub-assembly not saved in this work order yet (one made
                     // before they were listed whole) starts as bought, like on creation.
                     statusCode: boughtBom && !existingWoPart ? "Untracked" : parseStatusToString(existingWoPart?.statusCode),
-                    approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
-                    manufacturingMethod: (existingWoPart as any)?.manufacturingMethod || (part as any)?.manufacturingMethod || (boughtBom ? "Purchased" : "Manual"),
-                    material: (existingWoPart as any)?.material || part?.material || "",
-                    Priority: (existingWoPart as any)?.Priority || "Medium",
-                    comments: (existingWoPart as any)?.comments || part?.comments || "",
-                    links: (existingWoPart as any)?.links || (part as any)?.links || "",
+                    approxArrivalDate: existingWoPart?.approxArrivalDate || "",
+                    manufacturingMethod: existingWoPart?.manufacturingMethod || (part as any)?.manufacturingMethod || (boughtBom ? "Purchased" : "Manual"),
+                    // Not stored per work order (the server keeps no material there): the part's.
+                    material: part?.material || "",
+                    Priority: existingWoPart?.Priority || "Medium",
+                    comments: existingWoPart?.comments || part?.comments || "",
+                    links: existingWoPart?.links || (part as any)?.links || "",
                     onshapeURL: part?.onshapeURL || "",
                     exportSTL: part?.stlLink || "",
                     exportParasolid: part?.parasolidLink || "",
@@ -533,7 +534,7 @@ export default function WorkOrderDetailsPage() {
     const [pdfProgress, setPdfProgress] = useState<{ loaded: number; total: number } | null>(null);
 
     const handleExportPdf = async () => {
-        const shownBomName = (bomName?.workOrderID === workOrderID ? bomName?.name : undefined) || workOrderData?.bomName;
+        const shownBomName = bomName?.workOrderID === workOrderID ? bomName?.name : undefined;
         // The rows as the table shows them: filtered and in its sort order.
         const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
             .map(rowFromElement)

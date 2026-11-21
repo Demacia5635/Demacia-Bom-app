@@ -86,27 +86,41 @@ export interface WorkorderPartModel {
   statusCode?: number | string;
   /** e.g. "Manual", "CNC", "Purchased". */
   manufacturingMethod?: string;
+  /** "High", "Medium", "Low", "Untracked" or "Finished" (stored with a capital P). */
+  Priority?: string;
   productionGCOwner?: string;
   productionMakingOwner?: string;
+  comments?: string;
+  links?: string;
+  approxArrivalDate?: string;
   updatedAt?: Date;
   createdAt?: Date;
 }
 
+/** A work order as stored (server/models/WorkOrder.ts). */
 export interface WorkorderModel {
   id: string;
   name?: string;
   bomID?: string;
-  bomName?: string;
-  catalogNumber?: string;
   workOrderOwner?: string;
   description?: string;
   parts?: WorkorderPartModel[];
   /** Parts cut together in one CNC run, sharing one G-code link (WorkOrder/cncGroups.ts). */
   cncGroups?: { id: string; partIDs: string[]; links?: string }[];
   avatarID?: string;
-  thumbnailURL?: string;
-  onshapeID?: OnshapeID & { workOrderID?: string; assemblyID?: string };
   comments?: string;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+/**
+ * A work order as the list page shows it: the stored record plus what the
+ * client fills in from its assembly (not stored), and image fields older
+ * records may still have.
+ */
+export interface WorkorderRow extends WorkorderModel {
+  bomName?: string;
+  catalogNumber?: string;
+  driveFileId?: string;
+  thumbnailURL?: string;
 }

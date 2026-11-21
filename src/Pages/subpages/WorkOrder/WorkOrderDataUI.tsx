@@ -37,7 +37,7 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder }) => {
 
     // Resolve image source hierarchy matching the parent BOM exactly
     // The parent BOM's image; the work order's own until the BOM has loaded.
-    const imageSrc = recordImageSrc(bomData) || recordImageSrc(workOrder as any);
+    const imageSrc = recordImageSrc(bomData) || recordImageSrc(workOrder);
 
     return (
       <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200 mb-6`}>
@@ -74,7 +74,8 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder }) => {
               <p>
                 Catalog No:{" "}
                 <span className={`${textValue} font-medium`}>
-                  {workOrder.catalogNumber || "N/A"}
+                  {/* Not stored on the work order: the assembly's. */}
+                  {bomData?.catalogNumber || "N/A"}
                 </span>
               </p>
               <span>•</span>

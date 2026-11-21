@@ -2,20 +2,15 @@ import { useState, useMemo, useEffect } from "react";
 import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import WorkOrderTable from "./WorkOrderTable";
-import type { WorkorderModel } from "../../util/Models";
+import type { WorkorderRow } from "../../util/Models";
 import { fetchBomsByIds } from "../../util/records";
 import { recordImageSrc } from "../../util/recordImage";
 
-// Define and EXPORT the WorkorderSummary type directly here
-export type WorkorderSummary = Omit<
-  WorkorderModel,
-  "bomID" | "description" | "parts" | "comments" | "createdAt"
->;
 
 export function WorkOrdersPage() {
     const { isLight } = useThemeSync();
     const [searchQuery, setSearchQuery] = useState("");
-    const [workOrders, setWorkOrders] = useState<WorkorderSummary[]>([]);
+    const [workOrders, setWorkOrders] = useState<WorkorderRow[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -23,21 +18,21 @@ export function WorkOrdersPage() {
         async function getWorkOrders() {
             setLoading(true);
             try {
-                const response = await fetchFromApi<WorkorderSummary[]>(`/db/workOrder/all`);
+                const response = await fetchFromApi<WorkorderRow[]>(`/db/workOrder/all`);
                 // Oldest first, by when each was made. The server sorts by id, which was
                 // the creation time until new ids became random (crypto.randomUUID).
-                const createdTime = (wo: WorkorderSummary) =>
-                    Date.parse(String((wo as WorkorderModel).createdAt ?? "")) || Number(wo.id) || 0;
+                const createdTime = (wo: WorkorderRow) =>
+                    Date.parse(String(wo.createdAt ?? "")) || Number(wo.id) || 0;
                 const list = [...(response || [])].sort((a, b) => createdTime(a) - createdTime(b));
                 setWorkOrders(list);
 
                 // Each work order is made from an assembly: show that assembly's
                 // image, name and catalog number (one request for all of them).
-                const bomIds = list.map((wo) => (wo as WorkorderModel).bomID || "").filter(Boolean);
+                const bomIds = list.map((wo) => wo.bomID || "").filter(Boolean);
                 const boms = await fetchBomsByIds(bomIds).catch(() => null);
                 if (boms && boms.size > 0) {
                     setWorkOrders(list.map((wo) => {
-                        const bom = boms.get((wo as WorkorderModel).bomID || "");
+                        const bom = boms.get(wo.bomID || "");
                         if (!bom) return wo;
                         const bomImage = recordImageSrc(bom);
                         return {
@@ -46,7 +41,7 @@ export function WorkOrdersPage() {
                             catalogNumber: wo.catalogNumber || bom.catalogNumber,
                             // The assembly's current picture; the work order's own only as a fallback.
                             ...(bomImage ? { avatarID: bomImage, driveFileId: undefined, thumbnailURL: undefined } : {}),
-                        } as WorkorderSummary;
+                        } as WorkorderRow;
                     }));
                 }
             } catch (err: any) {

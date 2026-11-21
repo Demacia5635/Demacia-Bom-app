@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { AuthenticatedImage } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import { createPortal } from "react-dom";
-import type { WorkorderSummary } from "./WorkOrderPage";
+import type { WorkorderRow } from "../../util/Models";
 import { recordImageSrc } from "../../util/recordImage";
 
-export const WorkOrderTable: React.FC<{ workOrders: WorkorderSummary[] }> = ({ workOrders }) => {
+export const WorkOrderTable: React.FC<{ workOrders: WorkorderRow[] }> = ({ workOrders }) => {
     const navigate = useNavigate();
     const { isLight } = useThemeSync();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
