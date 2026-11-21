@@ -171,6 +171,9 @@ export default function WorkOrderDetailsPage() {
         if (!workOrderID || !workOrderData || !workOrderData.bomID || workOrderData.id !== workOrderID) return;
         let cancelled = false;
 
+        // Sub-assemblies bought whole: one purchased row each (collectBomParts).
+        const boughtAssemblies = new Map<string, BomModel>();
+
         async function fetchBomPartsRecursively(targetBomId: string): Promise<Map<string, number>> {
             const aggregated = new Map<string, number>();
             const fetchBom = async (id: string) => {
@@ -178,7 +181,7 @@ export default function WorkOrderDetailsPage() {
                 if (id === targetBomId && !cancelled && bom?.name) setBomName({ workOrderID: workOrderID!, name: bom.name });
                 return bom;
             };
-            for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1)) {
+            for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1, [], boughtAssemblies)) {
                 aggregated.set(partID, (aggregated.get(partID) || 0) + quantity);
             }
             return aggregated;
@@ -195,8 +198,21 @@ export default function WorkOrderDetailsPage() {
 
             for (const [partID, totalQty] of aggregatedQuantities.entries()) {
                 let part: PartModel | null = partRecords.get(partID) ?? null;
+                const boughtBom = boughtAssemblies.get(partID);
 
-                if (!part) {
+                if (!part && boughtBom) {
+                    // A bought sub-assembly without its own part record: shown by its BOM record.
+                    part = {
+                        id: partID,
+                        name: boughtBom.name,
+                        catalogNumber: boughtBom.catalogNumber || "",
+                        description: boughtBom.description,
+                        avatarID: boughtBom.avatarID,
+                        onshapeURL: boughtBom.onshapeURL || "",
+                        vendor: boughtBom.vendor,
+                        markedStandard: boughtBom.markedStandard,
+                    };
+                } else if (!part) {
                     part = {
                         id: partID,
                         name: partID,
@@ -229,9 +245,11 @@ export default function WorkOrderDetailsPage() {
                     size: part?.size || "",
                     partID,
                     quantityTotal: totalQty,
-                    statusCode: parseStatusToString(existingWoPart?.statusCode),
+                    // A bought sub-assembly not saved in this work order yet (one made
+                    // before they were listed whole) starts as bought, like on creation.
+                    statusCode: boughtBom && !existingWoPart ? "Untracked" : parseStatusToString(existingWoPart?.statusCode),
                     approxArrivalDate: (existingWoPart as any)?.approxArrivalDate || "",
-                    manufacturingMethod: (existingWoPart as any)?.manufacturingMethod || (part as any)?.manufacturingMethod || "Manual",
+                    manufacturingMethod: (existingWoPart as any)?.manufacturingMethod || (part as any)?.manufacturingMethod || (boughtBom ? "Purchased" : "Manual"),
                     material: (existingWoPart as any)?.material || part?.material || "",
                     Priority: (existingWoPart as any)?.Priority || "Medium",
                     comments: (existingWoPart as any)?.comments || part?.comments || "",

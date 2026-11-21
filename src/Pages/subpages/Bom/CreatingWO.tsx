@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { fetchFromApi } from "../../../util/ApiService";
-import { collectBomParts } from "../../../util/bomParts";
+import { collectBomParts, isBoughtAssembly } from "../../../util/bomParts";
 import { fetchPartsByIds } from "../../../util/records";
 import { isPurchasedPart, type BomModel, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
 import { checkCatalogTree, type CatalogNode } from "../../../util/catalogNumbers";
@@ -86,7 +86,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
                 name,
                 number: bom.catalogNumber || "",
                 isAssembly: true,
-                exempt: bomId !== topBomId && (!!bom.markedStandard || !!bom.vendor?.trim()),
+                exempt: bomId !== topBomId && isBoughtAssembly(bom),
                 children,
             };
         }
@@ -105,7 +105,8 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
      * assembly: each quantity multiplied by the quantities of the
      * sub-assemblies above it, and added up when a part (or a whole
      * sub-assembly) appears in several places. Same totals as the work-order
-     * page (WorkOrderDetailsPage), which reads them the same way.
+     * page (WorkOrderDetailsPage), which reads them the same way. A bought
+     * sub-assembly is one purchased line, without the parts inside it.
      */
     async function collectWorkOrderParts(targetBomId: string): Promise<WorkorderPartModel[]> {
         if (!targetBomId || targetBomId === "undefined") {
@@ -113,7 +114,8 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
         }
         const fetchBom = (id: string) => fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(id)}`);
         const totals = new Map<string, number>();
-        for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1)) {
+        const boughtAssemblies = new Map<string, BomModel>();
+        for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1, [], boughtAssemblies)) {
             totals.set(partID, (totals.get(partID) || 0) + quantity);
         }
 
@@ -129,9 +131,9 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             const engineer = partRecord?.engineer?.trim() || "";
 
             // Bought, not made (Onshape Standard Content such as screws, a part
-            // with a vendor, or one marked standard in the extension): no catalog
-            // number, material or engineer needed.
-            const isPurchased = isPurchasedPart(partRecord);
+            // with a vendor, one marked standard in the extension, or a bought
+            // sub-assembly): no catalog number, material or engineer needed.
+            const isPurchased = boughtAssemblies.has(partID) || isPurchasedPart(partRecord);
 
             if (!isPurchased) {
                 // Catalog numbers were checked for the whole tree first (checkCatalogNumbers).
