@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { GoogleDriveService, folderForUpload, isTeamFolder } from "../services/driveService";
+import { GoogleDriveService, folderForUpload } from "../services/driveService";
 
 /** What a Drive file ID looks like; anything else isn't sent to Drive. */
 const DRIVE_FILE_ID = /^[A-Za-z0-9_-]{10,100}$/;
@@ -44,29 +44,6 @@ export async function checkConnection(
 ) {
   const connected = await client.checkConnection();
   return res.status(connected.connected ? 200 : 503).json(connected);
-}
-
-export async function getFilesFromFolder(
-  client: GoogleDriveService,
-  req: Request<{ folderID: string }>,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const folderID = req.params.folderID;
-    if (!folderID)
-      return res.status(400).json({ message: "folder id is required" });
-    // Only the team's own folders (this also keeps the ID out of Drive's
-    // query syntax unless it's one we configured).
-    if (!isTeamFolder(folderID))
-      return res.status(404).json({ message: `Folder ${folderID} not found` });
-    const files = await client.getAllFilesInFolder(folderID);
-    if (!files)
-      return res.status(404).json({ message: `Folder ${folderID} not found` });
-    return res.status(200).json(files);
-  } catch (err) {
-    next(err);
-  }
 }
 
 export async function getFileFromId(

@@ -63,31 +63,6 @@ export class GoogleDriveService {
     this.drive = google.drive({ version: "v3", auth: oauth2Client });
   }
 
-  async getAllFilesInFolder(
-    folderId: string = IMAGE_FOLDER_ID,
-  ): Promise<DriveFile[]> {
-    this.assertImageFolderConfigured();
-
-    const files: DriveFile[] = [];
-    let pageToken: string | undefined = undefined;
-
-    do {
-      const res: any = await this.drive.files.list({
-        q: `'${folderId}' in parents and trashed = false`,
-        fields:
-          "nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)",
-        pageSize: 100,
-        pageToken,
-      });
-
-      const items = (res.data.files ?? []) as drive_v3.Schema$File[];
-      files.push(...items.map(this.mapFile));
-      pageToken = res.data.nextPageToken ?? undefined;
-    } while (pageToken);
-
-    return files;
-  }
-
   /** fileId -> whether it's directly inside one of the team folders. */
   private teamFileCache = new Map<string, boolean>();
 
@@ -179,29 +154,6 @@ export class GoogleDriveService {
   async deleteFile(fileId: string): Promise<void> {
     await this.drive.files.delete({ fileId });
     this.teamFileCache.delete(fileId);
-  }
-
-  async deleteFolder(folderId: string): Promise<void> {
-    await this.drive.files.delete({ fileId: folderId });
-  }
-
-  async createFolder(
-    folderName: string,
-    parentFolderId: string = IMAGE_FOLDER_ID,
-  ): Promise<DriveFile> {
-    this.assertImageFolderConfigured();
-
-    const res = await this.drive.files.create({
-      requestBody: {
-        name: folderName,
-        mimeType: "application/vnd.google-apps.folder",
-        parents: [parentFolderId],
-      },
-      fields:
-        "id, name, mimeType, createdTime, modifiedTime, webViewLink, parents",
-    });
-
-    return this.mapFile(res.data);
   }
 
   private assertImageFolderConfigured() {

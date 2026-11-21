@@ -39,10 +39,4 @@ router.delete(
     await driveController.deleteFile(drive, req, res, next),
 );
 
-router.get(
-  "/folder/id/:folderID",
-  async (req, res, next) =>
-    await driveController.getFilesFromFolder(drive, req, res, next),
-);
-
 export default router;
