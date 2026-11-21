@@ -1061,14 +1061,14 @@ export default function AssemblyBomPage() {
     [workOrderProblems]
   );
 
-  // Problems are read through a ref, so the columns are only rebuilt when the
-  // default engineer changes, not on every edit.
-  /** "Show size": the Size column, filled from Onshape (remembered in this browser). */
   /** Light / dark (theme.ts), switched by the header's theme button like the website's. */
   const theme = usePanelThemeSetting();
+  /** "Show size": the Size column, filled from Onshape (remembered in this browser). */
   const [showSize, setShowSize] = useState(() => readToggle("showSize"));
   useEffect(() => writeToggle("showSize", showSize), [showSize]);
 
+  // Problems are read through a ref, so the columns are only rebuilt when the
+  // default engineer or "Show size" changes, not on every edit.
   const columns = useMemo(
     () =>
       buildAssemblyBomColumns(
