@@ -7,6 +7,18 @@
 - **The extension asks for one new permission: notifications** (for the "publish finished" message). Chrome shows it when the new version is loaded.
 - Redeploy the server first if you want "who saved it" recorded: the extension now sends the Onshape user name with every save (an older server just ignores it).
 
+## Check before releasing (Chrome, about 10 minutes)
+
+1. Open an assembly: the status dot, "Loaded … ago", the amber saved-copy banner, then Refresh BOM.
+2. Edit 2 cells, then Ctrl+Z / Ctrl+Y (outside the cell), ↺ on a row, and "Revert all".
+3. Right-click a red cell: 💡 fix, "Copy Onshape link", "Open on the website".
+4. Publish: the Changes list, the time left, success, the header link.
+5. Excel-style editing: drag across cells, Ctrl+C into Excel, paste a 2×2 block back, Ctrl+D, the bottom bar with Material → Set, and Ctrl+Z.
+6. Switch to the light theme once: the table colours, the bar, the banner.
+7. Firefox (if released there): the BOM button note, the sidebar following tabs, the narrow layout.
+
+If there's no time to check step 5, the Excel-style editing can be left out with one clean revert (`git revert cc62bf3 462001d bf18cfa`); nothing else depends on it. The notifications permission (`fc2e5c6`) can also be reverted on its own; a store-installed extension stays disabled after the update until the user accepts the new permission.
+
 ## New
 
 - **Right-click a row** for a menu (Shift+right-click keeps the browser's menu):
