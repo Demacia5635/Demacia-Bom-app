@@ -10,7 +10,8 @@ import { openExternal } from "../../util/openExternal";
 /** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
 const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
 
-const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
+/** `onSaved`: called with the part as saved, so the page behind can show the new values. */
+const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => void }> = ({ part, onSaved }) => {
     const { isLight } = useThemeSync();
     const navigate = useNavigate();
 
@@ -68,6 +69,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                     body: JSON.stringify(changes),
                 });
                 savedValuesRef.current = { ...savedValuesRef.current, ...changes };
+                onSaved?.(savedValuesRef.current);
             }
             setSaved(true);
         } catch (err: any) {

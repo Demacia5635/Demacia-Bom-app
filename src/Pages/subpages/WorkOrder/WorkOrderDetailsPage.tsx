@@ -447,6 +447,25 @@ export default function WorkOrderDetailsPage() {
         }
     };
 
+    /**
+     * A part saved in Part Portal: its row shows the new name and catalog number,
+     * and the new material / comments where the row showed the part's own (not
+     * ones set in this work order).
+     */
+    const handlePartSaved = (saved: PartModel) => {
+        const before = selectedPart;
+        setRows((current) => current.map((r) => {
+            if (r.partID !== saved.id) return r;
+            return {
+                ...r,
+                name: partDisplayName(saved, saved.id),
+                catalogNumber: saved.catalogNumber || "",
+                material: r.material === (before?.material || "") ? saved.material || "" : r.material,
+                comments: r.comments === (before?.comments || "") ? saved.comments || "" : r.comments,
+            };
+        }));
+    };
+
     /** The row a table <tr> shows (the Table tags each one with its row ID). */
     const rowFromElement = (tr: Element): WorkOrderTableRow | undefined => {
         const id = tr.getAttribute("data-row-id");
@@ -851,7 +870,7 @@ export default function WorkOrderDetailsPage() {
                         >
                             ✕ Close
                         </button>
-                        <PartPortal part={selectedPart} />
+                        <PartPortal part={selectedPart} onSaved={handlePartSaved} />
                     </div>
                 </div>
             )}

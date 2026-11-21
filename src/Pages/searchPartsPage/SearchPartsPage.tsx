@@ -243,7 +243,12 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
                 >
                     <div onClick={(e) => e.stopPropagation()}>
-                        <PartPortal part={isOpen}/>
+                        <PartPortal
+                            part={isOpen}
+                            onSaved={(saved) => setItems((list) => list.map((item) =>
+                                item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item
+                            ))}
+                        />
                     </div>
                 </div>,
                 document.body

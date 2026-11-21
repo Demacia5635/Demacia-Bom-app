@@ -249,6 +249,27 @@ export default function BomDetailsPage() {
     try { localStorage.setItem(VIEW_STORAGE_KEY, next); } catch { /* not remembered */ }
   };
 
+  /** A part saved in Part Portal: its rows (and the views built later) show the new values. */
+  const handlePartSaved = (saved: PartModel) => {
+    const fields = {
+      name: partDisplayName(saved, saved.id),
+      catalogNumber: saved.catalogNumber || "",
+      revision: saved.revision || "",
+      description: saved.description || "",
+      engineer: saved.engineer || "",
+      material: saved.material || "",
+      mass: saved.mass || 0,
+      price: saved.price || 0,
+      comments: saved.comments || "",
+    };
+    partEditsRef.current.set(saved.id, {
+      ...partEditsRef.current.get(saved.id),
+      name: saved.name, catalogNumber: saved.catalogNumber, revision: saved.revision, description: saved.description,
+      engineer: saved.engineer, material: saved.material, mass: saved.mass, price: saved.price, comments: saved.comments,
+    });
+    setRows((current) => current.map((r) => (!r.isSubAssembly && r.entityID === saved.id ? { ...r, ...fields } : r)));
+  };
+
   const handleTableDataChange = (newData: BomTableRow[]) => {
     // 1. Instantly update local table state so typing has 0 lag
     setRows(newData);
@@ -493,7 +514,7 @@ export default function BomDetailsPage() {
             >
               ✕ Close
             </button>
-            <PartPortal part={selectedPart} />
+            <PartPortal part={selectedPart} onSaved={handlePartSaved} />
           </div>
         </div>
       )}
