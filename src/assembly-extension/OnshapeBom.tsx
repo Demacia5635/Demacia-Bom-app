@@ -231,8 +231,12 @@ export function parseOnshapeBomTable(table: OnshapeBomTable): ParsedOnshapeBomRo
   // Works on a single-level table too: every item is then top-level ("1",
   // "2"...), and sub-assemblies are told apart by their missing partId.
   const topLevel = items.filter((it) => !!it.item && !it.item.includes("."));
-  const hasChildren = (itemNumber: string) =>
-    !!itemNumber && items.some((it) => it.item && it.item.startsWith(`${itemNumber}.`));
+  // Top-level items with something nested under them ("1" for "1.1", "1.2.3"),
+  // found in one pass instead of searching every item for each one.
+  const parents = new Set(
+    items.filter((it) => it.item?.includes(".")).map((it) => it.item.slice(0, it.item.indexOf(".")))
+  );
+  const hasChildren = (itemNumber: string) => !!itemNumber && parents.has(itemNumber);
 
   // A row without a partId is an assembly even when it has no children in the
   // response (an empty sub-assembly), which the numbering alone can't show.
