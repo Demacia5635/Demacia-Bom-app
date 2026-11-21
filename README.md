@@ -159,7 +159,7 @@ Every `/api` route needs the `x-client-secret` header and an allowed origin, exc
 | `/api/db/part/all`, `/ids`, `/id/:id` | GET, POST, DELETE | Parts |
 | `/api/db/part/d/:documentID/.../p/:partID` | GET, DELETE | A part by its Onshape identity |
 | `/api/db/bom/all`, `/ids`, `/id/:id` | GET, POST, DELETE | BOMs (assemblies) |
-| `/api/db/bom/d/:documentID/.../e/:elementID` | GET, POST, DELETE | A BOM by its Onshape identity |
+| `/api/db/bom/d/:documentID/.../e/:elementID/b/:bomID` | GET, POST, DELETE | A BOM by its Onshape identity |
 | `/api/db/workOrder/all`, `/id/:id`, `/id/:id/part` | GET, POST, DELETE | Work orders and their per-part progress |
 | `/api/enum/productionType/*`, `/api/enum/status/*` | GET | Production types and statuses (`server/db/enum.ts`) |
 | `/api/drive/file/id/:fileID` | GET, DELETE | Read or delete a Drive file |
