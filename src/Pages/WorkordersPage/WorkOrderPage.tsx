@@ -23,9 +23,7 @@ export function WorkOrdersPage() {
         async function getWorkOrders() {
             setLoading(true);
             try {
-                const response = await fetchFromApi<WorkorderSummary[]>(`/db/workOrder/all`).catch(
-                    () => fetchFromApi<WorkorderSummary[]>(`/db/workorder/all`)
-                );
+                const response = await fetchFromApi<WorkorderSummary[]>(`/db/workOrder/all`);
                 const list = response || [];
                 setWorkOrders(list);
 
