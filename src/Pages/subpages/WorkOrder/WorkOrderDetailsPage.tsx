@@ -105,6 +105,8 @@ export default function WorkOrderDetailsPage() {
     /** Edits waiting to be saved, per row (merged until the save goes out). */
     const pendingSavesRef = useRef<Map<string, { changes: Record<string, unknown>; timer?: ReturnType<typeof setTimeout> }>>(new Map());
     const [saveError, setSaveError] = useState<string | null>(null);
+    // The assembly's name, from the BOM loaded for the rows (work orders don't store it).
+    const [bomName, setBomName] = useState<{ workOrderID: string; name: string } | null>(null);
     /** "Show size" checkbox, shared with the BOM page (remembered in this browser). */
     const [showSize, setShowSize] = useState(readShowSize);
     useEffect(() => writeShowSize(showSize), [showSize]);
@@ -166,7 +168,11 @@ export default function WorkOrderDetailsPage() {
 
         async function fetchBomPartsRecursively(targetBomId: string): Promise<Map<string, number>> {
             const aggregated = new Map<string, number>();
-            const fetchBom = (id: string) => fetchFromApi<BomModel>(`/db/bom/id/${id}`);
+            const fetchBom = async (id: string) => {
+                const bom = await fetchFromApi<BomModel>(`/db/bom/id/${id}`);
+                if (id === targetBomId && !cancelled && bom?.name) setBomName({ workOrderID: workOrderID!, name: bom.name });
+                return bom;
+            };
             for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1)) {
                 aggregated.set(partID, (aggregated.get(partID) || 0) + quantity);
             }
@@ -444,6 +450,7 @@ export default function WorkOrderDetailsPage() {
     const [pdfProgress, setPdfProgress] = useState<{ loaded: number; total: number } | null>(null);
 
     const handleExportPdf = async () => {
+        const shownBomName = (bomName?.workOrderID === workOrderID ? bomName?.name : undefined) || workOrderData?.bomName;
         // The rows as the table shows them: filtered and in its sort order.
         const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
             .map(rowFromElement)
@@ -465,7 +472,7 @@ export default function WorkOrderDetailsPage() {
             await printPartsPdf({
                 title: workOrderData?.name || "Work order",
                 subtitleLines: [
-                    workOrderData?.bomName ? `Assembly: ${workOrderData.bomName}` : "",
+                    shownBomName ? `Assembly: ${shownBomName}` : "",
                     filters.length > 0 ? `Filters: ${filters.join(" · ")}` : "All parts",
                     `Exported ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Jerusalem" })}`,
                 ],
