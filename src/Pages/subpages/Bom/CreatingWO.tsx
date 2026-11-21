@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { fetchFromApi } from "../../../util/ApiService";
+import { collectBomParts } from "../../../util/bomParts";
 import { fetchPartsByIds } from "../../../util/records";
 import { isPurchasedPart, type BomModel, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
 import { checkCatalogTree, type CatalogNode } from "../../../util/catalogNumbers";
@@ -55,8 +56,6 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const visitedBoms = new Set<string>();
-
     /**
      * Checks every catalog number in the assembly against the numbering rules
      * (util/catalogNumbers.ts, the same the BOM extension shows) and throws
@@ -101,34 +100,34 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
         );
     }
 
-    async function fetchBomPartsRecursively(
-        targetBomId: string,
-        seenCatalogNumbers: Set<string>
-    ): Promise<WorkorderPartModel[]> {
+    /**
+     * One work-order line per part, with its total quantity for one top
+     * assembly: each quantity multiplied by the quantities of the
+     * sub-assemblies above it, and added up when a part (or a whole
+     * sub-assembly) appears in several places. Same totals as the work-order
+     * page (WorkOrderDetailsPage), which reads them the same way.
+     */
+    async function collectWorkOrderParts(targetBomId: string): Promise<WorkorderPartModel[]> {
         if (!targetBomId || targetBomId === "undefined") {
             throw new Error("Assembly ID is missing or undefined.");
         }
-        if (visitedBoms.has(targetBomId)) return [];
-        visitedBoms.add(targetBomId);
-
-        const currentBom = await fetchFromApi<BomModel>(`/db/bom/id/${targetBomId}`);
-        const collectedParts: WorkorderPartModel[] = [];
-
-        for (const sub of currentBom.subAssemblies || []) {
-            const subParts = await fetchBomPartsRecursively(sub.bomID, seenCatalogNumbers);
-            collectedParts.push(...subParts);
+        const fetchBom = (id: string) => fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(id)}`);
+        const totals = new Map<string, number>();
+        for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1)) {
+            totals.set(partID, (totals.get(partID) || 0) + quantity);
         }
 
-        // This assembly's parts in one request instead of one per part.
-        const partRecords = await fetchPartsByIds((currentBom.parts || []).map((p) => p.partID));
+        // Every part in one request instead of one per part.
+        const partRecords = await fetchPartsByIds([...totals.keys()]);
 
-        for (const p of currentBom.parts || []) {
-            const partRecord: PartModel | null = partRecords.get(p.partID) ?? null;
-            
+        const collectedParts: WorkorderPartModel[] = [];
+        for (const [partID, quantityTotal] of totals) {
+            const partRecord: PartModel | null = partRecords.get(partID) ?? null;
+
             const catalogNumber = partRecord?.catalogNumber || "";
             const material = partRecord?.material?.trim() || "";
             const engineer = partRecord?.engineer?.trim() || "";
-            
+
             // Bought, not made (Onshape Standard Content such as screws, a part
             // with a vendor, or one marked standard in the extension): no catalog
             // number, material or engineer needed.
@@ -138,27 +137,27 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
                 // Catalog numbers were checked for the whole tree first (checkCatalogNumbers).
                 // Non-purchased parts need a material and an engineer.
                 if (!material) {
-                    throw new Error(`Missing material for manufactured part "${partRecord?.name || p.partID}" (Catalog: ${catalogNumber}).`);
+                    throw new Error(`Missing material for manufactured part "${partRecord?.name || partID}" (Catalog: ${catalogNumber}).`);
                 }
                 if (!engineer) {
-                    throw new Error(`Missing engineer for manufactured part "${partRecord?.name || p.partID}" (Catalog: ${catalogNumber}).`);
+                    throw new Error(`Missing engineer for manufactured part "${partRecord?.name || partID}" (Catalog: ${catalogNumber}).`);
                 }
             }
 
-            const workOrderPart: WorkorderPartModel = {
-                partID: p.partID,
-                quantityTotal: p.quantity,
+            const method = isPurchased ? "Purchased" : methodFromFiles(partRecord);
+            collectedParts.push({
+                partID,
+                quantityTotal,
                 quantityMade: 0,
                 // Purchased parts aren't manufactured, so their progress isn't tracked.
                 statusCode: isPurchased ? "Untracked" : 0,
                 // Made parts: Printed / CNC from their STL / Parasolid tick.
-                ...(isPurchased ? { manufacturingMethod: "Purchased" } : methodFromFiles(partRecord) ? { manufacturingMethod: methodFromFiles(partRecord) } : {}),
+                ...(method ? { manufacturingMethod: method } : {}),
                 productionGCOwner: "",
                 productionMakingOwner: "",
                 updatedAt: new Date(),
                 createdAt: new Date(),
-            };
-            collectedParts.push(workOrderPart);
+            });
         }
         return collectedParts;
     }
@@ -171,8 +170,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
         try {
             const id = Date.now().toString();
             await checkCatalogNumbers(bomId);
-            const seenCatalogNumbers = new Set<string>();
-            const parts = await fetchBomPartsRecursively(bomId, seenCatalogNumbers);
+            const parts = await collectWorkOrderParts(bomId);
 
             const payload: WorkorderModel = {
                 id: id,
