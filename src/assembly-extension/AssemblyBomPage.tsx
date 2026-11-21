@@ -35,6 +35,7 @@ import { childrenByParent, distinctRows, linkArrays, publishPhases, ROOT_PARENT 
 import PublishBomModal, { type PublishBomFormValues, type PublishCheck, type PublishPreview, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
+import { describePublishError, lowerFirst } from "./publishErrors";
 import { CATALOG_NUMBER_FORMAT, checkCatalogTree, type CatalogNode } from "../util/catalogNumbers";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
@@ -1359,6 +1360,8 @@ export default function AssemblyBomPage() {
             active.set(id, { name, step: next });
             report();
           },
+          /** The step it is on, for saying where a failure happened. */
+          current: () => active.get(id)?.step ?? "",
           finish: () => {
             active.delete(id);
             done += 1;
@@ -1468,7 +1471,7 @@ export default function AssemblyBomPage() {
               }
             } catch (err: any) {
               unsavedEdits.add(row.id);
-              problems.push(`Onshape properties of "${row.name}": ${err?.message || err}`);
+              problems.push(`Writing the edits of "${row.name}" to Onshape failed: ${describePublishError(err)}`);
             }
           }
 
@@ -1701,7 +1704,7 @@ export default function AssemblyBomPage() {
                   await publishRow(row, progress);
                   published.add(row.id);
                 } catch (err: any) {
-                  failSave(row, `Saving "${row.name}": ${err?.message || err}`);
+                  failSave(row, `"${row.name}" failed while ${lowerFirst(progress.current())}: ${describePublishError(err)}`);
                 } finally {
                   progress.finish();
                 }
@@ -1747,10 +1750,10 @@ export default function AssemblyBomPage() {
           // failure (a skip is always recorded after the failure that caused it).
           const others = problems.length - saveFailures.length;
           const message =
-            `"${values.name}" was not saved: ${notSaved.size} item${notSaved.size === 1 ? "" : "s"} in it ` +
-            `could not be saved (first: ${saveFailures[0]}).` +
+            `"${values.name}" was not saved, because ${notSaved.size} item${notSaved.size === 1 ? "" : "s"} in it ` +
+            `could not be saved. First: ${saveFailures[0]}` +
             (others > 0 ? ` ${others} other problem${others === 1 ? "" : "s"} (see the console).` : "") +
-            ` The items that were saved are kept. Publish BOM again to retry.`;
+            ` The items that were saved are kept.`;
           console.warn("[publish] problems:", problems);
           setPublishError(message);
           client.showMessageBubble(message);
@@ -1803,10 +1806,15 @@ export default function AssemblyBomPage() {
         }
         setPublishOpen(false);
         return true;
-      } catch (err: any) {
-        const apiErr = err as ApiError;
-        setPublishError(apiErr.message);
-        client.showMessageBubble(`Publish failed: ${apiErr.message}`);
+      } catch (err: unknown) {
+        // Per-item failures are caught inside; this is the top assembly's own
+        // steps, so say which step it was on.
+        const at = Array.from(active.values()).find((a) => a.name === values.name);
+        const message =
+          `Publish failed${at ? ` while ${lowerFirst(at.step)}` : ""}: ${describePublishError(err)}`;
+        console.warn("[publish] failed:", err);
+        setPublishError(message);
+        client.showMessageBubble(message);
         return null; // marks the operation failed on /tele
       } finally {
         setPublishing(false);
