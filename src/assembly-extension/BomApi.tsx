@@ -3,12 +3,11 @@
  * =============================================================================
  */
 
-import type { ApiError } from "../util/ApiService";
+import { fetchFromApi, type ApiError } from "../util/ApiService";
+import { apiUrl } from "../util/backendHost";
 import type { BomModel, PartModel } from "../util/Models";
 import type { OnshapeBomTable } from "./OnshapeBom";
 import * as onshapeDirect from "../extension/onshapeDirect";
-
-const BASE_URL = `${import.meta.env.VITE_CLIENT_URL}/api`;
 
 /** Standard headers for our server: content type and the client secret. */
 function getBomApiHeaders(contentType = "application/json"): Record<string, string> {
@@ -23,84 +22,12 @@ function getBomApiHeaders(contentType = "application/json"): Record<string, stri
   return headers;
 }
 
-export async function postToApi<T>(endpoint: string, body: unknown): Promise<T> {
-  try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: "POST",
-      headers: getBomApiHeaders("application/json"),
-      body: JSON.stringify(body),
-    });
-
-    const text = await response.text();
-    let parsedData: any = null;
-
-    if (text) {
-      try {
-        parsedData = JSON.parse(text);
-      } catch {
-        if (text.trim().startsWith("<")) {
-          throw {
-            message: `Server returned HTML. Endpoint '${endpoint}' may be missing.`,
-            statusCode: response.status || 404,
-          } as ApiError;
-        }
-        throw { message: "Failed to parse API response as JSON.", statusCode: 500 } as ApiError;
-      }
-    }
-
-    if (!response.ok) {
-      throw {
-        message: parsedData?.message || `Failed request to ${endpoint}: ${response.statusText}`,
-        statusCode: response.status,
-      } as ApiError;
-    }
-
-    return parsedData as T;
-  } catch (err: any) {
-    if (err.statusCode) throw err;
-    throw { message: err.message || "Network error occurred." } as ApiError;
-  }
-}
-
 /**
- * GET helper for our server (client secret header).
+ * GET or POST to our server: fetchFromApi (client secret, JSON body and
+ * answer, errors as ApiRequestError with the server's message and status).
  */
-async function fetchJsonFromApi<T>(endpoint: string): Promise<T> {
-  try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
-      method: "GET",
-      headers: getBomApiHeaders("application/json"),
-    });
-
-    const text = await response.text();
-    let parsedData: any = null;
-
-    if (text) {
-      try {
-        parsedData = JSON.parse(text);
-      } catch {
-        if (text.trim().startsWith("<")) {
-          throw {
-            message: `Server returned HTML. Endpoint '${endpoint}' may be missing.`,
-            statusCode: response.status || 404,
-          } as ApiError;
-        }
-        throw { message: "Failed to parse API response as JSON.", statusCode: 500 } as ApiError;
-      }
-    }
-
-    if (!response.ok) {
-      throw {
-        message: parsedData?.message || `Failed request to ${endpoint}: ${response.statusText}`,
-        statusCode: response.status,
-      } as ApiError;
-    }
-
-    return parsedData as T;
-  } catch (err: any) {
-    if (err.statusCode) throw err;
-    throw { message: err.message || "Network error occurred." } as ApiError;
-  }
+function requestJson<T>(method: "GET" | "POST", endpoint: string, body?: unknown): Promise<T> {
+  return fetchFromApi<T>(endpoint, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 
 export interface OnshapeKey {
@@ -128,19 +55,19 @@ export function dbPartByOnshapeKeyEndpoint(key: OnshapeKey, partID: string): str
 }
 
 export function getBomByOnshapeKey(key: OnshapeKey, bomID: string): Promise<BomModel> {
-  return fetchJsonFromApi<BomModel>(dbBomByOnshapeKeyEndpoint(key, bomID));
+  return requestJson<BomModel>("GET", dbBomByOnshapeKeyEndpoint(key, bomID));
 }
 
 export function getPartByOnshapeKey(key: OnshapeKey, partID: string): Promise<PartModel> {
-  return fetchJsonFromApi<PartModel>(dbPartByOnshapeKeyEndpoint(key, partID));
+  return requestJson<PartModel>("GET", dbPartByOnshapeKeyEndpoint(key, partID));
 }
 
 export function upsertBomById(id: string, data: Partial<BomModel>): Promise<BomModel> {
-  return postToApi<BomModel>(`/db/bom/id/${encodeURIComponent(id)}`, data);
+  return requestJson<BomModel>("POST", `/db/bom/id/${encodeURIComponent(id)}`, data);
 }
 
 export function upsertPartById(id: string, data: Partial<PartModel>): Promise<PartModel> {
-  return postToApi<PartModel>(`/db/part/id/${encodeURIComponent(id)}`, data);
+  return requestJson<PartModel>("POST", `/db/part/id/${encodeURIComponent(id)}`, data);
 }
 
 /** Most IDs the server accepts in one batch lookup (MAX_BATCH_IDS on the server). */
@@ -151,7 +78,7 @@ async function recordsByIds<T>(endpoint: string, ids: string[]): Promise<T[]> {
   const unique = [...new Set(ids)];
   const batches: Promise<T[]>[] = [];
   for (let i = 0; i < unique.length; i += BATCH_IDS) {
-    batches.push(postToApi<T[]>(endpoint, { ids: unique.slice(i, i + BATCH_IDS) }));
+    batches.push(requestJson<T[]>("POST", endpoint, { ids: unique.slice(i, i + BATCH_IDS) }));
   }
   return (await Promise.all(batches)).flat();
 }
@@ -162,7 +89,7 @@ export function getBomsByIds(ids: string[]): Promise<BomModel[]> {
 
 /** Every saved part and assembly (Publish BOM's check for catalog numbers already in use; once per publish). */
 export function getAllRecords(): Promise<{ parts: PartModel[]; boms: BomModel[] }> {
-  return Promise.all([fetchJsonFromApi<PartModel[]>("/db/part/all"), fetchJsonFromApi<BomModel[]>("/db/bom/all")]).then(
+  return Promise.all([requestJson<PartModel[]>("GET", "/db/part/all"), requestJson<BomModel[]>("GET", "/db/bom/all")]).then(
     ([parts, boms]) => ({ parts: parts ?? [], boms: boms ?? [] })
   );
 }
@@ -238,7 +165,7 @@ export interface DriveUploadResult {
 export async function uploadFileToDrive(blob: Blob, fileName: string): Promise<DriveUploadResult> {
   const encodedName = encodeURIComponent(fileName);
   const encodedMime = encodeURIComponent(blob.type || "application/octet-stream");
-  const url = `${BASE_URL}/drive/file/name/${encodedName}/mime/${encodedMime}`;
+  const url = apiUrl(`/drive/file/name/${encodedName}/mime/${encodedMime}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -282,7 +209,7 @@ export interface PartFilesResult {
  */
 export async function deleteDriveFile(fileId: string): Promise<boolean> {
   try {
-    const response = await fetch(`${BASE_URL}/drive/file/id/${encodeURIComponent(fileId)}`, {
+    const response = await fetch(apiUrl(`/drive/file/id/${encodeURIComponent(fileId)}`), {
       method: "DELETE",
       headers: getBomApiHeaders(""),
     });

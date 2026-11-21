@@ -2,28 +2,26 @@
  * Tells the user what they're waiting for when a request takes more than a
  * few seconds ("Loading parts from the server... 7 s"), including the free
  * Render server waking up. Install once per app with installRequestTracking();
- * render <SlowRequestNotice /> once.
+ * render <SlowRequestNotice /> (SlowRequestNotice.tsx) once.
  *
  * It wraps window.fetch, so every request is covered without changing each
  * call site. Requests the user isn't waiting on (table images, telemetry) are
  * ignored.
  */
-import { useEffect, useState } from "react";
-
 type Target = "server" | "onshape";
 
-interface Pending {
+export interface PendingRequest {
   target: Target;
   label: string;
   startedAt: number;
 }
 
-const pending = new Map<number, Pending>();
+const pending = new Map<number, PendingRequest>();
 let nextId = 1;
 let installed = false;
 
 /** What a request is, for the user; null for requests nobody is waiting on. */
-function describe(url: string, method: string): Pending | null {
+function describe(url: string, method: string): PendingRequest | null {
   let u: URL;
   try {
     u = new URL(url, window.location.href);
@@ -71,58 +69,7 @@ export function installRequestTracking(): void {
   };
 }
 
-/** The longest-running tracked request, once it's older than `thresholdMs`. */
-function useSlowestRequest(thresholdMs: number): (Pending & { seconds: number }) | null {
-  const [slowest, setSlowest] = useState<(Pending & { seconds: number }) | null>(null);
-  useEffect(() => {
-    const tick = () => {
-      let oldest: Pending | null = null;
-      for (const p of pending.values()) if (!oldest || p.startedAt < oldest.startedAt) oldest = p;
-      const age = oldest ? Date.now() - oldest.startedAt : 0;
-      setSlowest(oldest && age >= thresholdMs ? { ...oldest, seconds: Math.floor(age / 1000) } : null);
-    };
-    const timer = setInterval(tick, 500);
-    return () => clearInterval(timer);
-  }, [thresholdMs]);
-  return slowest;
-}
-
-/** Bottom-of-screen notice while something has taken more than 3 seconds. */
-export function SlowRequestNotice() {
-  const slow = useSlowestRequest(3000);
-  if (!slow) return null;
-  const others = pending.size - 1;
-  const hint =
-    slow.target === "server" && slow.seconds >= 8
-      ? "The server is probably waking up - it sleeps when nobody has used it for a while. This can take up to a minute."
-      : slow.target === "onshape" && slow.seconds >= 10
-        ? "Onshape is slow to answer; large assemblies and exports can take a while."
-        : "";
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{
-        position: "fixed",
-        left: "50%",
-        bottom: 16,
-        transform: "translateX(-50%)",
-        zIndex: 1000,
-        maxWidth: "min(520px, calc(100vw - 32px))",
-        padding: "8px 14px",
-        borderRadius: 10,
-        background: "rgba(24, 24, 27, 0.95)",
-        border: "1px solid #3f3f46",
-        color: "#e4e4e7",
-        fontSize: 12,
-        lineHeight: 1.4,
-        boxShadow: "0 4px 16px rgba(0,0,0,0.4)",
-      }}
-    >
-      <div style={{ fontWeight: 600 }}>
-        {slow.label}... {slow.seconds} s{others > 0 ? ` (+${others} more)` : ""}
-      </div>
-      {hint && <div style={{ color: "#a1a1aa", marginTop: 2 }}>{hint}</div>}
-    </div>
-  );
+/** The tracked requests still running (read by SlowRequestNotice). */
+export function pendingRequests(): PendingRequest[] {
+  return [...pending.values()];
 }

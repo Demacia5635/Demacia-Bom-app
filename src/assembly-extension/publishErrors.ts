@@ -4,6 +4,7 @@
  * `{ message, statusCode? }`, no status = never reached it) or from Onshape
  * (onshapeDirect: `source: "onshape"`, `onshapeStatus` 0 = never reached it).
  */
+import { ApiRequestError } from "../util/ApiService";
 export interface PublishErrorExplanation {
   /** The likely cause, as a sentence. */
   cause: string;
@@ -42,7 +43,10 @@ export function explainPublishError(err: unknown): PublishErrorExplanation {
 
   const status = typeof e.statusCode === "number" ? e.statusCode : 0;
   if (status === 0) {
-    if (err instanceof Error)
+    // A request to our server that never got an answer (fetchFromApi throws an
+    // ApiRequestError without a status) is the server being unreachable; any
+    // other Error is the extension's own.
+    if (err instanceof Error && !(err instanceof ApiRequestError))
       return { cause: "Something went wrong in the extension.", next: RETRY, detail };
     return {
       cause: "The BOM server could not be reached (you may be offline, or it may be starting up).",
