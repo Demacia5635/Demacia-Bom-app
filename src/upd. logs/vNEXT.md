@@ -14,6 +14,8 @@
 - If "Show Part Data" can't load a part, you're told, instead of nothing happening. (W7, `afca27b`)
 - An empty BOMs list says "No BOMs published yet" instead of showing a blank table. (W8, `30b9651`)
 - If the work-order list fails to load, you see the real error, not a misleading second one. (W9, `6f9ecc0`)
+- A mistyped address goes to the Home page instead of quietly showing it under the wrong address. (W11, `0bf51de`)
+- **The privacy policy now describes the extension's usage statistics** (what's recorded, that records are deleted after about 6 months, where they can be seen) and what's kept in the browser (BOM copies, image cache, display settings). (S3, `7ca8d73`)
 - **Clicking a part's picture on a work order opens the image viewer again after the Avatar column has been moved,** and on rows of a merged CNC job. (B5, `22fe2fb`)
 - **A failed save on a work order no longer loses your change.** It's sent again with your next edit of that part, as on the BOM page. The "Couldn't save" banner stays as it was. (B6, `9d827b1`)
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)
