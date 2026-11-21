@@ -312,7 +312,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         <button
                             type="button"
                             disabled={!part.parasolidLink}
-                            onClick={() => downloadPartFile(part.parasolidLink, `${part.name || "part"}.parasolid`)}
+                            onClick={() => downloadPartFile(part.parasolidLink, `${part.name || "part"}.x_t`)}
                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Download Parasolid
