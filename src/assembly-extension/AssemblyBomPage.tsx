@@ -313,6 +313,7 @@ async function recordOrNull<T>(request: Promise<T>): Promise<T | null> {
  * Per-load cache in front of the network: each BOM / record is requested once
  * (at most `limit` requests at a time), and asking again returns the same
  * promise. Lets a parallel prefetch run ahead of the in-order tree walk.
+ * A failed request is dropped from the cache, so asking again retries it.
  */
 function createCachedSources(limit: Limiter): TreeSources {
   const cache = new Map<string, Promise<unknown>>();
@@ -320,8 +321,13 @@ function createCachedSources(limit: Limiter): TreeSources {
     let p = cache.get(cacheKey) as Promise<T> | undefined;
     if (!p) {
       p = limit(request);
-      cache.set(cacheKey, p);
-      p.catch(() => {}); // failures are handled by whoever awaits it
+      const pending = p;
+      cache.set(cacheKey, pending);
+      // Failures are handled by whoever awaits it. Forget a failed request so
+      // the next ask retries instead of reusing the rejection for the whole load.
+      pending.catch(() => {
+        if (cache.get(cacheKey) === pending) cache.delete(cacheKey);
+      });
     }
     return p;
   };
