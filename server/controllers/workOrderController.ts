@@ -37,7 +37,9 @@ export async function getAllWorkOrders(
   next: NextFunction,
 ) {
   try {
-    const workOrders = await WorkOrder.find().sort({ id: 1 });
+    // Oldest first. IDs are UUIDs now, so they don't follow creation order;
+    // older documents without createdAt come first (they're the oldest).
+    const workOrders = await WorkOrder.find().sort({ createdAt: 1, id: 1 });
     return res.status(200).json(workOrders);
   } catch (err) {
     return next(err);
