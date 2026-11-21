@@ -61,6 +61,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
 
     const handleUpsert = async (e: FormEvent) => {
         e.preventDefault();
+        if (locked) return; // bought parts are edited in the extension (Enter in a field would submit)
         setIsSaving(true);
         setSaveError(null);
         setSaved(false);
@@ -380,11 +381,15 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         )}
                     </div>
 
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                    {/* The note is on the wrapper: a disabled button gets no hover in some browsers. */}
+                    <div
+                        className="flex items-center gap-3 w-full sm:w-auto"
+                        title={locked ? "Bought parts are edited in the BOM extension." : undefined}
+                    >
                         <button
                             type="submit"
-                            disabled={isSaving}
-                            className="flex-1 sm:flex-none px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md"
+                            disabled={isSaving || locked}
+                            className="flex-1 sm:flex-none px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md"
                         >
                             {isSaving ? "Saving..." : saved ? "Saved ✓" : "Save / Upsert Part"}
                         </button>
