@@ -204,6 +204,18 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     }, [stickyHeader]);
 
     const closeContextMenu = () => setContextMenu(prev => ({ ...prev, visible: false }));
+    const contextMenuRef = useRef<HTMLDivElement>(null);
+
+    // The column menu closes on a press anywhere outside it, also outside the
+    // table (a click inside the table already closes it through the wrapper).
+    useEffect(() => {
+        if (!contextMenu.visible) return;
+        const handlePointerDown = (e: PointerEvent) => {
+            if (!contextMenuRef.current?.contains(e.target as Node)) closeContextMenu();
+        };
+        window.addEventListener('pointerdown', handlePointerDown, true);
+        return () => window.removeEventListener('pointerdown', handlePointerDown, true);
+    }, [contextMenu.visible]);
 
     // Synchronize horizontal scrolling between the main table wrapper and the bottom scrollbar
     useEffect(() => {
@@ -920,7 +932,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
             </div>
 
             {contextMenu.visible && (
-                <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
+                <div ref={contextMenuRef} className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => { if (contextMenu.columnIndex > 0) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex - 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === 0}>Move Left</button>
                     <button onClick={() => { if (contextMenu.columnIndex < columns.length - 1) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex + 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === columns.length - 1}>Move Right</button>
                 </div>
