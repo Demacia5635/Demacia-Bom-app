@@ -113,7 +113,8 @@ export async function getFileFromId(
     const isRasterImage = /^image\/(png|jpeg|gif|webp|bmp)$/i.test(file.mimeType);
     res.setHeader("Content-Type", isRasterImage ? file.mimeType : "application/octet-stream");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    // The browser may keep it for a day; shared caches (proxies, CDNs) may not.
+    res.setHeader("Cache-Control", "private, max-age=86400");
     return res.status(200).send(file.data);
   } catch (err: any) {
     console.error(">>> [DRIVE CONTROLLER UNCAUGHT ERROR]:", err?.message || err);
