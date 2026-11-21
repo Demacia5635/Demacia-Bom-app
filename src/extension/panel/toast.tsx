@@ -1,43 +1,12 @@
 /**
- * Minimal toast notifications for the side panel. Stand-in for Onshape's
- * showMessageBubble, which only exists for iframe extensions.
+ * Shows the side panel's toast messages (showToast in toastStore.ts).
  */
 import { useEffect, useState } from "react";
-
-interface Toast {
-  id: number;
-  message: string;
-}
-
-type Listener = (toasts: Toast[]) => void;
-
-let toasts: Toast[] = [];
-let nextId = 1;
-const listeners = new Set<Listener>();
-const TOAST_MS = 5000;
-
-function emit() {
-  for (const l of listeners) l(toasts);
-}
-
-export function showToast(message: string): void {
-  const id = nextId++;
-  toasts = [...toasts, { id, message }];
-  emit();
-  setTimeout(() => {
-    toasts = toasts.filter((t) => t.id !== id);
-    emit();
-  }, TOAST_MS);
-}
+import { currentToasts, subscribeToasts, type Toast } from "./toastStore";
 
 export function Toasts() {
-  const [items, setItems] = useState<Toast[]>(toasts);
-  useEffect(() => {
-    listeners.add(setItems);
-    return () => {
-      listeners.delete(setItems);
-    };
-  }, []);
+  const [items, setItems] = useState<Toast[]>(currentToasts);
+  useEffect(() => subscribeToasts(setItems), []);
 
   if (items.length === 0) return null;
   return (

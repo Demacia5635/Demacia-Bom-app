@@ -22,9 +22,9 @@ import {
   getPartsByIds
 } from "./BomApi";
 import { getElementMicroversions, getPartBoundingBox, onshapeJson } from "../extension/onshapeDirect";
-import { catalogKey, findSameNumberGroups, isGrouped, normalizeCatalogNumber } from "./sameParts";
+import { catalogKey, findSameNumberGroups, isGrouped, normalizeCatalogNumber, quotedList } from "./sameParts";
 import { combineSameNumber, membersOf, pickRecordRow } from "./copyRows";
-import SameNumberNotice, { quotedList } from "./SameNumberNotice";
+import SameNumberNotice from "./SameNumberNotice";
 import { formatPartSize } from "../util/partSize";
 import { usePanelThemeSetting } from "../extension/panel/theme";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";

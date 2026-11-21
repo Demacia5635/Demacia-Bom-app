@@ -6,7 +6,7 @@
  */
 import { type ReactNode } from "react";
 import AssemblyBomPage from "../../assembly-extension/AssemblyBomPage";
-import { OnshapeLocationProvider } from "../onshapeHostShim";
+import OnshapeLocationProvider from "../OnshapeLocationProvider";
 import { setOnshapeServer } from "../onshapeDirect";
 import { useOwnOnshapeTab, type OnshapeLocation } from "../onshapeTab";
 import OnshapeSignInCheck from "./OnshapeSignInCheck";

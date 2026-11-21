@@ -1,10 +1,4 @@
-import type { SameNumberGroup } from "./sameParts";
-
-/** "A", "B" and "C" */
-export function quotedList(names: string[]): string {
-  const q = names.map((n) => `"${n}"`);
-  return q.length <= 1 ? q.join("") : `${q.slice(0, -1).join(", ")} and ${q[q.length - 1]}`;
-}
+import { quotedList, type SameNumberGroup } from "./sameParts";
 
 /**
  * Above the BOM table: catalog numbers used by several items (sameParts.ts).
