@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
+import React, { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
 import { AuthenticatedImage, downloadFile, fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import { isPurchasedPart, type PartModel, type BomModel } from "../../util/Models";
@@ -6,6 +6,9 @@ import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { recordImageSrc } from "../../util/recordImage";
 import { openExternal } from "../../util/openExternal";
+
+/** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
+const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
 
 const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const { isLight } = useThemeSync();
@@ -37,8 +40,12 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const [linkedBoms, setLinkedBoms] = useState<BomModel[]>([]);
     const [isBomModalOpen, setIsBomModalOpen] = useState(false);
 
+    // The values as last loaded or saved, to send only what was changed since.
+    const savedValuesRef = useRef<PartModel>(part);
+
     useEffect(() => {
         setFormData({ ...part });
+        savedValuesRef.current = part;
     }, [part]);
 
     const handleChange = (
@@ -59,11 +66,19 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
         setSaved(false);
 
         try {
-            // Same server as every other request (localhost:5050 when run locally).
-            await fetchFromApi(`/db/part/id/${encodeURIComponent(part.id)}`, {
-                method: "POST",
-                body: JSON.stringify(formData),
-            });
+            // Only the edited fields that changed: the rest of the record (e.g. a
+            // publish from the extension while this was open) is left as it is.
+            const changes = Object.fromEntries(
+                EDITABLE_FIELDS.filter((k) => formData[k] !== savedValuesRef.current[k]).map((k) => [k, formData[k]])
+            );
+            if (Object.keys(changes).length > 0) {
+                // Same server as every other request (localhost:5050 when run locally).
+                await fetchFromApi(`/db/part/id/${encodeURIComponent(part.id)}`, {
+                    method: "POST",
+                    body: JSON.stringify(changes),
+                });
+                savedValuesRef.current = { ...savedValuesRef.current, ...changes };
+            }
             setSaved(true);
         } catch (err: any) {
             setSaveError(`Failed to save the part: ${err?.message || "an unexpected error occurred."}`);
