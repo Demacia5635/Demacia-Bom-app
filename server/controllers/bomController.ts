@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
 import Part from '../models/Part';
+import { loadBoms, partIDsOf } from './bomTree';
 import { cleanUpdateBody, updatedByOf, upsertByID } from './upsert';
 import { makeGetByIds } from './getByIds';
 import { makeListAll } from './listAll';
@@ -83,37 +84,13 @@ export async function getBomTree(
 ) {
     try {
         const rootID = req.params.id;
-        const boms: any[] = [];
-        const seen = new Set<string>([rootID]);
-        const missingBoms: string[] = [];
-        const partIDs = new Set<string>();
-        let level = [rootID];
-        let truncated = false;
-
-        for (let depth = 0; level.length > 0; depth++) {
-            if (depth > MAX_TREE_DEPTH || boms.length + level.length > MAX_TREE_BOMS) {
-                truncated = true;
-                break;
-            }
-            const found = await Bom.find({ id: { $in: level } }).lean<Record<string, any>[]>();
-            if (depth === 0 && found.length === 0)
-                return res.status(404).json({ message: `Bom ${rootID} not found` });
-            const foundIDs = new Set(found.map((bom) => bom.id));
-            missingBoms.push(...level.filter((id) => !foundIDs.has(id)));
-            boms.push(...found);
-
-            const nextLevel: string[] = [];
-            for (const bom of found) {
-                for (const part of bom.parts ?? []) if (part?.partID) partIDs.add(part.partID);
-                for (const sub of bom.subAssemblies ?? []) {
-                    if (sub?.bomID && !seen.has(sub.bomID)) {
-                        seen.add(sub.bomID);
-                        nextLevel.push(sub.bomID);
-                    }
-                }
-            }
-            level = nextLevel;
-        }
+        const loaded = await loadBoms([rootID], MAX_TREE_DEPTH, MAX_TREE_BOMS);
+        if (!loaded.boms.has(rootID))
+            return res.status(404).json({ message: `Bom ${rootID} not found` });
+        const boms = [...loaded.boms.values()];
+        const missingBoms = loaded.missing;
+        const truncated = loaded.truncated;
+        const partIDs = partIDsOf(boms);
 
         const parts = partIDs.size ? await Part.find({ id: { $in: [...partIDs] } }).lean<Record<string, any>[]>() : [];
         const foundParts = new Set(parts.map((part) => part.id));
