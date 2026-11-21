@@ -3,12 +3,15 @@ import { Outlet } from "react-router-dom";
 import { Appbar } from "./Appbar";
 import { Sidebar } from "./Sidebar";
 import Toasts from "./Toasts";
+import { useUnsavedEditsGuard } from "./useUnsavedEditsGuard";
 import { useThemeSync } from "../util/misc/useThemeSync";
 import '../css/table.css';
 
 export default function MainLayout() {
     const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);
     const { isLight } = useThemeSync();
+    // Closing or reloading the tab with unsaved edits asks first.
+    useUnsavedEditsGuard();
 
     // Every page has the sidebar (the old in-Onshape "/onshape" page didn't).
     const isSidebar = true;

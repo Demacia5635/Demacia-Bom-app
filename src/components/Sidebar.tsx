@@ -2,6 +2,8 @@ import { HomeIcon, SearchIcon, ClipboardList, Package, X, type LucideProps } fro
 import { type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
+import { hasUnsavedEdits } from "../util/saveTracker";
+import { LEAVE_WITH_UNSAVED_EDITS } from "./useUnsavedEditsGuard";
 
 export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
@@ -16,6 +18,8 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     ];
 
     const handleNavigation = (path: string) => {
+        // Edits still on their way (or failed): ask before leaving the page.
+        if (path !== location.pathname && hasUnsavedEdits() && !window.confirm(LEAVE_WITH_UNSAVED_EDITS)) return;
         navigate(path);
         onClose();
     };
