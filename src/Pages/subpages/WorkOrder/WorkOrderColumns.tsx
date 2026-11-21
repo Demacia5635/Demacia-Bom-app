@@ -2,6 +2,7 @@ import type { ColumnConfig } from "../../../components/Table";
 import { downloadDriveFile } from "../../../util/ApiService";
 import { openExternal } from "../../../util/openExternal";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
+import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
 
 /** Onshape Standard Content and parts marked standard in the extension: purchased, so status and method are fixed. */
 const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!row.markedStandard;
@@ -9,8 +10,6 @@ const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!r
 /** Vendor parts, Standard Content and parts marked standard: their name isn't edited here. */
 const isBoughtPart = (row: WorkOrderTableRow) => row.vendor !== "" || isStandardRow(row);
 
-export const MANUFACTURING_METHODS = ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased'];
-export const PRIORITIES = ['High', 'Medium', 'Low', 'Untracked', 'Finished'];
 
 /**
  * Colour of each status / method / priority value (classes styled in

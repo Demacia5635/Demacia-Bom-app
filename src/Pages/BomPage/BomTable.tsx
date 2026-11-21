@@ -34,15 +34,17 @@ const BomRow: React.FC<BomRowProps> = ({
 
   const imageSrc = recordImageSrc(bom as any);
 
+  // The list request already returns full records (with their sub-assemblies).
+  const listedSubAssemblies = (bom as Partial<BomModel>).subAssemblies;
+
   // Pre-check if this sub-assembly has any sub-assemblies inside it
   useEffect(() => {
     let isMounted = true;
 
     async function checkSubAssemblies() {
-      // The list request already returns full records: no extra request needed.
-      const listed = (bom as Partial<BomModel>).subAssemblies;
-      if (Array.isArray(listed)) {
-        setHasSubAssemblies(listed.length > 0);
+      // Listed already: no extra request needed.
+      if (Array.isArray(listedSubAssemblies)) {
+        setHasSubAssemblies(listedSubAssemblies.length > 0);
         return;
       }
       try {
@@ -50,7 +52,7 @@ const BomRow: React.FC<BomRowProps> = ({
         if (isMounted) {
           setHasSubAssemblies(Boolean(fullBom?.subAssemblies && fullBom.subAssemblies.length > 0));
         }
-      } catch (err) {
+      } catch {
         if (isMounted) setHasSubAssemblies(false);
       }
     }
@@ -60,7 +62,7 @@ const BomRow: React.FC<BomRowProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [bom.id]);
+  }, [bom.id, listedSubAssemblies]);
 
   const handleToggleExpand = async (e: MouseEvent) => {
     e.stopPropagation();
