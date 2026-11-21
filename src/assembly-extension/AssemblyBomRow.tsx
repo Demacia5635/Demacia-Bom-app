@@ -66,6 +66,13 @@ export default interface AssemblyBomRow extends BomTableRow {
    * undefined for sizes just read from Onshape.
    */
   sizeVersion?: string;
+  /**
+   * Parts modeled several times in the same Part Studio are one row (quantity
+   * = all copies, see sameParts.ts); these are the other copies' Onshape part
+   * IDs. Publish BOM writes edits to every copy; the record is saved once,
+   * under `entityID`.
+   */
+  copyPartIDs?: string[];
   /** Parts: whether Publish BOM keeps an STL / Parasolid (unticking deletes it on publish). */
   wantStl?: boolean;
   wantParasolid?: boolean;

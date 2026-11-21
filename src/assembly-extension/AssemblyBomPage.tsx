@@ -20,7 +20,8 @@ import {
   getBomsByIds,
   getPartsByIds
 } from "./BomApi";
-import { getElementMicroversions, getPartBoundingBox, onshapeJson } from "../extension/onshapeDirect";
+import { getElementMicroversions, getPartBoundingBox, getPartStudioMassProperties, onshapeJson, type PartMassBody } from "../extension/onshapeDirect";
+import { combineCopies, studioKey, studiosToCheck, type CombinedItem, type PartStudioRef } from "./sameParts";
 import { formatPartSize } from "../util/partSize";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
@@ -265,12 +266,15 @@ interface TreeSources {
   onshapeBom(key: OnshapeKey): Promise<OnshapeBomTable>;
   dbBom(key: OnshapeKey, bomID: string): Promise<BomModel>;
   dbPart(key: OnshapeKey, partID: string): Promise<PartModel>;
+  /** Mass properties of a Part Studio's parts (to find parts modeled several times). */
+  partStudioMass(studio: PartStudioRef): Promise<Record<string, PartMassBody>>;
 }
 
 const directSources: TreeSources = {
   onshapeBom: getOnshapeBom,
   dbBom: getBomByOnshapeKey,
   dbPart: getPartByOnshapeKey,
+  partStudioMass: (s) => getPartStudioMassProperties(s, s.configuration || undefined),
 };
 
 const keyString = (k: OnshapeKey) => `${k.documentID}/${k.wvmType}/${k.wvmID}/${k.elementID}`;
@@ -310,6 +314,7 @@ function createCachedSources(limit: Limiter): TreeSources {
     onshapeBom: (key) => once(`bom:${keyString(key)}`, () => getOnshapeBom(key)),
     dbBom: (key, bomID) => once(`dbBom:${keyString(key)}/${bomID}`, () => getBomByOnshapeKey(key, bomID)),
     dbPart: (key, partID) => once(`dbPart:${keyString(key)}/${partID}`, () => getPartByOnshapeKey(key, partID)),
+    partStudioMass: (s) => once(`mass:${studioKey(s)}`, () => getPartStudioMassProperties(s, s.configuration || undefined)),
   };
 }
 
@@ -325,13 +330,31 @@ const itemKey = (item: ParsedOnshapeBomRow): OnshapeKey => ({
 });
 
 /**
+ * One assembly's BOM items with parts modeled several times in the same Part
+ * Studio combined into one item (util in sameParts.ts). A Part Studio whose
+ * mass properties can't be read is left as Onshape lists it.
+ */
+async function combineCopiesIn(items: ParsedOnshapeBomRow[], src: TreeSources): Promise<CombinedItem[]> {
+  const bodies = new Map<string, Record<string, PartMassBody>>();
+  await Promise.all(
+    studiosToCheck(items).map(async (studio) => {
+      const b = await src.partStudioMass(studio).catch(() => null);
+      if (b) bodies.set(studioKey(studio), b);
+    })
+  );
+  return combineCopies(items, bodies);
+}
+
+/**
  * Starts every request the tree walk will need, in parallel: each
  * sub-assembly's Onshape BOM and database record, and each part's record.
  * Failures are left in the cache for the walk to report as before.
  */
 async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new Set<string>()): Promise<void> {
+  const items = parseOnshapeBomTable(bom);
+  for (const studio of studiosToCheck(items)) src.partStudioMass(studio).catch(() => {});
   await Promise.all(
-    parseOnshapeBomTable(bom).map(async (item) => {
+    items.map(async (item) => {
       const key = itemKey(item);
       if (!item.isSubassembly) {
         await src.dbPart(key, item.itemSource.partId || "").catch(() => {});
@@ -827,7 +850,7 @@ export default function AssemblyBomPage() {
       const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
       const childParentId = isRoot ? null : node.row.id;
 
-      for (const item of parsedItems) {
+      for (const { item, copyPartIDs } of await combineCopiesIn(parsedItems, ctx.src)) {
         ctx.onItem?.(item.name);
         if (item.isSubassembly) {
           const subKey = itemKey(item);
@@ -841,7 +864,8 @@ export default function AssemblyBomPage() {
           ctx.visited.add(subKeyId);
           if (!subNode.row.markedStandard) await expandTree(subNode, false, ctx, new Set([...ancestors, subKeyId]));
         } else {
-          ctx.out.push(await resolvePartRow(item, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src));
+          const row = await resolvePartRow(item, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src);
+          ctx.out.push(copyPartIDs.length > 0 ? { ...row, copyPartIDs } : row);
         }
       }
     },
@@ -1402,7 +1426,12 @@ export default function AssemblyBomPage() {
               } else {
                 // Material (a library reference in Onshape) and the file choices are database-only.
                 const data = Object.fromEntries(edited.filter((k) => !DATABASE_ONLY_FIELDS.has(k)).map((k) => [k, values_[k]]));
-                if (Object.keys(data).length > 0) await updateOnshapePartMetadata(key, row.entityID, data);
+                // A row standing for several copies of one part: every copy gets the edits.
+                if (Object.keys(data).length > 0) {
+                  for (const partID of [row.entityID, ...(row.copyPartIDs ?? [])]) {
+                    await updateOnshapePartMetadata(key, partID, data);
+                  }
+                }
               }
             } catch (err: any) {
               unsavedEdits.add(row.id);
