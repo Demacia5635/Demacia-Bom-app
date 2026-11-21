@@ -111,7 +111,9 @@ export default function TelemetryPage() {
     const byUser = new Map<string, TelemetryEvent[]>();
     for (const e of shown) {
       const key = e.user || "(unknown)";
-      byUser.set(key, [...(byUser.get(key) ?? []), e]);
+      const list = byUser.get(key);
+      if (list) list.push(e);
+      else byUser.set(key, [e]);
     }
     return Array.from(byUser.entries())
       .map(([name, list]) => ({ name, operations: list.length, counts: sumCounts(list), last: list[0]?.at }))

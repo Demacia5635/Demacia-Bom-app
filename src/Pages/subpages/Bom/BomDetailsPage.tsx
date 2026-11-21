@@ -274,10 +274,11 @@ export default function BomDetailsPage() {
     // 1. Instantly update local table state so typing has 0 lag
     setRows(newData);
 
-    // 2. Queue debounced database updates
+    // 2. Queue debounced database updates (old rows looked up by id in one pass)
+    const oldById = new Map(rows.map((r) => [r.id, r]));
     for (let i = 0; i < newData.length; i++) {
       const newRow = newData[i];
-      const oldRow = rows.find(r => r.id === newRow.id);
+      const oldRow = oldById.get(newRow.id);
 
       const changed = oldRow && !newRow.isSubAssembly && newRow.entityID
         ? SAVED_PART_FIELDS.filter((k) => oldRow[k] !== newRow[k])
