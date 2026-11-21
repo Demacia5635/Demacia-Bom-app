@@ -24,6 +24,10 @@ export default function BomToolbar({
   standardAssemblyCount,
   showSize,
   setShowSize,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: {
   search: string;
   setSearch: (value: string) => void;
@@ -45,6 +49,10 @@ export default function BomToolbar({
   standardAssemblyCount: number;
   showSize: boolean;
   setShowSize: (on: boolean) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
 }) {
   return (
     <div className="assembly-bom-toolbar mb-2 flex flex-wrap items-center gap-2">
@@ -62,6 +70,26 @@ export default function BomToolbar({
           title={`Search the BOM (${SHORTCUTS.search}); Esc clears it`}
         />
       </div>
+      <button
+        type="button"
+        className="bom-toolbar-btn"
+        onClick={onUndo}
+        disabled={!canUndo}
+        title={`Undo the last edit (${SHORTCUTS.undo})`}
+        aria-label="Undo"
+      >
+        ↶
+      </button>
+      <button
+        type="button"
+        className="bom-toolbar-btn"
+        onClick={onRedo}
+        disabled={!canRedo}
+        title={`Redo (${SHORTCUTS.redo})`}
+        aria-label="Redo"
+      >
+        ↷
+      </button>
       {problemCount > 0 ? (
         <>
           <button

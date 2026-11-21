@@ -59,6 +59,7 @@ import { bomPageUrl } from "./websiteLinks";
 import { useServerStatus } from "./useServerStatus";
 import { useOnshapeChangeWatch } from "./useOnshapeChangeWatch";
 import { notifyPublishEnded } from "./publishNotify";
+import { useEditHistory } from "./useEditHistory";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { isTyping, SEARCH_INPUT_ID } from "./shortcuts";
 import {
@@ -198,6 +199,29 @@ export default function AssemblyBomPage() {
       : null;
   }, [documentId, workspaceId, versionId, elementId]);
 
+  /** Shows `nextRows` and keeps the saved copy in step, so edits survive closing the panel. */
+  const saveRows = useCallback(
+    (nextRows: AssemblyBomRow[]) => {
+      setRows(nextRows);
+      currentTreeRef.current = { ...currentTreeRef.current, rows: nextRows };
+      if (rootKey) {
+        const { rootBomDB: savedRoot, rootOnshapeBom: onshapeRoot } = currentTreeRef.current;
+        // Called on every edit/expand: written once edits pause.
+        writeTreeCacheSoon(
+          treeCacheKey(rootKey),
+          { rows: nextRows, rootBomDB: savedRoot, rootBom: rootBomSummary(onshapeRoot) },
+          treeSavedAtRef.current
+        );
+      }
+    },
+    [rootKey]
+  );
+
+  /** Undo / redo of table edits (Ctrl+Z / Ctrl+Y), until the next load or publish. */
+  const currentRows = useCallback(() => currentTreeRef.current.rows, []);
+  const history = useEditHistory(currentRows, saveRows);
+  const { record: recordEdit, clear: clearHistory } = history;
+
   /** "Onshape changed since loaded": watched while a tree from Onshape is on screen and idle. */
   const { changed: onshapeChanged, restart: restartChangeWatch } = useOnshapeChangeWatch({
     rootKey,
@@ -236,6 +260,7 @@ export default function AssemblyBomPage() {
         setCachedAt(cached.savedAt);
         setLoadedAt(cached.savedAt);
         restartChangeWatch();
+        clearHistory();
         setTelemetryAssembly(assemblyNameOf(cached.rootBom) || cached.rootBomDB?.name || "", rootKey.documentID, rootKey.elementID);
         treeSavedAtRef.current = cached.savedAt;
         setLoading(false);
@@ -308,6 +333,7 @@ export default function AssemblyBomPage() {
       treeSavedAtRef.current = Date.now();
       setLoadedAt(treeSavedAtRef.current);
       restartChangeWatch(); // these models are the new starting point
+      clearHistory();
       writeTreeCache(cacheKey, {
         rows: freshRows,
         rootBomDB: dbBom,
@@ -324,7 +350,7 @@ export default function AssemblyBomPage() {
       if (!stale()) setLoading(false);
     }
     });
-  }, [rootKey, context.server, restartChangeWatch]);
+  }, [rootKey, context.server, restartChangeWatch, clearHistory]);
 
   // Opening an assembly: show its saved copy if there is one; otherwise load it.
   useEffect(() => {
@@ -371,24 +397,6 @@ export default function AssemblyBomPage() {
 
   /** Sub-assemblies whose insides are being loaded after their standard mark was removed. */
   const [subtreeLoads, setSubtreeLoads] = useState(0);
-
-  /** Shows `nextRows` and keeps the saved copy in step, so edits survive closing the panel. */
-  const saveRows = useCallback(
-    (nextRows: AssemblyBomRow[]) => {
-      setRows(nextRows);
-      currentTreeRef.current = { ...currentTreeRef.current, rows: nextRows };
-      if (rootKey) {
-        const { rootBomDB: savedRoot, rootOnshapeBom: onshapeRoot } = currentTreeRef.current;
-        // Called on every edit/expand: written once edits pause.
-        writeTreeCacheSoon(
-          treeCacheKey(rootKey),
-          { rows: nextRows, rootBomDB: savedRoot, rootBom: rootBomSummary(onshapeRoot) },
-          treeSavedAtRef.current
-        );
-      }
-    },
-    [rootKey]
-  );
 
   /**
    * While "Show size" is on, reads the size of every made part that has none
@@ -455,6 +463,8 @@ export default function AssemblyBomPage() {
     (newData: AssemblyBomRow[]) => {
       const previousById = new Map(rows.map((r) => [r.id, r]));
       let blocked = false;
+      /** A cell value changed (not just a row expanded or collapsed): undoable. */
+      let edited = false;
 
       // Sub-assemblies whose standard-part mark changed in this edit.
       const markedNow: AssemblyBomRow[] = [];
@@ -473,6 +483,7 @@ export default function AssemblyBomPage() {
           (k) =>
             loading || publishing || subtreeLoads > 0 || isExternalRow(prev) || (prev.markedStandard && k !== "markedStandard")
         );
+        if (refused.length < editedKeys.length) edited = true;
         if (refused.length > 0) {
           blocked = true;
           row = { ...row, ...Object.fromEntries(refused.map((k) => [k, (prev as unknown as Record<string, unknown>)[k]])) } as AssemblyBomRow;
@@ -516,6 +527,7 @@ export default function AssemblyBomPage() {
         nextRows = nextRows.filter((r) => !drop.has(r.id));
       }
 
+      if (edited) recordEdit(rows);
       saveRows(nextRows);
 
       // Unmarked: its insides weren't loaded while it was marked - load them now.
@@ -545,7 +557,7 @@ export default function AssemblyBomPage() {
           .finally(() => setSubtreeLoads((n) => n - 1));
       }
     },
-    [rows, client, loading, publishing, subtreeLoads, saveRows, context.server, rootKey]
+    [rows, client, loading, publishing, subtreeLoads, saveRows, context.server, rootKey, recordEdit]
   );
 
   /**
@@ -563,9 +575,10 @@ export default function AssemblyBomPage() {
         client.showMessageBubble("Wait until the refresh, publish or loading has finished, then combine again.");
         return;
       }
+      recordEdit(rows);
       saveRows(combineSameNumber(rows, new Set(keys), retrackRow));
     },
-    [rows, loading, publishing, subtreeLoads, client, saveRows]
+    [rows, loading, publishing, subtreeLoads, client, saveRows, recordEdit]
   );
 
   /** Search box: rows whose name, catalog number or description contain the text. */
@@ -902,6 +915,7 @@ export default function AssemblyBomPage() {
         setRootBomDB(savedRoot);
         setRootIsPublished(true);
         restartChangeWatch(); // the publish wrote the edits to Onshape: not someone else's change
+        clearHistory(); // what's published can't be undone here
         currentTreeRef.current = { ...currentTreeRef.current, rootBomDB: savedRoot };
         writeTreeCache(
           treeCacheKey(rootKey),
@@ -942,7 +956,7 @@ export default function AssemblyBomPage() {
         setPublishProgress(null);
       }
     }),
-    [rootKey, client, context.server, restartChangeWatch]
+    [rootKey, client, context.server, restartChangeWatch, clearHistory]
   );
 
   /**
@@ -1060,6 +1074,12 @@ export default function AssemblyBomPage() {
       } else if (ctrl && e.key === "Enter") {
         e.preventDefault();
         if (!busy && rows.length > 0) openPublish();
+      } else if (ctrl && !e.altKey && !isTyping(e.target) && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
+        // In a cell's text box the browser's own undo applies instead.
+        e.preventDefault();
+        if (busy) return;
+        if (e.key.toLowerCase() === "y" || e.shiftKey) history.redo();
+        else history.undo();
       } else if (e.key === "?" && !ctrl && !e.altKey && !isTyping(e.target)) {
         e.preventDefault();
         setShowShortcuts(true);
@@ -1067,7 +1087,7 @@ export default function AssemblyBomPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [publishOpen, discardEdits, showShortcuts, busy, rows.length, handleRefresh, openPublish]);
+  }, [publishOpen, discardEdits, showShortcuts, busy, rows.length, handleRefresh, openPublish, history]);
 
   if (!rootKey) {
     return (
@@ -1201,6 +1221,10 @@ export default function AssemblyBomPage() {
             standardAssemblyCount={standardAssemblyCount}
             showSize={showSize}
             setShowSize={setShowSize}
+            canUndo={history.canUndo && !busy}
+            canRedo={history.canRedo && !busy}
+            onUndo={history.undo}
+            onRedo={history.redo}
           />
           <Table
             data={rows}

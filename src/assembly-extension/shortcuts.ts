@@ -8,6 +8,8 @@ export const SHORTCUTS = {
   refresh: "Alt+R",
   closeDialog: "Esc",
   help: "?",
+  undo: "Ctrl+Z",
+  redo: "Ctrl+Y",
 } as const;
 
 /** The toolbar's search box (focused by Ctrl+F). */
@@ -18,6 +20,8 @@ export const SHORTCUT_HELP: { keys: string; what: string }[] = [
   { keys: SHORTCUTS.search, what: "Search the BOM" },
   { keys: SHORTCUTS.refresh, what: "Refresh BOM (asks first when there are unpublished edits)" },
   { keys: SHORTCUTS.publish, what: "Publish BOM (in the dialog: publish)" },
+  { keys: SHORTCUTS.undo, what: "Undo the last table edit (outside a cell's text box)" },
+  { keys: SHORTCUTS.redo, what: "Redo (also Ctrl+Shift+Z)" },
   { keys: SHORTCUTS.closeDialog, what: "Close a dialog; in the search box, clear it" },
   { keys: SHORTCUTS.help, what: "Show this list" },
 ];
