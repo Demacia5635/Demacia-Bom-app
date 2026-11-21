@@ -7,7 +7,8 @@ import "../../css/table.css";
 import "./panelLight.css";
 import { applyTheme, readThemePreference } from "./theme";
 import PanelApp from "./PanelApp";
-import { installRequestTracking, SlowRequestNotice } from "../../util/slowRequests";
+import { installRequestTracking } from "../../util/slowRequests";
+import SlowRequestNotice from "../../util/SlowRequestNotice";
 import { reportPanelOpen } from "../onshapeTab";
 
 // Before the first render, so a light panel doesn't flash dark.
