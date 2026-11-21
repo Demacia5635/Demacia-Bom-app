@@ -25,7 +25,9 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"]
 }));
 
-app.use(express.json());
+// Big enough for a whole BOM or a new work order with all its parts
+// (the default 100 KB is about 400 work-order parts).
+app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
 
 // Root route to handle Render health checks cleanly (fixes GET / 404)
