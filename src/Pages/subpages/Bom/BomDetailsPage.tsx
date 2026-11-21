@@ -7,7 +7,7 @@ import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
 import SubAssemblySummary from "./SubAssemblySummary";
 import BomColumns from "./BomColumns";
-import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
+import PartPortal from "../../../Pages/SearchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
 import { loadBomTree, type BomTree } from "../../../util/bomTree";
 import { useThemeSync } from "../../../util/misc/useThemeSync";

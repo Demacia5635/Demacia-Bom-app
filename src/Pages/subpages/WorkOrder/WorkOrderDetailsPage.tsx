@@ -7,7 +7,7 @@ import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
-import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
+import PartPortal from "../../../Pages/SearchPartsPage/PartPortal";
 import SubAssemblySummary from "../Bom/SubAssemblySummary";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";

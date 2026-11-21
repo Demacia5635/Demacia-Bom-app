@@ -7,8 +7,8 @@ import MainLayout from './components/MainLayout';
 const HomeScreen = lazy(() => import('./Pages/BomPage/BomsPage'));
 const BomDetailsPage = lazy(() => import('./Pages/subpages/Bom/BomDetailsPage'));
 const WorkOrderDetailsPage = lazy(() => import('./Pages/subpages/WorkOrder/WorkOrderDetailsPage'));
-const PartsSearchPage = lazy(() => import('./Pages/searchPartsPage/SearchPartsPage'));
-const WorkOrdersPage = lazy(() => import('./Pages/WorkordersPage/WorkOrderPage'));
+const PartsSearchPage = lazy(() => import('./Pages/SearchPartsPage/SearchPartsPage'));
+const WorkOrdersPage = lazy(() => import('./Pages/WorkOrdersPage/WorkOrderPage'));
 const TelemetryPage = lazy(() => import('./Pages/Telemetry/TelemetryPage'));
 
 // A new id in the address is a new page (key): nothing of the previous BOM or
