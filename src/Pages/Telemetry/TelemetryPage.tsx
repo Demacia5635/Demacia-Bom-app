@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
+import ErrorBanner from "../../components/ErrorBanner";
 
 interface TelemetryEvent {
   _id: string;
@@ -169,7 +170,7 @@ export default function TelemetryPage() {
           </div>
         </div>
 
-        {error && <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">{error}</div>}
+        {error && <ErrorBanner className="p-3 rounded-lg text-sm">{error}</ErrorBanner>}
 
         {/* Totals per kind of Onshape request */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

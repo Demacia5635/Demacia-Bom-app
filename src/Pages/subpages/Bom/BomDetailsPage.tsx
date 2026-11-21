@@ -17,6 +17,7 @@ import ImageLightbox from "../../../components/ImageLightbox";
 import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
+import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -327,17 +328,14 @@ export default function BomDetailsPage() {
         <MainBomDataUI bom={mainBomData} />
       )}
       {Object.keys(saveErrors).length > 0 && (
-        <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-          <p className="font-semibold">Changes not saved</p>
+        <ErrorBanner title="Changes not saved" className="mb-6 p-4 rounded-lg">
           {Object.entries(saveErrors).map(([id, message]) => <p key={id}>{message}</p>)}
-        </div>
+        </ErrorBanner>
       )}
       {error && (
-        <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-          <p className="font-semibold">Error Loading BOM Data</p>
-          <p>{error.message}</p>
-          {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
-        </div>
+        <ErrorBanner title="Error Loading BOM Data" className="mb-6 p-4 rounded-lg">
+          <ApiErrorText error={error} />
+        </ErrorBanner>
       )}
 
       <div className="flex items-center gap-3 mb-3">

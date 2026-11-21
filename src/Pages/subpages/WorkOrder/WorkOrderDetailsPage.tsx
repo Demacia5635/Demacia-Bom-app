@@ -21,6 +21,7 @@ import { toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
 import WorkOrderFilters from "./WorkOrderFilters";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
+import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -267,20 +268,15 @@ export default function WorkOrderDetailsPage() {
                 </label>
             </div>
             {error && (
-                <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-                    <p className="font-semibold">Error Loading Work Order Data</p>
-                    <p>{error.message}</p>
-                    {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
-                </div>
+                <ErrorBanner title="Error Loading Work Order Data" className="mb-6 p-4 rounded-lg">
+                    <ApiErrorText error={error} />
+                </ErrorBanner>
             )}
 
             {saveError && (
-                <div className="mb-4 flex items-start justify-between gap-3 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
-                    <span>{saveError}</span>
-                    <button type="button" onClick={() => setSaveError(null)} className="shrink-0 text-xs font-semibold hover:underline">
-                        Dismiss
-                    </button>
-                </div>
+                <ErrorBanner className="mb-4 p-3 rounded-lg text-sm" onDismiss={() => setSaveError(null)}>
+                    {saveError}
+                </ErrorBanner>
             )}
 
             {loading ? (

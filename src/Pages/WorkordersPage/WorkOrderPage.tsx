@@ -5,6 +5,7 @@ import WorkOrderTable from "./WorkOrderTable";
 import type { WorkorderRow } from "../../util/Models";
 import { fetchBomsByIds } from "../../util/records";
 import { recordImageSrc } from "../../util/recordImage";
+import ErrorBanner from "../../components/ErrorBanner";
 
 
 export function WorkOrdersPage() {
@@ -120,10 +121,9 @@ export function WorkOrdersPage() {
             </div>
 
             {error && (
-                <div className="max-w-6xl mx-auto p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-sm">
-                    <p className="font-semibold">Error Loading Work Orders</p>
+                <ErrorBanner title="Error Loading Work Orders" className="max-w-6xl mx-auto p-4 rounded-lg text-sm">
                     <p>{error}</p>
-                </div>
+                </ErrorBanner>
             )}
 
             <div className="max-w-6xl mx-auto">

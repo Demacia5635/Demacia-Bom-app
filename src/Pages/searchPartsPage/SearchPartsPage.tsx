@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import PartPortal from "./PartPortal";
 import { recordImageSrc } from "../../util/recordImage";
 import { isMadeRecord, splitStandard } from "../../util/standardItems";
+import ErrorBanner, { ApiErrorText } from "../../components/ErrorBanner";
 
 /** A search result: a part, or a sub-assembly (an assembly some other assembly uses). */
 type SearchItem =
@@ -167,11 +168,9 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                         <p className={`${textMuted} text-sm font-medium`}>Loading {standard ? "standard parts" : "parts"}...</p>
                     </div>
                 ) : error ? (
-                    <div className="p-4 bg-red-900/50 border border-red-500 rounded-xl text-red-200">
-                        <p className="font-semibold">Error loading parts</p>
-                        <p>{error.message}</p>
-                        {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
-                    </div>
+                    <ErrorBanner title="Error loading parts" className="p-4 rounded-xl">
+                        <ApiErrorText error={error} />
+                    </ErrorBanner>
                 ) : items.length === 0 ? (
                     <div className={`${cardBg} border rounded-xl p-12 text-center`}>
                         <p className={`${textMuted} text-sm font-medium`}>

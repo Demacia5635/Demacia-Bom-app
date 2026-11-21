@@ -5,6 +5,7 @@ import { fetchFromApi } from "../../../util/ApiService";
 import { catalogTree, loadBomTree, workOrderLines, type BomTree } from "../../../util/bomTree";
 import { isPurchasedPart, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
 import { checkCatalogTree } from "../../../util/catalogNumbers";
+import ErrorBanner from "../../../components/ErrorBanner";
 
 /**
  * A made part's manufacturing method from the files it keeps (the STL /
@@ -192,9 +193,9 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
             </h2>
 
             {error && (
-                <div className="p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200 text-xs font-medium whitespace-pre-line max-h-60 overflow-y-auto">
+                <ErrorBanner className="p-3 rounded-lg text-xs font-medium whitespace-pre-line max-h-60 overflow-y-auto">
                     {error}
-                </div>
+                </ErrorBanner>
             )}
 
             {/* Name and Work Order Owner in a single row */}
