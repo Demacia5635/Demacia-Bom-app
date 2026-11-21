@@ -3,7 +3,7 @@ import cors from "cors";
 import apiRoutes from './routes';
 import { checkAuth } from "./controllers/healthController";
 import morgan from "morgan";
-import { allowedOrigins } from "./config";
+import { allowedOrigins, isAllowedOrigin } from "./config";
 
 const app: Express = express();
 
@@ -13,14 +13,7 @@ app.use(cors({
             return callback(null, true);
         }
 
-        const cleanOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-
-        const isAllowed = allowedOrigins.some((allowed) => {
-            const cleanAllowed = allowed.endsWith("/") ? allowed.slice(0, -1) : allowed;
-            return cleanAllowed === cleanOrigin;
-        });
-
-        if (isAllowed) {
+        if (isAllowedOrigin(origin)) {
             return callback(null, true);
         } else {
             console.warn(`>>> [CORS BLOCKED] Origin rejected: "${origin}". Allowed:`, allowedOrigins);

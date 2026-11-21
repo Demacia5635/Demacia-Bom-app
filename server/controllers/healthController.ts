@@ -1,11 +1,11 @@
 import { NextFunction, Request, Response } from "express";
 import { isConnected } from "../db/connection";
-import { allowedOrigins, CLIENT_SECRET as CLIENT_SECRET_KEY } from "../config";
+import { isAllowedOrigin, CLIENT_SECRET as CLIENT_SECRET_KEY } from "../config";
 
 export function checkAuth(req: Request, res: Response, next: NextFunction) {
   const origin = req.headers.origin;
 
-  if (origin && !allowedOrigins.includes(origin)) {
+  if (origin && !isAllowedOrigin(origin)) {
     return res.status(403).json({ message: 'Origin not allowed' });
   }
 

@@ -28,8 +28,15 @@ const envOrigins = (process.env.ALLOWED_ORIGINS || '')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-/** Browser origins allowed to call the API (CORS and checkAuth). */
-export const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+const withoutSlash = (origin: string) => origin.replace(/\/+$/, "");
+
+/** Browser origins allowed to call the API, without trailing slashes. */
+export const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins].map(withoutSlash)));
+
+/** Whether a browser origin may call the API (used by both CORS and checkAuth). */
+export function isAllowedOrigin(origin: string): boolean {
+    return allowedOrigins.includes(withoutSlash(origin));
+}
 
 export const google = {
     clientId: process.env.GOOGLE_CLIENT_ID,
