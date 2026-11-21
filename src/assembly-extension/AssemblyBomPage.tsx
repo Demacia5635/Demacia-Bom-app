@@ -564,26 +564,9 @@ function writeToggle(name: string, on: boolean) {
   }
 }
 
-/** Loads a parent assembly's DB record (null when missing); memoized per tree load. */
-type ParentBomLoader = (bomRowId: string) => Promise<BomModel | null>;
-
-/** Each parent assembly's DB record is fetched once per load, not once per child row. */
-function createParentBomLoader(limit: Limiter): ParentBomLoader {
-  const requests = new Map<string, Promise<BomModel | null>>();
-  return (bomRowId) => {
-    let request = requests.get(bomRowId);
-    if (!request) {
-      request = limit(() => fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomRowId)}`)).catch(() => null);
-      requests.set(bomRowId, request);
-    }
-    return request;
-  };
-}
-
 /** What a walk of the assembly tree (expandTree) works with. */
 interface ExpandContext {
   src: TreeSources;
-  getParentBom: ParentBomLoader;
   /** The top assembly's database record (null when it isn't saved). */
   rootBomDB: BomModel | null;
   /** Sub-assemblies already in the tree (listed once). */
@@ -677,7 +660,6 @@ export default function AssemblyBomPage() {
       key: OnshapeKey,
       parentRowId: string | null,
       rootBom: BomModel | null | 'root',
-      getParentBom: ParentBomLoader,
       /** The parent BOM's line for this sub-assembly (its part number etc.); absent for the root. */
       parentItem?: ParsedOnshapeBomRow,
       /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
@@ -690,11 +672,6 @@ export default function AssemblyBomPage() {
       const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${bomID}`;
 
       const isPublished = Boolean(dbBom);
-      const isExist = isPublished && rootBom !== 'root' && rootBom !== null && (
-        parentRowId
-          ? Boolean((await getParentBom(parentRowId))?.subAssemblies?.find((c) => c.bomID === rowId)) :
-          Boolean(rootBom.subAssemblies.find((c) => c.bomID === rowId))
-      );
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
       // Onshape where its BOM has the value, the database for the rest.
       const fromOnshape = parentItem?.onshapeFields ?? {};
@@ -733,7 +710,6 @@ export default function AssemblyBomPage() {
         onshapeURL: dbBom?.onshapeURL || onshapeUrl,
         exportSTL: "",
         exportParasolid: "",
-        dbAction: isExist ? "" : "add",
         vendor,
         markedStandard,
       };
@@ -763,8 +739,6 @@ export default function AssemblyBomPage() {
     async (
       parsedItem: ParsedOnshapeBomRow,
       parentRowId: string | null,
-      rootBom: BomModel | null,
-      getParentBom: ParentBomLoader,
       /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
       src: TreeSources = directSources
     ): Promise<AssemblyBomRow> => {
@@ -780,11 +754,6 @@ export default function AssemblyBomPage() {
       const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${partID}`;
 
       const isPublished = Boolean(dbPart);
-      const isExist = isPublished && rootBom !== null && (
-        parentRowId
-          ? Boolean((await getParentBom(parentRowId))?.parts?.find((c) => c.partID === rowId)) :
-          Boolean(rootBom.parts.find((c) => c.partID === rowId))
-      );
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
       // Onshape where its BOM has the value, the database for the rest.
       const fromOnshape = parsedItem.onshapeFields;
@@ -864,7 +833,6 @@ export default function AssemblyBomPage() {
         onshapeURL: standard ? "" : dbPart?.onshapeURL || onshapeUrl,
         exportSTL: standard ? "" : dbPart?.stlLink || "",
         exportParasolid: standard ? "" : dbPart?.parasolidLink || "",
-        dbAction: isExist ? "" : "add",
         vendor,
         configuration: parsedItem.itemSource.configuration || "",
         isStandardContent: !!parsedItem.itemSource.isStandardContent,
@@ -896,13 +864,13 @@ export default function AssemblyBomPage() {
           if (ancestors.has(subKeyId)) continue; // contains itself
 
           // Another use of an already-loaded sub-assembly is served from the per-load cache.
-          const { node: subNode } = await resolveBomNode(subKey, childParentId, ctx.rootBomDB, ctx.getParentBom, item, ctx.src);
+          const { node: subNode } = await resolveBomNode(subKey, childParentId, ctx.rootBomDB, item, ctx.src);
           ctx.out.push(subNode.row);
           if (ctx.visited.has(subKeyId)) continue; // its contents are already listed
           ctx.visited.add(subKeyId);
           if (!subNode.row.markedStandard) await expandTree(subNode, false, ctx, new Set([...ancestors, subKeyId]));
         } else {
-          ctx.out.push(await resolvePartRow(item, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src));
+          ctx.out.push(await resolvePartRow(item, childParentId, ctx.src));
         }
       }
     },
@@ -937,7 +905,7 @@ export default function AssemblyBomPage() {
       await expandTree(
         { row, key, bomID: row.entityID, onshapeBom },
         false,
-        { src, getParentBom: createParentBomLoader(limit), rootBomDB: currentTreeRef.current.rootBomDB, visited, out },
+        { src, rootBomDB: currentTreeRef.current.rootBomDB, visited, out },
         ancestors
       );
       return out;
@@ -1000,13 +968,12 @@ export default function AssemblyBomPage() {
     const limit = createLimiter(REFRESH_CONCURRENCY, stale);
     const src = createCachedSources(limit);
 
-    const getParentBom = createParentBomLoader(limit);
 
     const visitedBomIds = new Set<string>();
     const allRows: AssemblyBomRow[] = [];
 
     try {
-      const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', getParentBom, undefined, src);
+      const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', undefined, src);
       if (stale()) throw LOAD_CANCELLED;
       if (rootNode.onshapeBom) void prefetchTree(rootNode.onshapeBom, src);
       setTelemetryAssembly(assemblyNameOf(rootNode.onshapeBom) || dbBom?.name || "", rootKey.documentID, rootKey.elementID);
@@ -1019,7 +986,6 @@ export default function AssemblyBomPage() {
 
       await expandTree(rootNode, true, {
         src,
-        getParentBom,
         rootBomDB: dbBom,
         visited: visitedBomIds,
         out: allRows,
@@ -1783,7 +1749,6 @@ export default function AssemblyBomPage() {
                 ...r,
                 ...(rowUpdates.get(r.id) ?? {}),
                 source: "db" as const,
-                dbAction: "",
                 // The database now holds what's shown. Onshape too, unless writing the
                 // edits failed: then the next publish retries them.
                 baseline: editableValues(r),

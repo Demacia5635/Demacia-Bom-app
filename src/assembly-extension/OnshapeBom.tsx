@@ -1,18 +1,19 @@
 /**
  * OnshapeBom.tsx
  * =============================================================================
- * Types + a parser for this server's /api/onshape/bom proxy, which passes
- * through Onshape's raw getBillOfMaterials response untouched (server calls
- * it with indented=true&multiLevel=true).
+ * Types + a parser for Onshape's Bill of Materials table, which the panel
+ * reads directly from Onshape with the user's session (getBom in
+ * src/extension/onshapeDirect.ts: the unversioned
+ * /api/assemblies/.../bom?multiLevel=true&indented=true endpoint).
  *
- * CONFIRMED SHAPE (from a real multiLevel response):
+ * CONFIRMED SHAPE (from a real multiLevel response; getBom returns its
+ * `bomTable` key):
  *   {
  *     formatVersion, id, name, type: "multiLevel", createdAt, templateId,
  *     bomSource: { document, workspace, element, href, viewHref, configuration },
  *     headers: [ { name, propertyName, visible, propertyId }, ... ],
  *     items: [ ... ]
  *   }
- * - NOT wrapped in a `bomTable` key - the response IS the table.
  * - `headers` exists, but items do NOT use a headerIdToValue map - each
  *   item stores its column values as plain top-level properties, keyed by
  *   the header's `propertyName` (e.g. item.name, item.quantity,
@@ -24,9 +25,10 @@
  *     "1.1"  -> a part nested one level inside item "1"
  *     "1.2"  -> another part nested inside item "1"
  *     "2"    -> a top-level part (no children follow with "2.x")
- *   A row is a sub-assembly if and only if some other row's `item` starts
- *   with "<thisItem>.". This requires looking at the whole items array
- *   together, not one row in isolation - see `parseOnshapeBomTable` below.
+ *   A row is a sub-assembly if some other row's `item` starts with
+ *   "<thisItem>.", or if it has no partId (an empty sub-assembly). This
+ *   requires looking at the whole items array together, not one row in
+ *   isolation - see `parseOnshapeBomTable` below.
  * - `material` is an object ({ id, displayName, libraryName, ... }) rather
  *   than a plain string.
  */

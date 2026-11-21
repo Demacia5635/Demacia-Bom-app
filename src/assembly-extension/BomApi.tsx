@@ -135,10 +135,6 @@ export function getPartByOnshapeKey(key: OnshapeKey, partID: string): Promise<Pa
   return fetchJsonFromApi<PartModel>(dbPartByOnshapeKeyEndpoint(key, partID));
 }
 
-export function upsertBomByOnshapeKey(key: OnshapeKey, bomID: string, data: Partial<BomModel>): Promise<BomModel> {
-  return postToApi<BomModel>(dbBomByOnshapeKeyEndpoint(key, bomID), data);
-}
-
 export function upsertBomById(id: string, data: Partial<BomModel>): Promise<BomModel> {
   return postToApi<BomModel>(`/db/bom/id/${encodeURIComponent(id)}`, data);
 }
@@ -279,12 +275,6 @@ export interface PartFilesResult {
 }
 
 /**
- * Exports a part's files from Onshape and uploads them to Google Drive. The
- * server puts each file in its folder by type (image / STL / Parasolid).
- * `only` limits which files are made (e.g. just the missing ones); by default
- * all three. Failures don't throw: they're listed in `failures`.
- */
-/**
  * Deletes a file from Google Drive (used after Publish BOM replaced it).
  * Best-effort: returns false instead of throwing, so a leftover file never
  * fails a publish.
@@ -301,6 +291,12 @@ export async function deleteDriveFile(fileId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Exports a part's files from Onshape and uploads them to Google Drive. The
+ * server puts each file in its folder by type (image / STL / Parasolid).
+ * `only` limits which files are made (e.g. just the missing ones); by default
+ * all three. Failures don't throw: they're listed in `failures`.
+ */
 export async function syncPartFilesToDrive(
   key: OnshapeKey,
   partID: string,
