@@ -490,13 +490,10 @@ export default function WorkOrderDetailsPage() {
 
         // By ID: with sorting or filters the on-screen order isn't the order of `rows`.
         const clickedRow = rowFromElement(trEl);
-        if (clickedRow) {
-            const cellsInRow = Array.from(trEl.querySelectorAll(".table-td, td"));
-            const cellIndex = cellsInRow.indexOf(cellEl);
-
-            if (cellIndex === 0) {
-                setEnlargedImageSrc(clickedRow.avatar || "FAILED");
-            }
+        // By column, not position: columns can be dragged into another order,
+        // and merged Links cells leave some rows with fewer cells.
+        if (clickedRow && cellEl.getAttribute("data-col-key") === "avatar") {
+            setEnlargedImageSrc(clickedRow.avatar || "FAILED");
         }
     };
 
