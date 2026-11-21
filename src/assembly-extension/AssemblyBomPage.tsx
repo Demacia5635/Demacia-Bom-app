@@ -1987,7 +1987,7 @@ export default function AssemblyBomPage() {
             )}
             <button
               type="button"
-              className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
+              className="publish-btn-primary shadow-md"
               onClick={handleRefresh}
               disabled={loading || publishing || subtreeLoads > 0}
               title="Reload everything from Onshape (the database only for fields Onshape doesn't have). Saves nothing; discards edits not published yet."
@@ -1997,7 +1997,7 @@ export default function AssemblyBomPage() {
 
             <button
               type="button"
-              className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
+              className="publish-btn-primary shadow-md"
               onClick={() => {
                 setPublishError(null);
                 setPublishOpen(true);
