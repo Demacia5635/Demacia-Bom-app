@@ -4,7 +4,7 @@ One file per version: `v<version>.md`, listing what changed in the server (`serv
 
 - The server is deployed on Render **by hand**. A push to `MASTER` doesn't redeploy it. After redeploying, open `https://demacia-bom-app-n2ag.onrender.com/api` and check that it answers `{"status":"online"}`.
 - Render installs only the root `package.json`, so the server's packages must stay there.
-- Versions follow `package.json`; from 4.0.0 on, each version is a whole number (4.0.0, 5.0.0, …). A version with no server changes gets no file here.
+- The server has its own version in `server/package.json` (shown by `GET /api`). Up to 4.0.0 it shared the root `package.json`'s number with the extension. Increase it like the website's: +0.0.1 for a small deploy, +0.1.0 for a medium update, +1.0.0 for a large one. A version with no server changes gets no file here.
 
 ## How versions are made
 
@@ -13,7 +13,7 @@ One file per version: `v<version>.md`, listing what changed in the server (`serv
 
 | Version | Pushed | Highlights |
 |---|---|---|
-| [next](vNEXT.md) | Unreleased | Health info, whole-tree route, who-saved-it, Drive trash, BOM delete off |
+| [4.1.0](v4.1.0.md) | Not pushed yet | Health info, whole-tree route, who-saved-it, Drive trash, BOM delete off |
 | [4.0.0](v4.0.0.md) | 2026-11-21 | Safer uploads and inputs; CNC merge for parts added later; cleanup |
 | [3.0.0](v3.0.0.md) | 2026-11-17 23:18 | Part size field; work-order CNC jobs |
 | [2.0.0](v2.0.0.md) | 2026-11-15 | Refuses to start without `CLIENT_SECRET`, Drive limited to team folders, safer saves |
