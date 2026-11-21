@@ -50,7 +50,7 @@ const LIGHT: ThemeClasses = {
   tableHeader: "bg-zinc-100 text-zinc-700",
   rowHover: "hover:bg-zinc-50",
   imageBox: "bg-zinc-100 border-zinc-200",
-  input: "bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400",
+  input: "bg-white border-zinc-300 text-zinc-900 placeholder-zinc-500",
 };
 
 const DARK: ThemeClasses = {

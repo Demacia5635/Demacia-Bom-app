@@ -180,7 +180,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
 
     // Dynamic theme classes
     const formBg = isLight ? "bg-white border-zinc-300 text-zinc-900 shadow-xl" : "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-xl";
-    const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:ring-blue-600/50 focus:border-blue-600" : "bg-zinc-950 border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:ring-blue-500/50 focus:border-blue-500";
+    const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-500 focus:ring-blue-600/50 focus:border-blue-600" : "bg-zinc-950 border-zinc-800 text-zinc-100 placeholder-zinc-600 focus:ring-blue-500/50 focus:border-blue-500";
     const cancelBtnClass = isLight ? "bg-zinc-300 hover:bg-zinc-400 text-zinc-800 focus:ring-zinc-400" : "bg-zinc-600 hover:bg-zinc-500 text-white focus:ring-zinc-400";
 
     return (

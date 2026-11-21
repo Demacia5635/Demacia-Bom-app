@@ -8,3 +8,11 @@ body.dark-theme-active {
 body.light-theme-active {
   background-color: var(--color-zinc-50);
 }
+
+/* Keyboard focus is always visible (QW26): a blue outline when moving with
+   the keyboard (not on mouse clicks). Over Tailwind's focus:outline-none.
+   Table cells keep their own focus highlight (table.css). */
+:focus-visible:not(.cell-input):not(.cell-select) {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}

@@ -114,7 +114,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
 
     // Dynamic theme classes
     const labelColor = isLight ? "text-zinc-600" : "text-zinc-500";
-    const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:ring-blue-600/50" : "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:ring-blue-500/50";
+    const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-500 focus:ring-blue-600/50" : "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:ring-blue-500/50";
     const cardBg = isLight ? "bg-zinc-50 border-zinc-200" : "bg-zinc-950 border-zinc-800/80";
     const subInputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 focus:ring-blue-600/50" : "bg-zinc-900 border-zinc-800 text-zinc-100 focus:ring-blue-500/50";
     const commentsColor = isLight ? "text-zinc-700 italic" : "text-zinc-300 italic";
@@ -136,7 +136,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                                 className="w-full h-full object-cover"
                             />
                         ) : (
-                            <span className={`text-[10px] font-mono ${isLight ? "text-zinc-400" : "text-zinc-600"}`}>NO IMAGE</span>
+                            <span className={`text-[10px] font-mono ${isLight ? "text-zinc-500" : "text-zinc-600"}`}>NO IMAGE</span>
                         )}
                     </div>
 
@@ -335,7 +335,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                         onChange={handleChange}
                         disabled={locked}
                         placeholder="Detailed description of the part..."
-                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${theme.textValue}`}
+                        className={`w-full border rounded-lg p-3 text-xs ${isLight ? "placeholder-zinc-500" : "placeholder-zinc-400"} focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${theme.textValue}`}
                     />
                 </div>
 
@@ -351,7 +351,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                         onChange={handleChange}
                         disabled={locked}
                         placeholder="Additional manufacturing notes, comments, or issues..."
-                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${commentsColor}`}
+                        className={`w-full border rounded-lg p-3 text-xs ${isLight ? "placeholder-zinc-500" : "placeholder-zinc-400"} focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${commentsColor}`}
                     />
                 </div>
 
