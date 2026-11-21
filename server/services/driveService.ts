@@ -1,5 +1,6 @@
 import { google, drive_v3 } from "googleapis";
-import { OAuth2Client } from "google-auth-library";
+// google-auth-library isn't a declared dependency: take its types from googleapis.
+import type { Auth } from "googleapis";
 import { Readable } from "stream";
 import { google as googleConfig } from "../config";
 
@@ -58,7 +59,7 @@ const TEAM_FILE_CACHE_MAX = 5000;
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
 
-  constructor(oauth2Client: OAuth2Client) {
+  constructor(oauth2Client: Auth.OAuth2Client) {
     this.drive = google.drive({ version: "v3", auth: oauth2Client });
   }
 
@@ -245,7 +246,7 @@ export class GoogleDriveService {
 }
 
 export function createGoogleDriveService(
-  oauth2Client: OAuth2Client,
+  oauth2Client: Auth.OAuth2Client,
 ): GoogleDriveService {
   return new GoogleDriveService(oauth2Client);
 }
