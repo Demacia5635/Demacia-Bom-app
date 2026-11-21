@@ -21,6 +21,7 @@ import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 import { showToast } from "../../../util/toast";
 import { usePartInAddress } from "../../../components/usePartInAddress";
+import SaveStatus from "../../../components/SaveStatus";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -172,6 +173,7 @@ export default function BomDetailsPage() {
   // fields: the rest of the record (e.g. a newer publish from the extension) is
   // left as it is. A failed save is shown, and retried with the part's next edit.
   const queuePartSave = useDebouncedFieldSave({
+    trackAs: "part",
     save: (partId, changes) =>
       fetchFromApi(`/db/part/id/${encodeURIComponent(partId)}`, { method: "POST", body: JSON.stringify(changes) }),
     onSaved: (partId) => setSaveErrors(({ [partId]: _done, ...rest }) => rest),
@@ -362,8 +364,9 @@ export default function BomDetailsPage() {
             </button>
           ))}
         </div>
-        {/* Right of the view buttons, under the title card. */}
-        <label className={`ml-auto flex items-center gap-2 cursor-pointer text-sm ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
+        {/* Right of the view buttons, under the title card: save status, then "Show size". */}
+        <span className="ml-auto"><SaveStatus /></span>
+        <label className={`flex items-center gap-2 cursor-pointer text-sm ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
           <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
           Show size
         </label>

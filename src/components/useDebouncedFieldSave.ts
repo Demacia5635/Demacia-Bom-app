@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
+import { trackSaveEnd, trackSaveStart } from "../util/saveTracker";
 
 interface Handlers<Result> {
+  /** Names the edits for the save indicator (util/saveTracker.ts): "part", "row". */
+  trackAs: string;
   /** Sends one key's changed fields. */
   save: (key: string, changes: Record<string, unknown>) => Promise<Result>;
   onSaved?: (key: string, result: Result) => void;
@@ -30,6 +33,8 @@ export function useDebouncedFieldSave<Result>(handlers: Handlers<Result>, delayM
 
   return useCallback(
     (key: string, changes: Record<string, unknown>, label?: string) => {
+      const trackKey = `${handlersRef.current.trackAs}:${key}`;
+      trackSaveStart(trackKey);
       const pending = pendingRef.current.get(key) ?? { changes: {} };
       Object.assign(pending.changes, changes);
       if (label) pending.label = label;
@@ -38,12 +43,15 @@ export function useDebouncedFieldSave<Result>(handlers: Handlers<Result>, delayM
         pendingRef.current.delete(key);
         try {
           const result = await handlersRef.current.save(key, pending.changes);
+          // Saved, unless a newer edit of this key is already waiting.
+          if (!pendingRef.current.has(key)) trackSaveEnd(trackKey, true);
           handlersRef.current.onSaved?.(key, result);
         } catch (err) {
           // Kept for this key's next save (newer edits made meanwhile win).
           const next = pendingRef.current.get(key);
           if (next) next.changes = { ...pending.changes, ...next.changes };
           else pendingRef.current.set(key, { changes: pending.changes, label: pending.label });
+          trackSaveEnd(trackKey, false);
           handlersRef.current.onFailed?.(key, err, pending.label);
         }
       }, delayMs);

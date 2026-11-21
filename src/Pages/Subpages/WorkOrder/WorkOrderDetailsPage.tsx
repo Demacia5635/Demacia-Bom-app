@@ -24,6 +24,7 @@ import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 import { showToast } from "../../../util/toast";
 import { usePartInAddress } from "../../../components/usePartInAddress";
+import SaveStatus from "../../../components/SaveStatus";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -95,6 +96,7 @@ export default function WorkOrderDetailsPage() {
      */
     // Keyed by row; `name` only labels a failure message.
     const queueRowSave = useDebouncedFieldSave<{ updatedAt?: string } | null>({
+        trackAs: "row",
         save: (rowId, changes) =>
             fetchFromApi<{ updatedAt?: string } | null>(
                 `/db/workOrder/id/${encodeURIComponent(workOrderID!)}/part`,
@@ -262,6 +264,7 @@ export default function WorkOrderDetailsPage() {
                 <p className={`text-xs ${theme.textMuted}`}>
                     Parts and quantities follow the assembly&apos;s current BOM: publishing it again updates this work order.
                 </p>
+                <span className="ml-auto"><SaveStatus /></span>
                 <label className={`flex items-center gap-2 cursor-pointer text-sm ${theme.textLabel}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
                     <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
                     Show size
