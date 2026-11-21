@@ -22,7 +22,8 @@ import type { OnshapeKey } from "./BomApi";
 // 8: parts carry wantStl / wantParasolid and the saved files' model version.
 // 9: rows carry dbUpdatedAt (Publish BOM's check for newer publishes).
 // 10: vendor parts and sub-assemblies are always marked standard.
-const VERSION = 10;
+// 11: parts modeled several times in one Part Studio are one row with its copies (copies, copyGroup, keepSeparate).
+const VERSION = 11;
 const PREFIX = "demacia-bom-tree:";
 const INDEX_KEY = "demacia-bom-tree-index";
 const MAX_ENTRIES = 20;
