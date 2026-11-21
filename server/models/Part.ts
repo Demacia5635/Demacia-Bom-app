@@ -47,15 +47,6 @@ const partSchema = new mongoose.Schema(
     // part (same id as its assembly record) so it lists as one bought item.
     markedStandard: { type: Boolean, default: false },
 
-    // Parts modeled several times in one Part Studio are combined into one
-    // BOM row by the extension (one record, under the copy it shows).
-    // keepSeparate: someone marked this part "not the same part": it is only
-    // combined with other parts marked so, never with unmarked ones.
-    // copyPartIDs: the other copies (Onshape part IDs) this record stands for,
-    // so marked copies are known again after a reload.
-    keepSeparate: { type: Boolean },
-    copyPartIDs: { type: [String], default: undefined },
-
     // Which files Publish BOM keeps for this part (set in the BOM extension).
     // Absent on parts saved before these choices existed.
     wantStl: { type: Boolean },
