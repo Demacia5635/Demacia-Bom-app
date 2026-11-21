@@ -1027,3 +1027,16 @@ body.light-theme-active .table-td.cell-frozen.cell-disabled,
 .table-page-container.theme-light .table-td.cell-frozen.cell-disabled {
   background-color: var(--bg-surface-disabled, #f1f5f9);
 }
+
+/* Excel-style selected cells (Table's opt-in cellSelection). */
+.table-td.cell-selected {
+  background-color: rgba(59, 130, 246, 0.18) !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.7);
+}
+.table-td.cell-selected .cell-input {
+  background-color: transparent;
+}
+body.light-theme-active .table-td.cell-selected {
+  background-color: rgba(37, 99, 235, 0.14) !important;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.75);
+}

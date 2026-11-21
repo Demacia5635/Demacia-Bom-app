@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useColumnResize } from "./table/useColumnResize";
 import ProblemTip from "./table/ProblemTip";
 import TableCell from "./table/TableCell";
+import { useCellSelection } from "./table/useCellSelection";
 import { useProblemTip } from "./table/useProblemTip";
 import { useColumnReorder } from "./table/useColumnReorder";
 import { useStickyFit } from "./table/useStickyFit";
@@ -81,9 +82,17 @@ interface TableParam<T extends RowData> {
     rowFilter?: (row: T) => boolean;
     /** Rows this returns true for are left out (with anything under them); expanding works as usual. */
     hideRow?: (row: T) => boolean;
+    /**
+     * Excel-style cell selection (table/useCellSelection.ts): drag or
+     * Shift-click a range, Ctrl+C / Ctrl+V / Ctrl+D / Delete on it. Off by
+     * default: the table then behaves exactly as without it.
+     */
+    cellSelection?: boolean;
+    /** With cellSelection: the distinct rows the selection covers, when it changes. */
+    onSelectionChange?: (rows: T[]) => void;
 }
 
-export function Table<T extends RowData>({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }: TableParam<T>) {
+export function Table<T extends RowData>({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow, cellSelection = false, onSelectionChange }: TableParam<T>) {
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
 
@@ -163,6 +172,17 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     const mergeSpans = useMemo(() => mergedCellSpans(columns, renderedRows), [columns, renderedRows]);
     const rowKeys = useMemo(() => renderKeys(visibleData), [visibleData]);
     const isParent = (id: string) => childrenByParent.has(id);
+
+    // Excel-style selection, only when cellSelection is on (table/useCellSelection.ts).
+    const selection = useCellSelection({
+        enabled: cellSelection,
+        rows: renderedRows,
+        columns,
+        data,
+        setData,
+        wrapperRef,
+        onSelectionChange,
+    });
 
     // Fits a column to its longest shown value (double-click on its resize handle).
     const handleResizeDoubleClick = (e: React.MouseEvent, key: string, label: string) => {
@@ -401,6 +421,10 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                                                 onCellKeyDown={handleCellKeyDown}
                                                 onShowProblem={showProblemTip}
                                                 onHideProblem={hideProblemTip}
+                                                selected={selection.isSelected(rowIndex, colIndex)}
+                                                onSelectMouseDown={selection.onCellMouseDown}
+                                                onSelectMouseEnter={selection.onCellMouseEnter}
+                                                onSelectFocus={selection.onCellFocus}
                                             />
                                         );
                                     })}

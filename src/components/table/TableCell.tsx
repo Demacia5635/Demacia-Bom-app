@@ -24,6 +24,11 @@ interface TableCellProps<T extends RowData> {
     onCellKeyDown: (e: KeyboardEvent, rowIndex: number, colIndex: number) => void;
     onShowProblem: (cell: HTMLElement, text: string) => void;
     onHideProblem: () => void;
+    /** Inside the Excel-style selection (Table's cellSelection; never set without it). */
+    selected?: boolean;
+    onSelectMouseDown?: (e: MouseEvent, rowIndex: number, colIndex: number) => void;
+    onSelectMouseEnter?: (rowIndex: number, colIndex: number) => void;
+    onSelectFocus?: (rowIndex: number, colIndex: number) => void;
 }
 
 /**
@@ -34,6 +39,7 @@ interface TableCellProps<T extends RowData> {
 export default function TableCell<T extends RowData>({
     row, col, rowIndex, colIndex, span, isRowParent, filtering, className, style,
     onToggleExpand, onCellChange, onNumberCommit, onCellKeyDown, onShowProblem, onHideProblem,
+    selected = false, onSelectMouseDown, onSelectMouseEnter, onSelectFocus,
 }: TableCellProps<T>) {
     const isCellDisabled = col.isDisabled ? col.isDisabled(row) : false;
     const value = (row as unknown as Record<string, unknown>)[col.key];
@@ -45,11 +51,18 @@ export default function TableCell<T extends RowData>({
             data-col-key={col.key}
             rowSpan={span > 1 ? span : undefined}
             style={style}
-            onMouseEnter={cellProblem ? (e) => onShowProblem(e.currentTarget, cellProblem) : undefined}
+            onMouseDown={onSelectMouseDown ? (e) => onSelectMouseDown(e, rowIndex, colIndex) : undefined}
+            onMouseEnter={cellProblem || onSelectMouseEnter ? (e) => {
+                if (cellProblem) onShowProblem(e.currentTarget, cellProblem);
+                onSelectMouseEnter?.(rowIndex, colIndex);
+            } : undefined}
             onMouseLeave={cellProblem ? () => onHideProblem() : undefined}
-            onFocus={cellProblem ? (e) => onShowProblem(e.currentTarget, cellProblem) : undefined}
+            onFocus={cellProblem || onSelectFocus ? (e) => {
+                if (cellProblem) onShowProblem(e.currentTarget, cellProblem);
+                onSelectFocus?.(rowIndex, colIndex);
+            } : undefined}
             onBlur={cellProblem ? () => onHideProblem() : undefined}
-            className={`table-td ${className} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''} ${cellProblem ? 'cell-problem' : ''}`}>
+            className={`table-td ${className} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''} ${cellProblem ? 'cell-problem' : ''}${selected ? ' cell-selected' : ''}`}>
             <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
                 {colIndex === 0 && isRowParent && (
                     <button
