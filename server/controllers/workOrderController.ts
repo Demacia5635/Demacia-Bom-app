@@ -181,6 +181,10 @@ export async function deleteWorkOrderByID(
   }
 }
 const GROUP_ID = /^[A-Za-z0-9_-]{1,64}$/;
+// Size caps: this route writes with the native driver, so no schema checks it.
+const MAX_GROUP_PARTS = 500;
+const MAX_PART_ID_LENGTH = 200;
+const MAX_LINKS_LENGTH = 4000;
 
 /**
  * Creates, changes or dissolves one CNC group of a work order:
@@ -208,8 +212,12 @@ export async function updateCncGroup(
     const keepParts = body.partIDs === undefined && body.groupID !== undefined;
     if (!keepParts && (!Array.isArray(body.partIDs) || !body.partIDs.every((p) => typeof p === "string" && p !== "")))
       return res.status(400).json({ message: "partIDs must be a list of part IDs" });
+    if (!keepParts && ((body.partIDs as string[]).length > MAX_GROUP_PARTS || (body.partIDs as string[]).some((p) => p.length > MAX_PART_ID_LENGTH)))
+      return res.status(400).json({ message: `partIDs may list up to ${MAX_GROUP_PARTS} parts, each up to ${MAX_PART_ID_LENGTH} characters` });
     if (body.links !== undefined && typeof body.links !== "string")
       return res.status(400).json({ message: "links must be text" });
+    if (typeof body.links === "string" && body.links.length > MAX_LINKS_LENGTH)
+      return res.status(400).json({ message: `links may be up to ${MAX_LINKS_LENGTH} characters` });
     const partIDs = keepParts ? [] : [...new Set(body.partIDs as string[])];
     const groupID = (body.groupID as string | undefined) ?? randomUUID();
     if (body.groupID === undefined && partIDs.length < 2)
