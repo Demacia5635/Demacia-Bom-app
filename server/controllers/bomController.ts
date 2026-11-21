@@ -104,7 +104,7 @@ export async function deleteBomByID(
     }
 }
 
-export async function getBomByOnsahpeKey(
+export async function getBomByOnshapeKey(
     req: Request<OnshapeID>,
     res: Response,
     next: NextFunction
