@@ -20,7 +20,6 @@ app.use(cors({
             return callback(null, false);
         }
     },
-    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"]
 }));
@@ -33,14 +32,6 @@ app.use(morgan("dev"));
 // Root route to handle Render health checks cleanly (fixes GET / 404)
 app.get("/", (req: Request, res: Response) => {
     res.status(200).json({ status: "online", message: "Demacia BOM API is running" });
-});
-
-// Ensure preflight OPTIONS requests bypass auth checks and return 204
-app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-    }
-    next();
 });
 
 // Selective Auth Middleware: only *reading* a Drive file is public (images in
