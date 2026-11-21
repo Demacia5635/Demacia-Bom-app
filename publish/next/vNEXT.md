@@ -1,6 +1,6 @@
 # Extension: next version
 
-**Not built yet.** Commits `ef4a751`, `b91e47c`, `f477d57`, `16e3963`, `7be21f1` and `3821d89` were pushed by 2026-11-21 15:48, and `1039c40` on 16:27. Replaces [v3.0.0](../3.0.0/v3.0.0.md).
+**Not built yet.** Commits `ef4a751`, `b91e47c`, `f477d57`, `16e3963`, `7be21f1` and `3821d89` were pushed by 2026-11-21 15:48, and `1039c40` on 16:27. `3178eb4` is committed but not pushed yet. Replaces [v3.0.0](../3.0.0/v3.0.0.md).
 
 (`ef4a751` was first logged as 3.1.0. That version was never built, so it's part of the next version.)
 
@@ -16,19 +16,14 @@
     - **Different names:** the Catalog No. cells turn red (this blocks a work order) and name the other items, e.g. "0400-1104 is also used by "X". Give each its own catalog number in Onshape, or press Combine anyway". **Combine anyway** combines them regardless.
     - **An assembly among them:** it's only flagged. Fix it in Onshape.
   - **Publish BOM** lists the same groups, plus catalog numbers this assembly uses that are already used in the database by something outside it. When it lists a group or a warning, you have to tick that you understand, and the button becomes **Combine and publish**, which combines the groups first. A clean publish needs no tick. If the database list can't be loaded, the dialog says so and still lets you publish.
-  - **A combined row shows "×4 copies"** over the top-left corner of its picture, and opens with a round blue ▸ ("Show the 4 copies of this part") to list each copy, read-only. Sub-assemblies keep the grey ▶. (`16e3963`, `b91e47c`)
+  - **A combined row shows "×4 copies"** over the top-left corner of its picture. It's a normal part row: it doesn't open to list the copies. (`16e3963`, `3178eb4`)
   - A combined part is saved as one record, under every parent that uses it. That's the record of a copy that was already saved, otherwise the same copy on every load. Its STL / Parasolid come from that copy, and your edits are written to every copy in Onshape. The other copies' old records stay in the database, unused.
   - Never grouped: empty or placeholder catalog numbers ("-", "?", "TBD", "N/A", "none"…), default "Part N" names, and bought items (Standard Content, vendor, marked standard). Spaces around names and numbers, and upper/lower case, don't matter.
-  - **Expand all** opens sub-assemblies only, not combined rows.
 - **Light mode.** The BOM header has the same theme button as the website: 🌙 while light (click for dark), ☀️ while dark (click for light). Until you first click it, the panel follows your browser's or computer's colour scheme, so **if yours is set to light, the panel turns light after updating.** Click 🌙 to make it dark; the panel then remembers your choice. Dark mode looks exactly as before. (`7be21f1`, `3821d89`)
 
 ## Removed
 
-- The automatic shape-based combining from `ef4a751`, and **Not the same part** from `b91e47c` (both pushed, never in a built extension). The modeler fixes a wrong name or catalog number in Onshape instead. (`1039c40`)
-
-## Known problems
-
-- A part combined under two different parents lists the first parent's copies under both rows. The quantities are right.
+- The automatic shape-based combining from `ef4a751`, **Not the same part** from `b91e47c`, and the list of copies under a combined row (all pushed, never in a built extension). The modeler fixes a wrong name or catalog number in Onshape instead. (`1039c40`, `3178eb4`)
 
 ## Not tested yet
 
