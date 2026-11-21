@@ -1,6 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import { GoogleDriveService, folderForUpload, isTeamFolder } from "../services/driveService";
 
+/** What a Drive file ID looks like; anything else isn't sent to Drive. */
+const DRIVE_FILE_ID = /^[A-Za-z0-9_-]{10,100}$/;
+
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 // Blobs without a type are sent as application/octet-stream.
 const CAD_TYPES = (...types: string[]) => [...types, "application/octet-stream"];
@@ -74,8 +77,8 @@ export async function getFileFromId(
 ) {
   try {
     const fileID = req.params.fileID;
-    if (!fileID) {
-      return res.status(400).json({ message: "File ID is required" });
+    if (!DRIVE_FILE_ID.test(fileID ?? "")) {
+      return res.status(400).json({ message: "A valid file ID is required" });
     }
 
     let file: { data: Buffer; mimeType: string };
@@ -168,7 +171,7 @@ export async function deleteFile(
 ) {
   try {
     const id = req.params.fileID;
-    if (!id) return res.status(400).json({ message: "file id is required" });
+    if (!DRIVE_FILE_ID.test(id ?? "")) return res.status(400).json({ message: "A valid file ID is required" });
     // Only files in the team folders may be deleted through the API.
     if (!(await client.isInTeamFolders(id)))
       return res.status(404).json({ message: `File ${id} not found` });
