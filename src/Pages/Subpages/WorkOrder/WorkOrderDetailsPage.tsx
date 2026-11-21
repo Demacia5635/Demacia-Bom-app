@@ -61,6 +61,7 @@ export default function WorkOrderDetailsPage() {
     const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
     const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<WorkOrderTableRow>();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+    const [lightboxImages, setLightboxImages] = useState<string[]>([]);
 
     /** Edits waiting to be saved, per row (merged until the save goes out). */
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -219,6 +220,12 @@ export default function WorkOrderDetailsPage() {
         filterLines: filters.describe(),
     });
 
+    // The pictures of the rows as shown (filter and sort), for ← / → in the viewer.
+    const shownImages = () =>
+        [...new Set(Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+            .map((tr) => rowFromElement(tr)?.avatar || "")
+            .filter(Boolean))];
+
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const cellEl = target.closest(".table-td, td");
@@ -232,6 +239,7 @@ export default function WorkOrderDetailsPage() {
         // By column, not position: columns can be dragged into another order,
         // and merged Links cells leave some rows with fewer cells.
         if (clickedRow && cellEl.getAttribute("data-col-key") === "avatar") {
+            setLightboxImages(shownImages());
             setEnlargedImageSrc(clickedRow.avatar || "FAILED");
         }
     };
@@ -456,7 +464,7 @@ export default function WorkOrderDetailsPage() {
               </RecordDialog>
             )}
 
-            <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
+            <ImageLightbox src={enlargedImageSrc} images={lightboxImages} onClose={() => setEnlargedImageSrc(null)} />
         </div>
     );
 }

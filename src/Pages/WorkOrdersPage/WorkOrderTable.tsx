@@ -80,7 +80,11 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[]; summaries?: 
                 </tbody>
             </table>
 
-            <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
+            <ImageLightbox
+                src={enlargedImageSrc}
+                images={[...new Set(workOrders.map((wo) => recordImageSrc(wo)).filter(Boolean))]}
+                onClose={() => setEnlargedImageSrc(null)}
+            />
         </div>
     );
 };

@@ -172,6 +172,7 @@ export default function BomDetailsPage() {
   const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
   const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<BomTableRow>();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [tree, setTree] = useState<BomTree | null>(null);
   const tableAreaRef = useRef<HTMLDivElement>(null);
   // The header's totals: distinct parts and pieces for one assembly (QW11).
@@ -289,6 +290,12 @@ export default function BomDetailsPage() {
     return rowId == null ? undefined : rows.find((r) => r.id === rowId);
   };
 
+  // The pictures of the rows as shown (filter and sort), for ← / → in the viewer.
+  const shownImages = () =>
+      [...new Set(Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+          .map((tr) => rowOfElement(tr)?.avatar || "")
+          .filter(Boolean))];
+
   const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const cellEl = target.closest(".table-td, td");
@@ -301,6 +308,7 @@ export default function BomDetailsPage() {
     if (clickedRow) {
       // By column, not position: columns can be dragged into another order.
       if (cellEl.getAttribute("data-col-key") === "avatar") {
+        setLightboxImages(shownImages());
         setEnlargedImageSrc(clickedRow.avatar || "FAILED");
       }
     }
@@ -473,7 +481,7 @@ export default function BomDetailsPage() {
         </RecordDialog>
       )}
 
-      <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
+      <ImageLightbox src={enlargedImageSrc} images={lightboxImages} onClose={() => setEnlargedImageSrc(null)} />
     </div>
   );
 }

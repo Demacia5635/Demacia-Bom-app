@@ -217,7 +217,11 @@ export const BomTable: React.FC<{ boms: BomSummary[]; emptyText?: string }> = ({
       </table>
 
       {/* Enlarged Image Preview Overlay Modal Portal */}
-      <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
+      <ImageLightbox
+        src={enlargedImageSrc}
+        images={[...new Set(rootBoms.map((bom) => recordImageSrc(bom as any)).filter(Boolean))]}
+        onClose={() => setEnlargedImageSrc(null)}
+      />
     </div>
   );
 };
