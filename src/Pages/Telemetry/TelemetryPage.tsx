@@ -5,7 +5,7 @@
  *
  * Route /tele - deliberately not linked from the sidebar or anywhere else.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 
@@ -69,23 +69,31 @@ export default function TelemetryPage() {
   const [range, setRange] = useState("7");
   const [user, setUser] = useState(ALL_USERS);
 
+  // Each load is numbered: only the newest one's reply is shown (an older range
+  // answering late can't replace it), and none after the page is left.
+  const loadSeqRef = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     setError(null);
     try {
       const days = RANGES.find((r) => r.key === range)?.days ?? null;
       const since = days ? `&since=${encodeURIComponent(new Date(Date.now() - days * 86_400_000).toISOString())}` : "";
-      setEvents((await fetchFromApi<TelemetryEvent[]>(`/telemetry/events?limit=2000${since}`)) || []);
+      const result = (await fetchFromApi<TelemetryEvent[]>(`/telemetry/events?limit=2000${since}`)) || [];
+      if (seq === loadSeqRef.current) setEvents(result);
     } catch (err: any) {
-      setError(err?.message || "Failed to load telemetry");
+      if (seq === loadSeqRef.current) setError(err?.message || "Failed to load telemetry");
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [range]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Leaving the page: any reply still on its way is ignored.
+  useEffect(() => () => { loadSeqRef.current++; }, []);
 
   const users = useMemo(() => Array.from(new Set(events.map((e) => e.user || "(unknown)"))).sort(), [events]);
   const shown = useMemo(
