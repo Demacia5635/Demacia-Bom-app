@@ -203,7 +203,9 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         };
     }, [stickyHeader]);
 
-    const closeContextMenu = () => setContextMenu(prev => ({ ...prev, visible: false }));
+    // Unchanged state when already closed: this runs on every scroll and click,
+    // and a new object each time re-rendered the whole table.
+    const closeContextMenu = () => setContextMenu(prev => (prev.visible ? { ...prev, visible: false } : prev));
     const contextMenuRef = useRef<HTMLDivElement>(null);
 
     // The column menu closes on a press anywhere outside it, also outside the
