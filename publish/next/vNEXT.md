@@ -25,6 +25,9 @@
 
 - **One failed request no longer breaks the whole Refresh BOM.** A request to Onshape or the server that failed once is tried again the next time it's needed, instead of failing every later part of the load and every sub-assembly you open afterwards. (B12, `1b65342`)
 - **A failed Publish BOM tells you right away, in the Publish dialog, what went wrong and what to do.** Before, the error was hidden until the dialog closed, and was a raw message like "Failed to fetch". Now it names the step and item that failed, the likely cause (the BOM server or Onshape can't be reached, no permission in Onshape, an item was deleted or changed, too many requests, someone saved the same item at the same moment, an invalid value) and the next step (retry, Refresh BOM, check your Onshape access…), with the raw message as details. It's cleared when the dialog opens again or the BOM reloads. (B14, `2c1548c`, `f4c7249`)
+- **Every publish failure stays inside the Publish dialog,** including "someone published this again after your copy was loaded" and "items inside weren't saved", in the same plain words. (`24b2f35`)
+- **A saved copy must be refreshed before it can be published.** When the panel shows a copy saved in the browser ("Saved copy from 3 days ago"), Publish BOM is disabled and the dialog says to press Refresh BOM first, because Onshape may have changed since. If the copy has unpublished edits, it warns that they'll be lost on Refresh. Before, an old copy could be published over newer data. (B13, `ab6c8f1`)
+- On Firefox, a BOM sidebar opened from the sidebar menu follows the tab you switch to, instead of staying on the first one. (B11, `ebc3275`)
 
 ## Removed
 
@@ -32,6 +35,6 @@
 
 ## Not tested yet
 
-- The checklist fixes haven't been run in the real extension, and no failure was forced to see the messages.
+- The checklist fixes haven't been run in the real extension, and no failure was forced to see the messages. The Firefox fix needs Firefox.
 - Not run in the real panel in Onshape or against the live database: the notice, Combine, the red catalog-number problems, and the Publish dialog's database check (the full parts list may be slow to load). The grouping and combining rules, the dialog and the notice passed scripted checks.
 - Light mode hasn't been opened in Chrome or Firefox at all, so some parts of the panel may still be dark.
