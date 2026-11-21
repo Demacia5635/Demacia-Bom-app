@@ -18,11 +18,10 @@ import {
   getBomsByIds,
   getPartsByIds
 } from "./BomApi";
-import { getPartBoundingBox, onshapeJson } from "../extension/onshapeDirect";
+import { onshapeJson } from "../extension/onshapeDirect";
 import { catalogKey, findSameNumberGroups, isGrouped, normalizeCatalogNumber, quotedList } from "./sameParts";
 import { combineSameNumber, membersOf, pickRecordRow } from "./copyRows";
 import SameNumberNotice from "./SameNumberNotice";
-import { formatPartSize } from "../util/partSize";
 import { usePanelThemeSetting } from "../extension/panel/theme";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
@@ -64,6 +63,7 @@ import {
   type TreeSources,
 } from "./requestPool";
 import { computeImageVersions, computeModelVersions, partFilesVersion, type ModelVersions } from "./modelVersions";
+import { isSavedSizeStale, needsSize, readPartSize, SIZE_CONCURRENCY } from "./partSize";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
   if (context.workspaceId) return { wvmType: "w", wvmID: context.workspaceId };
@@ -136,43 +136,6 @@ async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new S
       await prefetchTree(sub, src, seen);
     })
   );
-}
-
-/** Bounding-box requests in flight at once while "Show size" fills the Size column. */
-const SIZE_CONCURRENCY = 4;
-
-/** Whether a row gets a size: made parts only (bought ones are named by their size already). */
-function needsSize(row: AssemblyBomRow): boolean {
-  return !row.isAssembly && !isHiddenByStandardToggle(row) && !!row.entityID;
-}
-
-/**
- * Whether a size saved in the database is out of date: the part's model
- * changed since it was read. Sizes just read from Onshape (no sizeVersion) and
- * parts whose current version is unknown are kept.
- */
-function isSavedSizeStale(row: AssemblyBomRow, currentVersion: string | null): boolean {
-  return row.sizeVersion !== undefined && !!currentVersion && row.sizeVersion !== currentVersion;
-}
-
-/**
- * A part's size text from Onshape (util/partSize), waiting and retrying when
- * rate-limited. Stops (throws LOAD_CANCELLED) once `isCancelled` says so.
- */
-async function readPartSize(row: AssemblyBomRow, isCancelled?: () => boolean): Promise<string> {
-  const key = keyOf(row);
-  for (let attempt = 0; ; attempt++) {
-    if (isCancelled?.()) throw LOAD_CANCELLED;
-    try {
-      return formatPartSize(await getPartBoundingBox(key, row.entityID, row.configuration || undefined));
-    } catch (err) {
-      if ((err as { onshapeStatus?: number })?.onshapeStatus === 429 && attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)));
-        continue;
-      }
-      throw err;
-    }
-  }
 }
 
 /** Requests in flight at once during Refresh BOM (Onshape + our server). */
