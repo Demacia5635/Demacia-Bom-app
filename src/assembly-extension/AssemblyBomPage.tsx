@@ -1416,11 +1416,12 @@ export default function AssemblyBomPage() {
           const names = newer.slice(0, 3).map((n) => `"${n}"`).join(", ");
           const more = newer.length > 3 ? ` and ${newer.length - 3} more` : "";
           const message =
-            `Not published: ${names}${more} ${newer.length === 1 ? "was" : "were"} published again after this copy was loaded. ` +
-            `Press Refresh BOM to load the latest, then publish again. Nothing was changed.`;
+            `Not published: someone published ${names}${more} again after this copy was loaded, ` +
+            `so publishing now would overwrite their changes. Nothing was changed. ` +
+            `Close this dialog, press Refresh BOM to load the latest, then publish again.`;
+          // Shown inside the dialog, which stays open.
           setPublishError(message);
           client.showMessageBubble(message);
-          setPublishOpen(false);
           return null; // marks the operation failed on /tele
         }
 
@@ -1755,9 +1756,9 @@ export default function AssemblyBomPage() {
             (others > 0 ? ` ${others} other problem${others === 1 ? "" : "s"} (see the console).` : "") +
             ` The items that were saved are kept.`;
           console.warn("[publish] problems:", problems);
+          // Shown inside the dialog, which stays open.
           setPublishError(message);
           client.showMessageBubble(message);
-          setPublishOpen(false);
           return null; // marks the operation failed on /tele
         }
         rootTrack.step(isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
