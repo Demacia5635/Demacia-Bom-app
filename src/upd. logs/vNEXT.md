@@ -17,6 +17,7 @@
 - A mistyped address goes to the Home page instead of quietly showing it under the wrong address. (W11, `0bf51de`)
 - **The privacy policy now describes the extension's usage statistics** (what's recorded, that records are deleted after about 6 months, where they can be seen) and what's kept in the browser (BOM copies, image cache, display settings). (S3, `7ca8d73`)
 - The sidebar's buttons can't be reached with the Tab key while it's closed. (W12, `ee0bb64`)
+- A file download can no longer be cancelled by the browser right after it starts. (W15, `028af0c`)
 - **Clicking a part's picture on a work order opens the image viewer again after the Avatar column has been moved,** and on rows of a merged CNC job. (B5, `22fe2fb`)
 - **A failed save on a work order no longer loses your change.** It's sent again with your next edit of that part, as on the BOM page. The "Couldn't save" banner stays as it was. (B6, `9d827b1`)
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)
