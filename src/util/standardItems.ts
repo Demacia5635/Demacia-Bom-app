@@ -16,7 +16,6 @@ import { isPurchasedPart, type BomModel, type PartModel } from "./Models";
 /** Engineer the extension writes for standard items. */
 const STANDARD_PART_ENGINEER = "Standard Part";
 
-const hasVendor = (vendor: string | undefined) => !!vendor && vendor.trim() !== "";
 
 export function isStandardPart(part: PartModel): boolean {
     return isPurchasedPart(part) || !!part.markedStandard || part.engineer === STANDARD_PART_ENGINEER;
@@ -41,8 +40,8 @@ export function splitStandard(boms: BomModel[], parts: PartModel[]): StandardSpl
         boms
             .filter(
                 (b) =>
-                    !!b.markedStandard ||
-                    hasVendor(b.vendor) ||
+                    // Marked standard or with a vendor (BOMs have no isStandardContent).
+                    isPurchasedPart(b) ||
                     b.engineer === STANDARD_PART_ENGINEER ||
                     standardPartIds.has(b.id)
             )

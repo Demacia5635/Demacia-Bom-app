@@ -2,13 +2,15 @@ import type { ColumnConfig } from "../../../components/Table";
 import { downloadDriveFile } from "../../../util/ApiService";
 import { openExternal } from "../../../util/openExternal";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
+import { isPurchasedPart } from "../../../util/Models";
 import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
 
-/** Onshape Standard Content and parts marked standard in the extension: purchased, so status and method are fixed. */
+/**
+ * Onshape Standard Content and parts marked standard in the extension: status
+ * and method are fixed. Narrower than isPurchasedPart on purpose: a vendor
+ * part's method and priority can still be set here.
+ */
 const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!row.markedStandard;
-
-/** Vendor parts, Standard Content and parts marked standard: their name isn't edited here. */
-const isBoughtPart = (row: WorkOrderTableRow) => row.vendor !== "" || isStandardRow(row);
 
 
 /**
@@ -41,7 +43,7 @@ const valueColour = (value: unknown) => VALUE_COLOURS[String(value ?? '')];
 
 // Avatar and name come first: the table freezes the first two columns.
 const WorkOrderColumns: ColumnConfig[] = [
-    { key: "avatar", label: "Avatar", type: "image", isDisabled: isBoughtPart },
+    { key: "avatar", label: "Avatar", type: "image", isDisabled: isPurchasedPart },
     // Name, catalogue number and quantity come from the BOM: not changed here.
     { key: "name", label: "Name", type: "string", isDisabled: () => true },
     // Shown by the "Show size" checkbox (WorkOrderDetailsPage); saved by Publish BOM.

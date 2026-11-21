@@ -1,4 +1,5 @@
 import type { RowData } from "../../../components/Table";
+import { isPurchasedPart } from "../../../util/Models";
 
 export default interface BomTableRow extends RowData {
   avatar: string;
@@ -31,16 +32,11 @@ export default interface BomTableRow extends RowData {
   subBomId?: string;
 }
 
-/** Standard Content, vendor parts and items marked standard aren't edited here (same rule as the BOM extension). */
-export function isLockedBomRow(row: BomTableRow): boolean {
-  return row.vendor !== "" || !!row.isStandardContent || !!row.markedStandard;
-}
-
 /**
- * Cells that can't be edited on the BOM page: bought items (isLockedBomRow) and
- * sub-assemblies, whose details are edited in the BOM extension (edits here
- * were never saved).
+ * Cells that can't be edited on the BOM page: bought items (isPurchasedPart:
+ * Standard Content, vendor parts, items marked standard, as in the extension)
+ * and sub-assemblies, whose details are edited in the BOM extension.
  */
 export function isReadOnlyBomRow(row: BomTableRow): boolean {
-  return !!row.isSubAssembly || isLockedBomRow(row);
+  return !!row.isSubAssembly || isPurchasedPart(row);
 }
