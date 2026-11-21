@@ -291,7 +291,9 @@ export default function WorkOrderDetailsPage() {
      * change, but per part and only the fields that changed, so people editing
      * different parts of the same work order don't overwrite each other.
      */
-    const queueSave = useCallback((rowId: string, changes: Record<string, unknown>) => {
+    // `name` only labels a failure message (so this doesn't depend on `rows` and
+    // stays the same function between edits).
+    const queueSave = useCallback((rowId: string, changes: Record<string, unknown>, name?: string) => {
         const partID = rowPartMapRef.current.get(rowId);
         if (!workOrderID || !partID) return;
 
@@ -315,11 +317,11 @@ export default function WorkOrderDetailsPage() {
                 const next = pendingSavesRef.current.get(rowId);
                 if (next) next.changes = { ...pending.changes, ...next.changes };
                 else pendingSavesRef.current.set(rowId, { changes: pending.changes, timer: undefined });
-                setSaveError(`Couldn't save the change to "${rows.find((r) => r.id === rowId)?.name ?? partID}": ${err?.message || err}`);
+                setSaveError(`Couldn't save the change to "${name || partID}": ${err?.message || err}`);
             }
         }, 600);
         pendingSavesRef.current.set(rowId, pending);
-    }, [workOrderID, rows]);
+    }, [workOrderID]);
 
     // The work order's groups, as loaded (later changes come back from the server).
     useEffect(() => {
@@ -477,7 +479,7 @@ export default function WorkOrderDetailsPage() {
             for (const field of SAVED_PART_FIELDS) {
                 if (row[field] !== old[field]) changes[field] = row[field];
             }
-            if (Object.keys(changes).length > 0) queueSave(row.id, changes);
+            if (Object.keys(changes).length > 0) queueSave(row.id, changes, row.name);
         }
     };
 
