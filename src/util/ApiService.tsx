@@ -366,7 +366,8 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
         const blob = await imageBlobFromResponse(res);
 
-        if (isOnshape && onshapeImageCache) void onshapeImageCache.put(targetUrl, blob);
+        // Storing is only a speed-up: a full or blocked cache mustn't break the image.
+        if (isOnshape && onshapeImageCache) onshapeImageCache.put(targetUrl, blob).catch(() => undefined);
         if (!isMounted) return;
         objectUrl = URL.createObjectURL(blob);
         setImageSrc(objectUrl);
