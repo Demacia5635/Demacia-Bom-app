@@ -26,7 +26,7 @@
 - A download that gets an unexpected answer from the server shows an error instead of saving an empty or broken file. (W16, `78daf59`)
 - **The browser tab says "Demacia BOM"** instead of "bom-app". (W18, `d0a157e`)
 - **New work orders get a long random ID** (and so a longer address, /workOrder/<id>), so two people creating one at the same moment can't collide. Existing work orders keep their IDs and addresses. (W17, `c5de334`)
-- Each page of the site loads the first time you open it, so the first page appears faster. (P11, `79f2ce7`)
+- Each page of the site loads the first time you open it, so the first page appears faster; "Loading..." shows briefly the first time. **After a new version is deployed, a tab that was already open reloads itself** when it next changes page, instead of breaking. (P11, `79f2ce7`)
 - The PDF export always frees the memory of its pictures, even when drawing one fails. (T6, `ddbcbe8`)
 - Tables stay smoother: scrolling and clicking no longer redraw the whole table, and the bottom scrollbar's size watcher isn't rebuilt after every edit. (P2, P12: `304e5c4`, `cbd65bf`; also in the extension panel)
 - Internal fixes with no visible change: a failed image-cache write is handled, a work-order save helper no longer changes on every edit, and lint warnings cleaned up. (T5, P8, C11: `4e49c78`, `43a9031`)
