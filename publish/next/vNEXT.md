@@ -1,6 +1,6 @@
 # Extension: next version
 
-**Unreleased.** On branch `fix/ext` (`33845f5`–`d174045`). The user releases this version separately; `fix/ext` is not merged into `MASTER` for it.
+**Unreleased.** On branch `fix/ext` (`33845f5`–`cc62bf3`). The user releases this version separately; `fix/ext` is not merged into `MASTER` for it.
 
 ## Before handing it out
 
@@ -13,6 +13,7 @@
   - **💡 Suggested fix** on a problem, like VS Code: e.g. "Use 2714-1003 (from the name)" for a catalog number, "Use 6061 aluminium (used by 12 parts here)" for a missing material, the Default engineer for a missing engineer. Fixes can be undone. (QE11, `91dab42`)
   - **Open on the website ↗**: a part opens its card in Search Parts, an assembly its BOM page. Only for items already in the database. (QE17, `91dab42`)
   - **Copy Onshape link.** (QE18, `91dab42`)
+- **Excel-style editing in the table:** drag across cells or Shift-click to select a range; Ctrl+C / Ctrl+V copy and paste it (also to and from Excel); Ctrl+D fills down; Delete clears the selected text cells. When the selection covers 2 or more rows, a bar at the bottom sets Material, Engineer or the STL / Parasolid ticks for all of them; bought rows are skipped. Each action is one undo step. (Ctrl+click to add separate rows isn't supported: the selection is one rectangle.) (QE2, QE3: `bf18cfa`, `462001d`, `cc62bf3`)
 - **Undo / redo** with Ctrl+Z / Ctrl+Y (or the ↶ ↷ buttons) for cell edits, standard marks and combines, up to 50 steps, until a refresh or publish. (QE4, `aa11ead`)
 - **↺ Revert** on an edited row puts it back to its saved values; **↺ Revert all** in the toolbar (asks first if more than 5 items). Both can be undone. (QE1, `49a7d2e`)
 - **The Publish dialog lists the changes:** "Changes (N)", one line per edited cell, "Item · Column: old → new". (QE5, `e0ba2de`)
@@ -33,4 +34,4 @@
 
 ## Not tested yet
 
-- None of it in the real panel: the new menu near the panel's edges, undo across a standard-mark change, the ↺ column, the notification in Firefox's sidebar, Alt+R in Firefox, and the "Onshape changed" line after a real edit in Onshape. The narrow layout was checked by narrowing Chrome's panel, not in Firefox.
+- None of it in the real panel: the new menu near the panel's edges, undo across a standard-mark change, the ↺ column, Excel-style selection and paste from Excel, the notification in Firefox's sidebar, Alt+R in Firefox, and the "Onshape changed" line after a real edit in Onshape. The narrow layout was checked by narrowing Chrome's panel, not in Firefox.
