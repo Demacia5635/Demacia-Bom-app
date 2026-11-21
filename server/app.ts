@@ -54,6 +54,13 @@ app.get("/", (req: Request, res: Response) => {
     res.status(200).json({ status: "online", message: "Demacia BOM API is running" });
 });
 
+// Database reads: the browser may keep them but must revalidate each time.
+// Express adds an ETag, so an unchanged list comes back as an empty 304.
+app.use('/api/db', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "GET") res.setHeader("Cache-Control", "private, no-cache");
+    next();
+});
+
 // Selective Auth Middleware: only *reading* a Drive file is public (images in
 // <img> tags can't send the client secret). Deleting one still needs the secret.
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
