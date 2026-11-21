@@ -48,3 +48,37 @@ body {
   margin-top: 4px;
 }
 
+
+/* The header's buttons wrap instead of overflowing a narrow panel. */
+.assembly-bom-page .assembly-bom-header > div:last-child {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A dialog taller than the panel scrolls inside it instead of being cut off. */
+.publish-modal {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+/* ---- Narrow panels (Firefox's sidebar can be ~300 px wide) ------------- */
+@media (max-width: 420px) {
+  .assembly-bom-page {
+    padding: 8px;
+  }
+  /* body: out-ranks AssemblyBomPage.css, which loads after this file. */
+  body .publish-modal-overlay {
+    padding: 8px;
+  }
+  body .publish-modal {
+    padding: 16px;
+    border-radius: 10px;
+    max-height: calc(100vh - 16px);
+  }
+  .publish-modal-actions {
+    flex-wrap: wrap;
+  }
+  .assembly-bom-page .assembly-bom-toolbar {
+    gap: 6px;
+  }
+}

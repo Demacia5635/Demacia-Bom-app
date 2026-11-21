@@ -35,7 +35,8 @@ export default function buildAssemblyBomColumns(
   });
 
   return [
-    { key: "avatar", label: "Avatar", type: "image", isDisabled: isLockedRow },
+    // Narrow: it's a 32 px picture, and it's one of the two frozen columns.
+    { key: "avatar", label: "Avatar", type: "image", width: 56, isDisabled: isLockedRow },
     editable("name", "Name", "string"),
     // Shown only on edited rows (AssemblyBomPage.css hides the disabled ones).
     ...(onRevertRow
