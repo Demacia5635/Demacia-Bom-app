@@ -55,9 +55,14 @@ interface BomTree {
   parts: Map<string, PartModel>;
 }
 
-/** Loads a BOM's whole tree: one batch request per level of sub-assemblies, then one for the parts. */
-async function loadBomTree(rootId: string): Promise<BomTree> {
+/**
+ * Loads a BOM's whole tree: one batch request per level of sub-assemblies, then
+ * one for the parts. `onRoot` gets the root BOM as soon as it's loaded (the
+ * page's header shows it while the rest loads).
+ */
+async function loadBomTree(rootId: string, onRoot?: (root: BomModel) => void): Promise<BomTree> {
   const root = await fetchFromApi<BomModel>(`/db/bom/id/${rootId}`);
+  onRoot?.(root);
   const boms = new Map<string, BomModel>();
   const tried = new Set<string>([rootId]);
   let level: BomModel[] = [root];
@@ -201,17 +206,6 @@ export default function BomDetailsPage() {
   // and isn't changed in place).
   const partEditsRef = useRef<Map<string, Partial<PartModel>>>(new Map());
 
-  useEffect(() => {
-    if (!bomId) return;
-    // Switching BOMs: the previous one's header goes, and its late reply is ignored.
-    let cancelled = false;
-    setMainBomData(null);
-
-    fetchFromApi<BomModel>(`/db/bom/id/${bomId}`)
-      .then((bom) => { if (!cancelled) setMainBomData(bom); })
-      .catch(() => { /* the table load below shows the error */ });
-    return () => { cancelled = true; };
-  }, [bomId]);
 
   useEffect(() => {
     const handleClickOutside = () => setContextMenu(null);
@@ -224,11 +218,13 @@ export default function BomDetailsPage() {
     if (!bomId) return;
     let cancelled = false;
     setTree(null);
+    // Switching BOMs: the previous one's header goes too.
+    setMainBomData(null);
     partEditsRef.current = new Map();
     setRows([]);
     setError(null);
     setLoading(true);
-    loadBomTree(bomId)
+    loadBomTree(bomId, (root) => { if (!cancelled) setMainBomData(root); })
       .then((loaded) => { if (!cancelled) setTree(loaded); })
       .catch((err: ApiError) => { if (!cancelled) setError(err); })
       .finally(() => { if (!cancelled) setLoading(false); });

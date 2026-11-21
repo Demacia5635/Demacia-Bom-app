@@ -13,14 +13,20 @@ interface WorkOrderDataUIProps {
 const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyThumbnailURL }) => {
     const { isLight } = useThemeSync();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
-    const [bomData, setBomData] = useState<BomModel | null>(null);
+    // Kept with the id it was loaded for: another work order's BOM is never shown.
+    const [loadedBom, setLoadedBom] = useState<{ bomID: string; bom: BomModel } | null>(null);
+    const bomData = workOrder?.bomID && loadedBom?.bomID === workOrder.bomID ? loadedBom.bom : null;
 
-    // Fetch the parent BOM data using workOrder.bomID to get its exact image source
+    // Fetch the parent BOM data using workOrder.bomID to get its exact image source.
+    // Another work order: a late reply for the previous one is ignored.
     useEffect(() => {
-        if (!workOrder?.bomID) return;
-        fetchFromApi<BomModel>(`/db/bom/id/${workOrder.bomID}`)
-            .then((bom) => setBomData(bom))
+        const bomID = workOrder?.bomID;
+        if (!bomID) return;
+        let cancelled = false;
+        fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomID)}`)
+            .then((bom) => { if (!cancelled) setLoadedBom({ bomID, bom }); })
             .catch(() => {});
+        return () => { cancelled = true; };
     }, [workOrder?.bomID]);
 
     const containerBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
