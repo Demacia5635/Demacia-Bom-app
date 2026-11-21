@@ -18,6 +18,7 @@ One file per website version: `v<version>.md`, listing what that deploy changed 
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [2.1.0](v2.1.0.md) | Unreleased | Quality-of-life round |
 | [2.0.2](v2.0.2.md) | Unreleased | The website's own version number |
 | [2.0.1](v2.0.1.md) | 2026-11-21 18:35 | Follow-ups after the code review |
 | [2.0.0](v2.0.0.md) | 2026-11-21 18:23 | Code-review fixes and cleanup (large) |
