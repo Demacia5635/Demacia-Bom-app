@@ -36,6 +36,7 @@ import PublishBomModal, { type PublishBomFormValues, type PublishCheck, type Pub
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
+import { assemblyKeyId, bomIdOf, itemKey, keyOf, keyString, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
 import { CATALOG_NUMBER_FORMAT, checkCatalogTree, type CatalogNode } from "../util/catalogNumbers";
 
@@ -53,14 +54,6 @@ function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string 
 /** What the saved copy of a tree keeps of the root Onshape BOM. */
 function rootBomSummary(bom: OnshapeBomTable | null | undefined) {
   return bom ? { id: bom.id, name: bom.name, description: bom.description || "", partNumber: bom.partNumber || "" } : null;
-}
-
-/**
- * The BOM ID used in record and row IDs: Onshape's BOM table ID, or the
- * element ID when Onshape gives none. Use it everywhere so they all agree.
- */
-function bomIdOf(bom: Pick<OnshapeBomTable, "id"> | null | undefined, key: Pick<OnshapeKey, "elementID">): string {
-  return bom?.id || key.elementID;
 }
 
 /**
@@ -322,7 +315,6 @@ const directSources: TreeSources = {
   dbPart: getPartByOnshapeKey,
 };
 
-const keyString = (k: OnshapeKey) => `${k.documentID}/${k.wvmType}/${k.wvmID}/${k.elementID}`;
 
 /**
  * A database record, or null when it isn't saved (the server answers 404).
@@ -368,17 +360,6 @@ function createCachedSources(limit: Limiter): TreeSources {
     dbPart: (key, partID) => once(`dbPart:${keyString(key)}/${partID}`, () => getPartByOnshapeKey(key, partID)),
   };
 }
-
-/** Identifies an assembly in the tree walk (visited / cycle checks). */
-const assemblyKeyId = (k: Pick<OnshapeKey, "documentID" | "wvmType" | "wvmID" | "elementID">) =>
-  `${k.documentID}_${k.wvmType}_${k.wvmID}_${k.elementID}`;
-
-const itemKey = (item: ParsedOnshapeBomRow): OnshapeKey => ({
-  documentID: item.itemSource.documentId,
-  wvmType: item.itemSource.wvmType,
-  wvmID: item.itemSource.wvmId,
-  elementID: item.itemSource.elementId,
-});
 
 /** Recomputes a row's list of unpublished edits (after parts were combined). */
 const retrackRow = (row: AssemblyBomRow): AssemblyBomRow => ({ ...row, modified: changedFields(row, row.baseline ?? row.loaded) });
@@ -459,7 +440,7 @@ function isSavedSizeStale(row: AssemblyBomRow, currentVersion: string | null): b
  * rate-limited. Stops (throws LOAD_CANCELLED) once `isCancelled` says so.
  */
 async function readPartSize(row: AssemblyBomRow, isCancelled?: () => boolean): Promise<string> {
-  const key = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
+  const key = keyOf(row);
   for (let attempt = 0; ; attempt++) {
     if (isCancelled?.()) throw LOAD_CANCELLED;
     try {
@@ -678,7 +659,7 @@ export default function AssemblyBomPage() {
       const bomID = bomIdOf(onshapeBom, key);
 
       const dbBom = await recordOrNull(src.dbBom(key, bomID));
-      const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${bomID}`;
+      const rowId = recordId(key, bomID);
 
       const isPublished = Boolean(dbBom);
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
@@ -751,16 +732,11 @@ export default function AssemblyBomPage() {
       /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
       src: TreeSources = directSources
     ): Promise<AssemblyBomRow> => {
-      const key: OnshapeKey = {
-        documentID: parsedItem.itemSource.documentId,
-        wvmType: parsedItem.itemSource.wvmType,
-        wvmID: parsedItem.itemSource.wvmId,
-        elementID: parsedItem.itemSource.elementId,
-      };
+      const key = itemKey(parsedItem);
       const partID = parsedItem.itemSource.partId || "";
 
       const dbPart: PartModel | null = await recordOrNull(src.dbPart(key, partID));
-      const rowId = `${key.documentID}_${key.wvmType}_${key.wvmID}_${key.elementID}_${partID}`;
+      const rowId = recordId(key, partID);
 
       const isPublished = Boolean(dbPart);
       const onshapeUrl = buildOnshapeElementURL(context.server, key);
@@ -897,7 +873,7 @@ export default function AssemblyBomPage() {
       // Closing the panel stops the requests not started yet (LOAD_CANCELLED).
       const limit = createLimiter(REFRESH_CONCURRENCY, () => !mountedRef.current);
       const src = createCachedSources(limit);
-      const key: OnshapeKey = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
+      const key = keyOf(row);
       const onshapeBom = await src.onshapeBom(key);
       // Sub-assemblies whose contents the tree already lists (not marked standard).
       const visited = new Set(
@@ -1358,7 +1334,7 @@ export default function AssemblyBomPage() {
       setPublishing(true);
       setPublishError(null);
 
-      const rootID = rootBomDB?.id || `${rootKey.documentID}_${rootKey.wvmType}_${rootKey.wvmID}_${rootKey.elementID}_${bomIdOf(rootOnshapeBom, rootKey)}`;
+      const rootID = rootBomDB?.id || recordId(rootKey, bomIdOf(rootOnshapeBom, rootKey));
 
       const rootRowId = ROOT_PARENT;
 
@@ -1463,12 +1439,7 @@ export default function AssemblyBomPage() {
 
         /** Publishes one sub-assembly or part (edits to Onshape, files, record). */
         const publishRow = async (row: AssemblyBomRow, progress: ReturnType<typeof track>) => {
-          const key: OnshapeKey = {
-            documentID: row.documentID,
-            wvmType: row.wvmType,
-            wvmID: row.wvmID,
-            elementID: row.elementID,
-          };
+          const key = keyOf(row);
 
           // 1. Cells changed from what was loaded from Onshape go to Onshape first.
           const edited = changedFields(row, row.loaded);
@@ -1491,7 +1462,7 @@ export default function AssemblyBomPage() {
                   for (const use of rows) {
                     if (use.id !== row.id) continue;
                     for (const m of membersOf(use)) {
-                      const copyKey: OnshapeKey = { documentID: m.documentID, wvmType: m.wvmType, wvmID: m.wvmID, elementID: m.elementID };
+                      const copyKey = keyOf(m);
                       targets.set(`${keyString(copyKey)}/${m.entityID}`, { key: copyKey, partID: m.entityID });
                     }
                   }
