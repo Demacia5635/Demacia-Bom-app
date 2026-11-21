@@ -118,7 +118,19 @@ export interface ColumnConfig {
      * An edit there changes only the first row; the page applies it to the rest.
      */
     mergeKey?: (row: RowData & any) => string | undefined;
+    /** Image columns: a small label over the top-left corner of the image (e.g. "×4 copies"). */
+    badge?: (row: RowData & any) => string | undefined;
     apiPath?: string | ((value: any) => string);
+}
+
+/** How one row's expand button looks (see the expandToggle prop); unset parts keep the default. */
+export interface ExpandToggleStyle {
+    /** Added to the button's "expand-toggle" class. */
+    className?: string;
+    title?: string;
+    /** Button text while closed / open (default ▶ / ▼). */
+    closed?: string;
+    open?: string;
 }
 
 interface TableParam {
@@ -147,9 +159,11 @@ interface TableParam {
      * one around the table).
      */
     rowMenu?: (row: RowData & any) => RowMenuItem[] | undefined;
+    /** Per row: a different look for its expand button (e.g. a part row opening its copies, not an assembly). */
+    expandToggle?: (row: RowData & any) => ExpandToggleStyle | undefined;
 }
 
-export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow, rowMenu }) => {
+export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow, rowMenu, expandToggle }) => {
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
     const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
     const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
@@ -837,16 +851,19 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                 onBlur={cellProblem ? () => setProblemTip(null) : undefined}
                                                 className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''} ${cellProblem ? 'cell-problem' : ''}`}>
                                                 <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
-                                                    {colIndex === 0 && isRowParent && (
-                                                        <button
-                                                            className="expand-toggle"
-                                                            onClick={(e) => toggleExpand(row.id, e)}
-                                                            disabled={!!filterSets}
-                                                            title={filterSets ? 'Clear the search to expand or collapse' : undefined}
-                                                        >
-                                                            {row.open ? '▼' : '▶'}
-                                                        </button>
-                                                    )}
+                                                    {colIndex === 0 && isRowParent && (() => {
+                                                        const toggle = expandToggle?.(row);
+                                                        return (
+                                                            <button
+                                                                className={toggle?.className ? `expand-toggle ${toggle.className}` : 'expand-toggle'}
+                                                                onClick={(e) => toggleExpand(row.id, e)}
+                                                                disabled={!!filterSets}
+                                                                title={filterSets ? 'Clear the search to expand or collapse' : toggle?.title}
+                                                            >
+                                                                {row.open ? (toggle?.open ?? '▼') : (toggle?.closed ?? '▶')}
+                                                            </button>
+                                                        );
+                                                    })()}
                                                     {colIndex === 0 && !isRowParent && <span className="expand-placeholder" />}
 
                                                     {col.type === 'select' ? (
@@ -879,14 +896,27 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                                             {col.buttonText || "Action"}
                                                         </button>
                                                     ) : col.type === 'image' ? (
-                                                        (() => (
-                                                            <div className="w-8 h-8 rounded overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 my-1">
-                                                                <AuthenticatedImage
-                                                                    src={row[col.key]}
-                                                                    alt={col.label || "Image"}
-                                                                    className="w-full h-full object-cover" />
-                                                            </div>
-                                                        ))()
+                                                        (() => {
+                                                            const image = (
+                                                                <div className="w-8 h-8 rounded overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 my-1">
+                                                                    <AuthenticatedImage
+                                                                        src={row[col.key]}
+                                                                        alt={col.label || "Image"}
+                                                                        className="w-full h-full object-cover" />
+                                                                </div>
+                                                            );
+                                                            const badge = col.badge?.(row);
+                                                            if (!badge) return image;
+                                                            // Like the SUB-ASSEMBLY label on the parts search page, over the image's corner.
+                                                            return (
+                                                                <div className="relative shrink-0">
+                                                                    {image}
+                                                                    <span className="table-image-badge">
+                                                                        {badge}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })()
 
                                                     ) : col.type === 'boolean' ? (
                                                         <input
