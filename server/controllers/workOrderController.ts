@@ -183,10 +183,11 @@ const GROUP_ID = /^[A-Za-z0-9_-]{1,64}$/;
  * Creates, changes or dissolves one CNC group of a work order:
  * body { groupID?, partIDs: string[], links?: string }.
  * - No groupID: a new group (the server makes its ID).
- * - partIDs: the group's parts (all must be in the work order). Left out (with
- *   a groupID) = unchanged, e.g. when only the links change. They leave
- *   any other group; a group left with fewer than 2 parts is removed, so an
- *   empty list dissolves it. parts[] is never touched.
+ * - partIDs: the group's parts. Left out (with a groupID) = unchanged, e.g.
+ *   when only the links change. They leave any other group; a group left
+ *   with fewer than 2 parts is removed, so an empty list dissolves it.
+ *   A part parts[] doesn't list yet (added to the BOM after the work order
+ *   was made) is added to it with the defaults, like the per-part route does.
  * - links: the shared G-code link(s); left out = unchanged ("" for a new group).
  * One atomic update, so people merging at the same time don't overwrite each
  * other. Answers with the work order's groups.
@@ -232,9 +233,28 @@ export async function updateCncGroup(
         links !== undefined ? { links: { $literal: links } } : {},
       ],
     };
+    // Parts the work order doesn't list yet, with the schema's defaults (the
+    // native driver below doesn't apply them). Only the missing ones are added.
+    const newParts = new WorkOrder({
+      parts: partIDs.map((partID) => ({ partID, createdAt: now, updatedAt: now })),
+    }).toObject().parts;
+    const addParts = {
+      parts: {
+        $concatArrays: [
+          { $ifNull: ["$parts", []] },
+          {
+            $filter: {
+              input: { $literal: newParts },
+              cond: { $not: [{ $in: ["$$this.partID", { $ifNull: ["$parts.partID", []] }] }] },
+            },
+          },
+        ],
+      },
+    };
     const pipeline = [
       {
         $set: {
+          ...(partIDs.length > 0 ? addParts : {}),
           cncGroups: {
             $filter: {
               input: {
@@ -251,17 +271,9 @@ export async function updateCncGroup(
       },
     ];
 
-    // Native driver: a pipeline update, checked against parts[] in the same step.
-    const result = await WorkOrder.collection.findOneAndUpdate(
-      { id, ...(partIDs.length > 0 ? { "parts.partID": { $all: partIDs } } : {}) },
-      pipeline,
-      { returnDocument: "after" },
-    );
-    if (!result) {
-      const exists = await WorkOrder.exists({ id });
-      if (!exists) return res.status(404).json({ message: `Work order ${id} not found` });
-      return res.status(400).json({ message: "Some of those parts aren't in this work order" });
-    }
+    // Native driver: one atomic pipeline update.
+    const result = await WorkOrder.collection.findOneAndUpdate({ id }, pipeline, { returnDocument: "after" });
+    if (!result) return res.status(404).json({ message: `Work order ${id} not found` });
     const cncGroups = (result as { cncGroups?: { id?: string }[] }).cncGroups ?? [];
     // A links-only change for a group someone removed meanwhile wasn't saved: say so.
     if (keepParts && !cncGroups.some((g) => g.id === groupID))
