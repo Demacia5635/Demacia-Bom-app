@@ -6,8 +6,11 @@ import { recordImageSrc } from "../../util/recordImage";
 import ImageLightbox from "../../components/ImageLightbox";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import { CatalogNumber } from "../../components/CopyButton";
+import WorkOrderProgress from "./WorkOrderProgress";
+import type { WorkOrderSummary } from "./workOrderSummary";
 
-export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workOrders }) => {
+/** `summaries`: each work order's progress by id (QW14); left out when the server has none. */
+export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[]; summaries?: Map<string, WorkOrderSummary> | null }> = ({ workOrders, summaries }) => {
     const navigate = useNavigate();
     const theme = useThemeClasses();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
@@ -58,8 +61,9 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workO
                                         )}
                                     </div>
                                 </td>
-                                <td className="py-3 px-4 font-medium text-sm">
-                                    {wo.name || "Unnamed Work Order"}
+                                <td className="py-3 px-4 text-sm">
+                                    <span className="font-medium">{wo.name || "Unnamed Work Order"}</span>
+                                    {summaries?.get(wo.id) && <WorkOrderProgress summary={summaries.get(wo.id)!} />}
                                 </td>
                                 <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
                                     <CatalogNumber value={wo.catalogNumber} />

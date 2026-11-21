@@ -8,6 +8,18 @@ import ErrorBanner from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import { useSearchShortcut } from "../../components/useSearchShortcut";
 import { SkeletonList } from "../../components/Skeleton";
+import { hasUnfinishedParts, loadWorkOrderSummaries, type WorkOrderSummary } from "./workOrderSummary";
+
+type SortOrder = "oldest" | "newest" | "name";
+const SORT_KEY = "workOrders:sort";
+function readSort(): SortOrder {
+    try {
+        const saved = localStorage.getItem(SORT_KEY);
+        return saved === "newest" || saved === "name" ? saved : "oldest";
+    } catch {
+        return "oldest";
+    }
+}
 
 
 export function WorkOrdersPage() {
@@ -16,6 +28,19 @@ export function WorkOrdersPage() {
     const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    // Progress per work order (QW14), from the server's summary; null when it has none.
+    const [summaries, setSummaries] = useState<Map<string, WorkOrderSummary> | null>(null);
+    const [ownerFilter, setOwnerFilter] = useState("");
+    const [unfinishedOnly, setUnfinishedOnly] = useState(false);
+    const [sortOrder, setSortOrder] = useState<SortOrder>(readSort);
+    useEffect(() => {
+        try { localStorage.setItem(SORT_KEY, sortOrder); } catch { /* not remembered */ }
+    }, [sortOrder]);
+    useEffect(() => {
+        let cancelled = false;
+        loadWorkOrderSummaries().then((found) => { if (!cancelled) setSummaries(found); });
+        return () => { cancelled = true; };
+    }, []);
 
     useEffect(() => {
         async function getWorkOrders() {
@@ -61,19 +86,28 @@ export function WorkOrdersPage() {
     // "/" jumps to the search box, Esc clears it.
     const { inputRef: searchInputRef, onKeyDown: onSearchKeyDown } = useSearchShortcut(() => setSearchQuery(""));
 
+    const owners = useMemo(
+        () => [...new Set(workOrders.map((wo) => wo.workOrderOwner?.trim()).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b)),
+        [workOrders]
+    );
+
     const filteredWorkOrders = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
-        if (!query) return workOrders;
-
-        return workOrders.filter((wo) => {
+        const shown = workOrders.filter((wo) => {
+            if (ownerFilter && wo.workOrderOwner?.trim() !== ownerFilter) return false;
+            if (unfinishedOnly && summaries && !hasUnfinishedParts(summaries.get(wo.id))) return false;
+            if (!query) return true;
             const nameMatch = wo.name?.toLowerCase().includes(query);
             const catalogMatch = wo.catalogNumber?.toLowerCase().includes(query);
             const bomMatch = wo.bomName?.toLowerCase().includes(query);
             const ownerMatch = wo.workOrderOwner?.toLowerCase().includes(query);
-
             return nameMatch || catalogMatch || bomMatch || ownerMatch;
         });
-    }, [searchQuery, workOrders]);
+        // The list arrives oldest first.
+        if (sortOrder === "newest") return [...shown].reverse();
+        if (sortOrder === "name") return [...shown].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        return shown;
+    }, [searchQuery, workOrders, ownerFilter, unfinishedOnly, summaries, sortOrder]);
 
     // Written out in full: Tailwind only generates classes it finds as literal text.
     const textSubdued = "text-zinc-600"; // the same in both themes
@@ -120,6 +154,31 @@ export function WorkOrdersPage() {
                         </button>
                     )}
                 </div>
+
+                {/* Owner, unfinished and sort (QW14). */}
+                <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${theme.textLabel}`}>
+                    <label className="flex items-center gap-2">
+                        Owner
+                        <select value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)} className={`border rounded-lg px-2 py-1 ${theme.input}`}>
+                            <option value="">All owners</option>
+                            {owners.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                    </label>
+                    {summaries && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" checked={unfinishedOnly} onChange={(e) => setUnfinishedOnly(e.target.checked)} />
+                            Only with unfinished parts
+                        </label>
+                    )}
+                    <label className="flex items-center gap-2 sm:ml-auto">
+                        Sort
+                        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as SortOrder)} className={`border rounded-lg px-2 py-1 ${theme.input}`}>
+                            <option value="oldest">Oldest first</option>
+                            <option value="newest">Newest first</option>
+                            <option value="name">Name (A–Z)</option>
+                        </select>
+                    </label>
+                </div>
             </div>
 
             {error && (
@@ -132,11 +191,11 @@ export function WorkOrdersPage() {
                 {loading ? (
                     <SkeletonList label="Loading work orders…" />
                 ) : filteredWorkOrders.length > 0 ? (
-                    <WorkOrderTable workOrders={filteredWorkOrders} />
+                    <WorkOrderTable workOrders={filteredWorkOrders} summaries={summaries} />
                 ) : (
                     <div className={`${theme.card} border rounded-xl p-12 text-center space-y-2`}>
                         <p className={`${theme.textMuted} text-sm font-medium`}>
-                            {searchQuery ? `No work orders found matching "${searchQuery}"` : "No work orders available."}
+                            {searchQuery || ownerFilter || unfinishedOnly ? "No work orders match the search and filters." : "No work orders available."}
                         </p>
                         <p className={`${textSubdued} text-xs`}>
                             Try searching with a different term or clearing filters.
