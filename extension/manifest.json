@@ -5,7 +5,7 @@
   "description": "Demacia BOM side panel for Onshape assemblies.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4H3mQym1xGn0W5+Xnhwjnc10aYGnW5gbia5hHTLwxxa29EbBOJBR59tnj+SvjKxZqyCb1U1f0lXF/1DPcIqZy984fBUWxqPJyqrFcpCrUOCAQYkvs7h8LoS+Oc3LJF23KzYgevGEN2RS7k7pj6W4LoUUEOltyCobvcTa/0GfrLZnAuFynvknWg53bjyggY41CaxuisnddQfVP5G/meNvFYPWyLVRHQuQbSe9/2LaeqXDbnyUVGEBxG3j7/AqmxRWetcNh3g1NHcc8PzMFbN29QFHjSxFvi/FQwMAf+rcZ4vKWJuuo34hNbVt2H2hCWWtSRL7YHai0PoRj0zMgzM4LwIDAQAB",
-  "permissions": ["sidePanel", "cookies"],
+  "permissions": ["sidePanel", "cookies", "notifications"],
   "host_permissions": ["https://*.onshape.com/*"],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_title": "Open Demacia BOM" },

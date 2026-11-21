@@ -52,6 +52,7 @@ import BomHeader from "./BomHeader";
 import { bomPageUrl } from "./websiteLinks";
 import { useServerStatus } from "./useServerStatus";
 import { useOnshapeChangeWatch } from "./useOnshapeChangeWatch";
+import { notifyPublishEnded } from "./publishNotify";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { isTyping, SEARCH_INPUT_ID } from "./shortcuts";
 import {
@@ -725,6 +726,7 @@ export default function AssemblyBomPage() {
           // Shown inside the dialog, which stays open.
           setPublishError(message);
           client.showMessageBubble(message);
+          notifyPublishEnded(startedAt, `Publish BOM of "${values.name}" stopped`, message);
           return null; // marks the operation failed on /tele
         }
 
@@ -839,6 +841,7 @@ export default function AssemblyBomPage() {
           // Shown inside the dialog, which stays open.
           setPublishError(message);
           client.showMessageBubble(message);
+          notifyPublishEnded(startedAt, `Publish BOM of "${values.name}" stopped`, message);
           return null; // marks the operation failed on /tele
         }
         rootTrack.step(isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
@@ -887,6 +890,13 @@ export default function AssemblyBomPage() {
               `(first: ${problems[0]}). Publish BOM again to retry.`
           );
         }
+        notifyPublishEnded(
+          startedAt,
+          `"${values.name}" was published`,
+          problems.length > 0
+            ? `${problems.length} item${problems.length === 1 ? "" : "s"} could not be fully saved; see the panel.`
+            : "Everything was saved to the database."
+        );
         setPublishOpen(false);
         return true;
       } catch (err: unknown) {
@@ -898,6 +908,7 @@ export default function AssemblyBomPage() {
         console.warn("[publish] failed:", err);
         setPublishError(message);
         client.showMessageBubble(message);
+        notifyPublishEnded(startedAt, `Publish BOM of "${values.name}" failed`, message);
         return null; // marks the operation failed on /tele
       } finally {
         setPublishing(false);
