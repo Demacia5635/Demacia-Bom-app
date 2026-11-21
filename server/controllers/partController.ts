@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
-import { cleanUpdateBody, upsertWithRetry } from "./upsert";
+import { cleanUpdateBody, upsertByID } from "./upsert";
 
 interface OnshapeID {
   documentID: string;
@@ -69,7 +69,8 @@ export async function upsertPartByID(
 ) {
   try {
     const id = req.params.id;
-    const existing = await Part.findOne({ id: id });
+    // Read only for the name below; 200 vs 201 comes from the write itself.
+    const existing = await Part.exists({ id: id });
 
     const updateData: any = { ...cleanUpdateBody(req.body), id: id };
 
@@ -82,18 +83,9 @@ export async function upsertPartByID(
       delete updateData.name;
     }
 
-    const part = await upsertWithRetry(() => Part.findOneAndUpdate(
-      { id: id },
-      { $set: updateData },
-      {
-        returnDocument: "after",
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-      },
-    ));
+    const { doc: part, created } = await upsertByID(Part, id, { $set: updateData });
 
-    return res.status(existing ? 200 : 201).json(part);
+    return res.status(created ? 201 : 200).json(part);
   } catch (err) {
     return next(err);
   }

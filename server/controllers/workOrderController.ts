@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
-import { cleanUpdateBody, upsertWithRetry } from "./upsert";
+import { cleanUpdateBody, upsertByID } from "./upsert";
 
 interface SubPartBody {
   partID: string;
@@ -83,8 +83,6 @@ export async function upsertWorkOrderByID(
 ) {
   try {
     const id = req.params.id;
-    const existing = await WorkOrder.findOne({ id: id });
-
     // `parts` is written only when the work order is created. Afterwards each
     // part changes through POST /id/:id/part, so a whole-work-order save
     // (sent with an older copy of the parts) can't undo other people's
@@ -95,18 +93,9 @@ export async function upsertWorkOrderByID(
     const update: Record<string, unknown> = { $set: { ...fields, id: id } };
     if (parts !== undefined) update.$setOnInsert = { parts: uniqueParts(parts) };
 
-    const workOrder = await upsertWithRetry(() => WorkOrder.findOneAndUpdate(
-      { id: id },
-      update,
-      {
-        returnDocument: 'after', // Fixed deprecation warning
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-      },
-    ));
+    const { doc: workOrder, created } = await upsertByID(WorkOrder, id, update);
 
-    return res.status(existing ? 200 : 201).json(workOrder);
+    return res.status(created ? 201 : 200).json(workOrder);
   } catch (err) {
     return next(err);
   }
