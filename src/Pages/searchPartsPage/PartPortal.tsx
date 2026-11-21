@@ -21,6 +21,17 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const [saved, setSaved] = useState(false);
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
+    // Files are stored in Google Drive under their file ID.
+    const downloadPartFile = async (fileId: string | undefined, filename: string) => {
+        if (!fileId) return;
+        try {
+            await downloadFile(`/api/drive/file/id/${fileId}`, filename);
+        } catch (err: any) {
+            console.error("Failed to download file:", err);
+            alert(`Download failed: ${err?.message || "an unexpected error occurred."}`);
+        }
+    };
+
     // Linked BOM states
     const [isCheckingBoms, setIsCheckingBoms] = useState(false);
     const [linkedBoms, setLinkedBoms] = useState<BomModel[]>([]);
@@ -271,10 +282,8 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         </label>
                         <button
                             type="button"
-                            onClick={async () => {
-                                const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${part.stlLink}`;
-                                await downloadFile(downloadUrl, `${part.name || "part"}.stl`);
-                            }}
+                            disabled={!part.stlLink}
+                            onClick={() => downloadPartFile(part.stlLink, `${part.name || "part"}.stl`)}
                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Download STL
@@ -287,10 +296,8 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         </label>
                         <button
                             type="button"
-                            onClick={async () => {
-                                const downloadUrl = `${import.meta.env.VITE_CLIENT_URL}/api/drive/file/${part.parasolidLink}`;
-                                await downloadFile(downloadUrl, `${part.name || "part"}.parasolid`);
-                            }}
+                            disabled={!part.parasolidLink}
+                            onClick={() => downloadPartFile(part.parasolidLink, `${part.name || "part"}.parasolid`)}
                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Download Parasolid
