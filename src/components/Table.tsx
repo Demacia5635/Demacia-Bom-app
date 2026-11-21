@@ -14,13 +14,6 @@ interface ContextMenuState {
     columnIndex: number;
 }
 
-interface RowContextMenuState {
-    visible: boolean;
-    x: number;
-    y: number;
-    rowId: string | null;
-}
-
 interface DraftInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> {
     value: string | number | undefined | null;
     /**
@@ -141,7 +134,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const [isHandleDragging, setIsHandleDragging] = useState<boolean>(false);
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
-    const [, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, rowId: null });
 
     // Tooltip of a problem cell, drawn by the table: the browser's own title
     // tooltip is slow, and doesn't show over the cell's input in the extension panel.
@@ -211,13 +203,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         };
     }, [stickyHeader]);
 
-    const closeContextMenu = () => { setContextMenu(prev => ({ ...prev, visible: false })); setRowContextMenu(prev => ({ ...prev, visible: false })); };
-
-    const handleRowContextMenu = (e: React.MouseEvent, rowId: string) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setRowContextMenu({ visible: true, x: e.clientX, y: e.clientY, rowId });
-    };
+    const closeContextMenu = () => setContextMenu(prev => ({ ...prev, visible: false }));
 
     // Synchronize horizontal scrolling between the main table wrapper and the bottom scrollbar
     useEffect(() => {
@@ -781,7 +767,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                             const isRowParent = isParent(row.id);
 
                             return (
-                                <tr key={rowKeys.get(row) ?? row.id} data-row-id={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row.id)}>
+                                <tr key={rowKeys.get(row) ?? row.id} data-row-id={row.id} className="table-tr">
                                     {columns.map((col, colIndex) => {
                                         const span = mergeSpans.get(col.key)?.[rowIndex] ?? 1;
                                         if (span === 0) return null; // covered by the merged cell above
