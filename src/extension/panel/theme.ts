@@ -2,7 +2,7 @@
  * Light / dark theme of the side panel. "auto" follows the browser's (or the
  * operating system's) colour scheme. Light mode sets the same body class as
  * the web app (light-theme-active), so the shared Table styles in
- * css/LightMode.css apply; the panel's own light styles are in panelLight.css.
+ * css/table.css apply; the panel's own light styles are in panelLight.css.
  * Dark mode is the panel's original look (no class).
  */
 import { createContext, useContext, useEffect, useState } from "react";

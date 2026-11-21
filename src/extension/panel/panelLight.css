@@ -1,6 +1,6 @@
 /*
  * Light theme of the side panel (theme.ts sets body.light-theme-active).
- * The shared Table's light styles come from css/LightMode.css; this file
+ * The shared Table's light styles come from css/table.css (its light rules); this file
  * covers the panel itself: its background, the Table's colour variables
  * (the web app sets them on .table-page-container, the panel on
  * .assembly-bom-page), the dark Tailwind classes the panel's components use,
@@ -18,7 +18,7 @@ body.light-theme-active main.bg-zinc-950 {
   color: #18181b;
 }
 
-/* Values from LightMode.css (.table-page-container), lighter border. */
+/* Values from table.css (light .table-page-container), lighter border. */
 body.light-theme-active .assembly-bom-page {
   --bg-main: #eef2f7;
   --bg-surface: #ffffff;

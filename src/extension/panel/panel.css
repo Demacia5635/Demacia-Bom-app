@@ -15,9 +15,9 @@ body {
 }
 
 /*
- * Theme variables the shared Table styles (css/DarkMode.css) read. The web app
+ * Theme variables the shared Table styles (css/table.css) read. The web app
  * defines them on .table-page-container; AssemblyBomPage has no such wrapper.
- * Values copied from DarkMode.css.
+ * Values copied from table.css (its dark block).
  */
 .assembly-bom-page {
   --bg-main: #0f172a;
