@@ -1,6 +1,6 @@
 # Server: next version
 
-**Unreleased.** The commits below are on branch `fix/serv`, not on `MASTER` yet. They go in with the next version once the branch is merged.
+**Unreleased.** The commits below were merged into `MASTER` on 2026-11-21 (`606d8e7`), not pushed yet.
 
 ## Fixes (from the code-review checklist)
 

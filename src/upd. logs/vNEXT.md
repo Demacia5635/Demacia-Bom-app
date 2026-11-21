@@ -1,6 +1,6 @@
 # Website: next version
 
-**Unreleased.** The commits below are on branch `fix/web`, not on `MASTER` yet. They go in with the next version once the branch is merged.
+**Unreleased.** The commits below were merged into `MASTER` on 2026-11-21 (`22571a1`), not pushed yet.
 
 ## New
 
@@ -41,6 +41,7 @@
 - The work-order page's code was split up (CNC jobs, filters, PDF export, loading), from about 860 to about 440 lines. No change in behaviour. (R7: `33a7b42`, `3b4dc76`, `7e96b9a`, `dae4653`)
 - **The shared table was split into smaller pieces** (cell, editing box, visible-rows logic, column resize, column reorder, scroll sync, problem tooltips), from about 950 to about 440 lines, and is now typed by its row type. Its look and behaviour are unchanged, on the website and in the extension panel. (R5, T4: `82b1cd4` … `5b8279f`, `6631013`)
 - More cleanup with no visible change: the server address is built in one place, one red error banner component, and clearer names for folders, files and types (the "Qty Per Assembly" label and the stored field names stay as they are). (R8, R11, X5: `a6c4e5d`, `91f195e`, `ff2a32f`, `9819f7d`)
+- The two theme CSS files are merged into one `table.css`, and the repeated light/dark colour classes come from one shared helper. Nothing looks different. (R6, R11: `99f02e7`, `02ccb1a`)
 - **Clicking a part's picture on a work order opens the image viewer again after the Avatar column has been moved,** and on rows of a merged CNC job. (B5, `22fe2fb`)
 - **A failed save on a work order no longer loses your change.** It's sent again with your next edit of that part, as on the BOM page. The "Couldn't save" banner stays as it was. (B6, `9d827b1`)
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)
