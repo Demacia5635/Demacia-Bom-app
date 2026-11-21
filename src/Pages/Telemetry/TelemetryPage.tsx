@@ -80,7 +80,12 @@ export default function TelemetryPage() {
       const days = RANGES.find((r) => r.key === range)?.days ?? null;
       const since = days ? `&since=${encodeURIComponent(new Date(Date.now() - days * 86_400_000).toISOString())}` : "";
       const result = (await fetchFromApi<TelemetryEvent[]>(`/telemetry/events?limit=2000${since}`)) || [];
-      if (seq === loadSeqRef.current) setEvents(result);
+      if (seq === loadSeqRef.current) {
+        setEvents(result);
+        // A user with nothing in this range isn't in the list any more: show everyone
+        // rather than empty tables.
+        setUser((u) => (u === ALL_USERS || result.some((e) => (e.user || "(unknown)") === u) ? u : ALL_USERS));
+      }
     } catch (err: any) {
       if (seq === loadSeqRef.current) setError(err?.message || "Failed to load telemetry");
     } finally {
