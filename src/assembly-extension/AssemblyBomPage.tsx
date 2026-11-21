@@ -8,6 +8,7 @@ import {
   upsertBomById,
   type OnshapeKey,
   syncBomThumbnailToDrive,
+  setUpdatedBy,
   getAllRecords,
   getBomsByIds,
   getPartsByIds
@@ -123,6 +124,7 @@ export default function AssemblyBomPage() {
   useEffect(() => {
     let cancelled = false;
     getOnshapeUserName().then((name) => {
+      setUpdatedBy(name); // the server records who saved (X-Updated-By)
       if (!cancelled) setOnshapeUserName(name);
     });
     return () => {

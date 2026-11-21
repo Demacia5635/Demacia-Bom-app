@@ -9,10 +9,23 @@ import type { BomModel, PartModel } from "../util/Models";
 import type { OnshapeBomTable } from "./OnshapeBom";
 import * as onshapeDirect from "../extension/onshapeDirect";
 
-/** Standard headers for our server: content type and the client secret. */
+/** The signed-in Onshape user's name, sent as X-Updated-By ("" until known). */
+let updatedBy = "";
+
+/** Who the server records as having saved what the panel writes (its `updatedBy`). */
+export function setUpdatedBy(name: string): void {
+  updatedBy = name.trim();
+}
+
+/** X-Updated-By (URL-encoded, so any name works), once the user's name is known. */
+export function updatedByHeaders(): Record<string, string> {
+  return updatedBy ? { "X-Updated-By": encodeURIComponent(updatedBy) } : {};
+}
+
+/** Standard headers for our server: content type, the client secret, and who is saving. */
 function getBomApiHeaders(contentType = "application/json"): Record<string, string> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...updatedByHeaders() };
   if (contentType) {
     headers["Content-Type"] = contentType;
   }
@@ -27,7 +40,11 @@ function getBomApiHeaders(contentType = "application/json"): Record<string, stri
  * answer, errors as ApiRequestError with the server's message and status).
  */
 function requestJson<T>(method: "GET" | "POST", endpoint: string, body?: unknown): Promise<T> {
-  return fetchFromApi<T>(endpoint, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  return fetchFromApi<T>(endpoint, {
+    method,
+    headers: updatedByHeaders(),
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
 }
 
 export interface OnshapeKey {
