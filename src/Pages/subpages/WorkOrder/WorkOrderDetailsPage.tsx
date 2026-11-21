@@ -9,6 +9,7 @@ import type WorkOrderTableRow from "./WorkOrderTableRow";
 import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
+import SubAssemblySummary from "../Bom/SubAssemblySummary";
 import { recordImageSrc } from "../../../util/recordImage";
 import { fetchPartsByIds } from "../../../util/records";
 import { printPartsPdf } from "../../../util/exportPartsPdf";
@@ -95,6 +96,8 @@ export default function WorkOrderDetailsPage() {
     const [assemblyThumbnailUrl] = useState<string>(""); // image now comes from the BOM record
 
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
+    // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
+    const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
     const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
     const [contextMenu, setContextMenu] = useState<{
         x: number;
@@ -630,6 +633,13 @@ export default function WorkOrderDetailsPage() {
             setIsPartPortalOpen(true);
         } catch (err: any) {
             if (err?.statusCode === 404) {
+                // A bought sub-assembly is listed by its BOM id (collectBomParts) and
+                // may have no part record: show its summary instead.
+                const subBom = await fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(partId)}`).catch(() => null);
+                if (subBom) {
+                    setSelectedSubBom(subBom);
+                    return;
+                }
                 window.alert(`"${row.name || partId}" isn't saved in the database yet. Publish the BOM from the extension first.`);
                 return;
             }
@@ -896,6 +906,21 @@ export default function WorkOrderDetailsPage() {
                     )}
                 </div>
                 </>
+            )}
+
+            {selectedSubBom && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <button
+                            type="button"
+                            onClick={() => setSelectedSubBom(null)}
+                            className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
+                        >
+                            ✕ Close
+                        </button>
+                        <SubAssemblySummary bom={selectedSubBom} />
+                    </div>
+                </div>
             )}
 
             {isPartPortalOpen && selectedPart && (
