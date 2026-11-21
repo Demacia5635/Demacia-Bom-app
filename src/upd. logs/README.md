@@ -12,6 +12,7 @@ One file per version: `v<version>.md`, listing what changed on the website. The 
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [next](vNEXT.md) | Unreleased | Fixes from the code review (on `fix/web`) |
 | [3.1.0](v3.1.0.md) | 2026-11-21 14:59 | Items marked standard count as bought everywhere |
 | [3.0.0](v3.0.0.md) | 2026-11-17 23:18 | Part sizes; CNC jobs in work orders; Printed / CNC defaults |
 | [2.1.0](v2.1.0.md) | 2026-11-16 22:59 | BOM page: Single-level, Structured and Flattened views |
