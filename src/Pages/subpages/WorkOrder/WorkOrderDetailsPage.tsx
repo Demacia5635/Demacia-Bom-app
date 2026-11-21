@@ -118,8 +118,9 @@ export default function WorkOrderDetailsPage() {
 
     // ---- CNC groups: parts cut in one run, sharing one Links cell (cncGroups.ts) ----
     const [cncGroups, setCncGroups] = useState<CncGroup[]>([]);
+    // The groups for handlers that run later (timers, menus), kept current.
     const cncGroupsRef = useRef(cncGroups);
-    cncGroupsRef.current = cncGroups;
+    useEffect(() => { cncGroupsRef.current = cncGroups; }, [cncGroups]);
     /** Part IDs picked with "Select for CNC merge" (right-click). */
     const [mergeSelection, setMergeSelection] = useState<string[]>([]);
     const [groupSaving, setGroupSaving] = useState(false);
@@ -150,19 +151,17 @@ export default function WorkOrderDetailsPage() {
 
     useEffect(() => {
         if (!workOrderID) return;
-        // Switching work orders: nothing of the previous one stays on screen, and
-        // its late replies are ignored.
+        // Another work order is a new page (App.tsx keys it by id); a late reply
+        // after leaving is ignored.
         let cancelled = false;
-        setWorkOrderData(null);
-        setRows([]);
-        setError(null);
-        setLoading(true);
 
         async function getWOData() {
             try {
                 const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
                 if (cancelled) return;
                 setWorkOrderData(data);
+                // Its CNC groups as loaded (later changes come back from the server).
+                setCncGroups(toCncGroups(data?.cncGroups));
                 // No assembly: no parts to load (the page says so).
                 if (!data?.bomID) setLoading(false);
 
@@ -279,7 +278,7 @@ export default function WorkOrderDetailsPage() {
             return collectedRows;
         }
 
-        setLoading(true);
+        // (loading is already true: this runs once, when the work order arrives)
         getPartsData()
             .then((data) => { if (!cancelled) setRows(data); })
             .catch((err: ApiError) => { if (!cancelled) setError(err); })
@@ -324,12 +323,6 @@ export default function WorkOrderDetailsPage() {
         pendingSavesRef.current.set(rowId, pending);
     }, [workOrderID]);
 
-    // The work order's groups, as loaded (later changes come back from the server).
-    useEffect(() => {
-        const loaded = (workOrderData?.id === workOrderID ? workOrderData?.cncGroups : undefined) ?? [];
-        setCncGroups(toCncGroups(loaded));
-        setMergeSelection([]);
-    }, [workOrderData, workOrderID]);
 
     /** The rows as the table shows them: groups together, sharing their links. */
     const displayRows = useMemo(() => applyCncGroups(rows, cncGroups), [rows, cncGroups]);
@@ -929,7 +922,7 @@ export default function WorkOrderDetailsPage() {
                         >
                             ✕ Close
                         </button>
-                        <PartPortal part={selectedPart} onSaved={handlePartSaved} />
+                        <PartPortal key={selectedPart.id} part={selectedPart} onSaved={handlePartSaved} />
                     </div>
                 </div>
             )}

@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { lazy } from 'react';
 import MainLayout from './components/MainLayout';
 
@@ -11,6 +11,17 @@ const PartsSearchPage = lazy(() => import('./Pages/searchPartsPage/SearchPartsPa
 const WorkOrdersPage = lazy(() => import('./Pages/WorkordersPage/WorkOrderPage'));
 const TelemetryPage = lazy(() => import('./Pages/Telemetry/TelemetryPage'));
 
+// A new id in the address is a new page (key): nothing of the previous BOM or
+// work order stays in its state, so the pages don't reset it by hand.
+function BomRoute() {
+  const { bomId } = useParams();
+  return <BomDetailsPage key={bomId} />;
+}
+function WorkOrderRoute() {
+  const { workOrderID } = useParams();
+  return <WorkOrderDetailsPage key={workOrderID} />;
+}
+
 // The assembly BOM itself lives in the Chrome extension (src/extension);
 // the website shows what has been published to the database.
 export default function App() {
@@ -20,9 +31,9 @@ export default function App() {
         <Route element={<MainLayout />}>
           <Route path="/" element={<HomeScreen />} />
           <Route path="/home" element={<HomeScreen />} />
-          <Route path="/bom/:bomId" element={<BomDetailsPage />} />
+          <Route path="/bom/:bomId" element={<BomRoute />} />
           <Route path="/workorders" element={<WorkOrdersPage />} />
-          <Route path="/workOrder/:workOrderID" element={<WorkOrderDetailsPage />} />
+          <Route path="/workOrder/:workOrderID" element={<WorkOrderRoute />} />
           {/* Same page in two modes; the keys keep their search boxes separate. */}
           <Route path="/partSearch" element={<PartsSearchPage key="made" />} />
           <Route path="/standardParts" element={<PartsSearchPage key="standard" standard />} />

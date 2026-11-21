@@ -19,8 +19,14 @@ interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageEleme
  * memory-hungry. The object URL is released when the image goes away.
  */
 export function AuthenticatedImage({ src, alt, className, ...props }: AuthenticatedImageProps) {
-  const [imageSrc, setImageSrc] = useState<string | null>(null);
-  const [error, setError] = useState<boolean>(false);
+  // Both kept with the src they belong to, so a new src never shows the previous
+  // image (its object URL is revoked by the cleanup below) or its failure.
+  const [loaded, setLoaded] = useState<{ src: string; url: string } | null>(null);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const error = failedSrc === src;
+  // Inline images need no fetching.
+  const isInline = !!src && src.startsWith("data:");
+  const imageSrc = isInline ? src : loaded?.src === src ? loaded.url : null;
 
   // Saved images (Google Drive, via our server) are public to read: a plain
   // <img> lets the browser cache them (the server sends Cache-Control) and
@@ -28,17 +34,7 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
   const publicUrl = publicDriveImageUrl(src);
 
   useEffect(() => {
-    setError(false);
-    // A new src: don't keep showing the previous image (its object URL is
-    // revoked by the cleanup below) while this one loads.
-    setImageSrc(null);
-    if (!src || publicUrl) return;
-    // Inline images need no fetching.
-    if (src.startsWith("data:")) {
-      setImageSrc(src);
-      setError(false);
-      return;
-    }
+    if (!src || publicUrl || src.startsWith("data:")) return;
 
     let isMounted = true;
     let objectUrl: string | null = null;
@@ -59,8 +55,7 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
           if (stored) {
             if (!isMounted) return;
             objectUrl = URL.createObjectURL(stored);
-            setImageSrc(objectUrl);
-            setError(false);
+            setLoaded({ src, url: objectUrl });
             return;
           }
         }
@@ -78,10 +73,9 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
         if (isOnshape && imageCache) imageCache.put(targetUrl, blob).catch(() => undefined);
         if (!isMounted) return;
         objectUrl = URL.createObjectURL(blob);
-        setImageSrc(objectUrl);
-        setError(false);
+        setLoaded({ src, url: objectUrl });
       } catch {
-        if (isMounted) setError(true);
+        if (isMounted) setFailedSrc(src);
       }
     };
 
@@ -108,7 +102,7 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
         className={className}
         loading="lazy"
         decoding="async"
-        onError={() => setError(true)}
+        onError={() => setFailedSrc(src)}
         {...props}
       />
     );

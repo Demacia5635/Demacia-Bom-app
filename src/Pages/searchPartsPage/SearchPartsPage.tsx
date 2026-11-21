@@ -245,6 +245,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                 >
                     <div onClick={(e) => e.stopPropagation()}>
                         <PartPortal
+                            key={isOpen.id}
                             part={isOpen}
                             onSaved={(saved) => setItems((list) => list.map((item) =>
                                 item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item

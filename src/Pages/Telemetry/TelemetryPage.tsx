@@ -72,26 +72,33 @@ export default function TelemetryPage() {
   // Each load is numbered: only the newest one's reply is shown (an older range
   // answering late can't replace it), and none after the page is left.
   const loadSeqRef = useRef(0);
-  const load = useCallback(async () => {
+  // Fetches the range's events. The "Loading..." state is set by whoever starts
+  // it (initial state, the range picker, Reload), not here.
+  const load = useCallback(() => {
     const seq = ++loadSeqRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const days = RANGES.find((r) => r.key === range)?.days ?? null;
-      const since = days ? `&since=${encodeURIComponent(new Date(Date.now() - days * 86_400_000).toISOString())}` : "";
-      const result = (await fetchFromApi<TelemetryEvent[]>(`/telemetry/events?limit=2000${since}`)) || [];
-      if (seq === loadSeqRef.current) {
+    const days = RANGES.find((r) => r.key === range)?.days ?? null;
+    const since = days ? `&since=${encodeURIComponent(new Date(Date.now() - days * 86_400_000).toISOString())}` : "";
+    return fetchFromApi<TelemetryEvent[]>(`/telemetry/events?limit=2000${since}`)
+      .then((response) => {
+        if (seq !== loadSeqRef.current) return;
+        const result = response || [];
         setEvents(result);
         // A user with nothing in this range isn't in the list any more: show everyone
         // rather than empty tables.
         setUser((u) => (u === ALL_USERS || result.some((e) => (e.user || "(unknown)") === u) ? u : ALL_USERS));
-      }
-    } catch (err: any) {
-      if (seq === loadSeqRef.current) setError(err?.message || "Failed to load telemetry");
-    } finally {
-      if (seq === loadSeqRef.current) setLoading(false);
-    }
+      })
+      .catch((err: any) => {
+        if (seq === loadSeqRef.current) setError(err?.message || "Failed to load telemetry");
+      })
+      .finally(() => {
+        if (seq === loadSeqRef.current) setLoading(false);
+      });
   }, [range]);
+
+  const startLoading = () => {
+    setLoading(true);
+    setError(null);
+  };
 
   useEffect(() => {
     load();
@@ -140,7 +147,7 @@ export default function TelemetryPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <select value={range} onChange={(e) => setRange(e.target.value)} className={`border rounded-lg px-3 py-2 text-sm ${inputBg}`}>
+            <select value={range} onChange={(e) => { setRange(e.target.value); startLoading(); }} className={`border rounded-lg px-3 py-2 text-sm ${inputBg}`}>
               {RANGES.map((r) => (
                 <option key={r.key} value={r.key}>{r.label}</option>
               ))}
@@ -153,7 +160,7 @@ export default function TelemetryPage() {
             </select>
             <button
               type="button"
-              onClick={load}
+              onClick={() => { startLoading(); load(); }}
               disabled={loading}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold"
             >

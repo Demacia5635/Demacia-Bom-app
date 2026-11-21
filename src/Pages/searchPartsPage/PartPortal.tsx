@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
+import React, { useState, useRef, type ChangeEvent, type FormEvent } from "react";
 import { downloadDriveFile, fetchFromApi } from "../../util/ApiService";
 import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { useThemeSync } from "../../util/misc/useThemeSync";
@@ -34,10 +34,8 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
     // The values as last loaded or saved, to send only what was changed since.
     const savedValuesRef = useRef<PartModel>(part);
 
-    useEffect(() => {
-        setFormData({ ...part });
-        savedValuesRef.current = part;
-    }, [part]);
+    // Another part is another dialog: callers key it by part id, so the form
+    // starts from that part (state above) without resetting it here.
 
     const handleChange = (
         e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>

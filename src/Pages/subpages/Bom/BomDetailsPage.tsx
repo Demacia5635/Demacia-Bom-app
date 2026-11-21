@@ -214,17 +214,11 @@ export default function BomDetailsPage() {
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // The whole assembly tree, loaded once per BOM; each view builds its rows from it.
+  // The whole assembly tree, loaded once per BOM (another BOM is a new page:
+  // App.tsx keys it by id); each view builds its rows from it.
   useEffect(() => {
     if (!bomId) return;
     let cancelled = false;
-    setTree(null);
-    // Switching BOMs: the previous one's header goes too.
-    setMainBomData(null);
-    partEditsRef.current = new Map();
-    setRows([]);
-    setError(null);
-    setLoading(true);
     loadBomTree(bomId, (root) => { if (!cancelled) setMainBomData(root); })
       .then((loaded) => { if (!cancelled) setTree(loaded); })
       .catch((err: ApiError) => { if (!cancelled) setError(err); })
@@ -510,7 +504,7 @@ export default function BomDetailsPage() {
             >
               ✕ Close
             </button>
-            <PartPortal part={selectedPart} onSaved={handlePartSaved} />
+            <PartPortal key={selectedPart.id} part={selectedPart} onSaved={handlePartSaved} />
           </div>
         </div>
       )}
