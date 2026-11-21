@@ -145,13 +145,15 @@ const pid = (partID: string) => encodeURIComponent(partID);
 /* ---------------------------------------------------------------------- */
 
 /**
- * Multi-level indented BOM. Uses the UNVERSIONED endpoint: its `bomTable`
- * has the `items` shape OnshapeBom.tsx parses (the /api/v9 endpoint returns a
- * different `rows` + `headerIdToValue` shape).
+ * Indented BOM. Uses the UNVERSIONED endpoint: its `bomTable` has the `items`
+ * shape OnshapeBom.tsx parses (the /api/v9 endpoint returns a different
+ * `rows` + `headerIdToValue` shape). `multiLevel` also lists everything
+ * inside the sub-assemblies (the whole tree); without it, only the
+ * assembly's own items. The table's `id` is the same either way.
  */
-export async function getBom(key: OnshapeElementKey): Promise<OnshapeBomTable> {
+export async function getBom(key: OnshapeElementKey, multiLevel = true): Promise<OnshapeBomTable> {
   const res = await onshapeJson<{ bomTable: OnshapeBomTable }>(
-    `/assemblies/${seg(key)}/bom?multiLevel=true&indented=true`
+    `/assemblies/${seg(key)}/bom?multiLevel=${multiLevel}&indented=true`
   );
   return res.bomTable;
 }

@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import ProgressBar from "./ProgressBar";
 
 export interface PublishBomFormValues {
   name: string;
@@ -66,6 +67,10 @@ interface PublishBomModalProps {
   onCancel: () => void;
   onSubmit: (values: PublishBomFormValues) => void;
   submitting?: boolean;
+  /** Why the last publish failed; shown above the buttons until the next try. */
+  error?: string | null;
+  /** Why Publish can't run right now (e.g. a saved copy); shown, and Publish is disabled. */
+  blockedReason?: string | null;
 }
 
 export default function PublishBomModal({
@@ -79,6 +84,8 @@ export default function PublishBomModal({
   preview = null,
   checks = [],
   checking = false,
+  error = null,
+  blockedReason = null,
 }: PublishBomModalProps) {
   const [name, setName] = useState(initialValues.name ?? "");
   const [description, setDescription] = useState(initialValues.description ?? "");
@@ -92,7 +99,8 @@ export default function PublishBomModal({
 
   const needsAck = checks.some((c) => c.kind !== "note");
   const combines = checks.some((c) => c.kind === "combine");
-  const canSubmit = name.trim().length > 0 && catalogNumber.trim().length > 0 && (!needsAck || acknowledged);
+  const canSubmit =
+    !blockedReason && name.trim().length > 0 && catalogNumber.trim().length > 0 && (!needsAck || acknowledged);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +169,7 @@ export default function PublishBomModal({
             <input
               value={defaultEngineer}
               onChange={(e) => setDefaultEngineer(e.target.value)}
-              placeholder="Applied to any item without one set"
+              placeholder="For new items without one; saved items keep theirs"
               disabled={submitting}
             />
           </label>
@@ -219,17 +227,29 @@ export default function PublishBomModal({
                   </span>
                 )}
               </div>
-              <div className="publish-progress-track">
-                <div
-                  className="publish-progress-bar"
-                  style={{ width: `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%` }}
-                />
-              </div>
+              <ProgressBar
+                done={progress.done}
+                total={progress.total}
+                trackClassName="publish-progress-track"
+                barClassName="publish-progress-bar"
+              />
               {progress.active.map((item, i) => (
                 <div key={i} className="publish-progress-step">
                   {item.name}: {item.step}
                 </div>
               ))}
+            </div>
+          )}
+
+          {!submitting && blockedReason && (
+            <div className="publish-progress publish-progress-failed" role="alert">
+              {blockedReason}
+            </div>
+          )}
+
+          {!submitting && error && (
+            <div className="publish-progress publish-progress-failed" role="alert">
+              {error}
             </div>
           )}
 

@@ -17,11 +17,5 @@
       "css": ["content.css"],
       "run_at": "document_idle"
     }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["logo.svg"],
-      "matches": ["https://*.onshape.com/*"]
-    }
   ]
 }

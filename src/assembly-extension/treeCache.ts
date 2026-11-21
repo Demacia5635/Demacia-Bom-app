@@ -11,6 +11,7 @@
 import type AssemblyBomRow from "./AssemblyBomRow";
 import type { BomModel } from "../util/Models";
 import type { OnshapeKey } from "./BomApi";
+import { keyString } from "./onshapeKeys";
 
 /** Bump when the stored shape changes, so old copies are ignored. */
 // 2: saved-image addresses gained the /api prefix.
@@ -39,7 +40,7 @@ export interface CachedTree {
 }
 
 export function treeCacheKey(k: OnshapeKey): string {
-  return `${PREFIX}${k.documentID}/${k.wvmType}/${k.wvmID}/${k.elementID}`;
+  return `${PREFIX}${keyString(k)}`;
 }
 
 function readIndex(): Record<string, number> {

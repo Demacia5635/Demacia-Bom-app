@@ -16,6 +16,12 @@
  */
 import type AssemblyBomRow from "./AssemblyBomRow";
 
+/** "A", "B" and "C" */
+export function quotedList(names: string[]): string {
+  const q = names.map((n) => `"${n}"`);
+  return q.length <= 1 ? q.join("") : `${q.slice(0, -1).join(", ")} and ${q[q.length - 1]}`;
+}
+
 export interface SameNumberGroup {
   /** The normalised catalog number (group key). */
   key: string;

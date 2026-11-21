@@ -85,16 +85,23 @@ function manifestPlugin(backendUrl: string, target: ExtensionTarget): Plugin {
         fileName: 'manifest.json',
         source: JSON.stringify(manifest, null, 2),
       });
-
-      // The Demacia logo for the in-page BOM button, from the web app's own
-      // favicon so there's one source (listed in web_accessible_resources).
-      this.emitFile({
-        type: 'asset',
-        fileName: 'logo.svg',
-        source: readFileSync(resolve(ROOT, 'public/favicon.svg'), 'utf8'),
-      });
     },
   };
+}
+
+/**
+ * The Demacia logo for the in-page BOM button, from the web app's favicon so
+ * there's one source. content.ts draws it as an inline <svg> (no extension
+ * file the Onshape page could probe for, and nothing for the page's CSP to
+ * block), so only the shapes are passed: the favicon is one path in one group.
+ */
+function readLogo(): { viewBox: string; transform: string; d: string } {
+  const svg = readFileSync(resolve(ROOT, 'public/favicon.svg'), 'utf8');
+  const viewBox = svg.match(/viewBox="([^"]+)"/)?.[1];
+  const transform = svg.match(/<g[^>]*\stransform="([^"]+)"/)?.[1] ?? '';
+  const paths = [...svg.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((m) => m[1].replace(/\s+/g, ' ').trim());
+  if (!viewBox || paths.length === 0) throw new Error('public/favicon.svg: no viewBox or path for the extension logo');
+  return { viewBox, transform, d: paths.join(' ') };
 }
 
 export function createExtensionConfig(target: ExtensionTarget) {
@@ -107,6 +114,7 @@ export function createExtensionConfig(target: ExtensionTarget) {
       base: '/',
       envDir: ROOT,
       publicDir: resolve(EXT_DIR, 'public'),
+      define: { __DEMACIA_LOGO__: JSON.stringify(readLogo()) },
       plugins: [react(), tailwindcss(), manifestPlugin(backendUrl, target)],
       build: {
         outDir: resolve(ROOT, target === 'firefox' ? 'dist-extension-firefox' : 'dist-extension'),

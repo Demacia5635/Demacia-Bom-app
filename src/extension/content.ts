@@ -7,9 +7,12 @@
  * shared import would become an `import` statement the browser rejects.
  */
 
-// Keep in sync with background.ts.
+// Keep in sync with messages.ts (this script can't import it).
 const OPEN_PANEL_MESSAGE = "demacia-bom:openPanel";
 const BUTTON_ID = "demacia-bom-open";
+const HINT_ID = "demacia-bom-hint";
+/** The logo's shapes, put in at build time (vite.extension.config.ts readLogo). */
+declare const __DEMACIA_LOGO__: { viewBox: string; transform: string; d: string };
 
 (() => {
   const w = window as Window & { __demaciaBomLoaded?: boolean };
@@ -67,18 +70,48 @@ const BUTTON_ID = "demacia-bom-open";
   btn.hidden = true;
   btn.title = "Demacia BOM";
   btn.setAttribute("aria-label", "Open the Demacia BOM side panel");
-  // Demacia logo (logo.svg, from public/favicon.svg) drawn in the icon color.
-  const logo = document.createElement("span");
-  logo.className = "demacia-bom-logo";
+  // Demacia logo (from public/favicon.svg, see vite.extension.config.ts) as an
+  // inline SVG in the icon color: no extension file the page could probe for.
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const LOGO = __DEMACIA_LOGO__; // read once: each mention is replaced by the whole object
+  const logo = document.createElementNS(SVG_NS, "svg");
+  logo.setAttribute("class", "demacia-bom-logo");
+  logo.setAttribute("viewBox", LOGO.viewBox);
   logo.setAttribute("aria-hidden", "true");
-  const logoUrl = `url("${chrome.runtime.getURL("logo.svg")}")`;
-  logo.style.setProperty("-webkit-mask-image", logoUrl);
-  logo.style.setProperty("mask-image", logoUrl);
+  const logoGroup = document.createElementNS(SVG_NS, "g");
+  if (LOGO.transform) logoGroup.setAttribute("transform", LOGO.transform);
+  logoGroup.setAttribute("fill", "currentColor");
+  const logoPath = document.createElementNS(SVG_NS, "path");
+  logoPath.setAttribute("d", LOGO.d);
+  logoGroup.append(logoPath);
+  logo.append(logoGroup);
   btn.append(logo);
+
+  /** A short note in the page's corner, gone after a few seconds. */
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  const showHint = (text: string) => {
+    let hint = document.getElementById(HINT_ID);
+    if (!hint) {
+      hint = document.createElement("div");
+      hint.id = HINT_ID;
+      hint.setAttribute("role", "status");
+      document.body.appendChild(hint);
+    }
+    hint.textContent = text;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => hint?.remove(), 6000);
+  };
 
   const openPanel = () => {
     try {
-      chrome.runtime.sendMessage({ type: OPEN_PANEL_MESSAGE });
+      // Firefox replies { opened: false } when it refused to open the sidebar
+      // from here (it only allows that from the toolbar icon); Chrome doesn't reply.
+      chrome.runtime.sendMessage({ type: OPEN_PANEL_MESSAGE }, (reply?: { opened?: boolean }) => {
+        void chrome.runtime.lastError; // no reply (Chrome) is fine
+        if (reply?.opened === false) {
+          showHint("Firefox doesn't let this button open the sidebar. Click the Demacia BOM icon in the toolbar instead.");
+        }
+      });
     } catch {
       // Extension was reloaded/updated; this orphaned script can't reach it.
       alert("The Demacia BOM extension was updated - please reload this Onshape tab.");

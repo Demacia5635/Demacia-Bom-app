@@ -1,16 +1,16 @@
 /**
  * Where the BOM page gets its Onshape context from in the Chrome extension.
  *
- *  - useOnshapeContext(): built from the active tab's URL (OnshapeLocationProvider).
+ *  - useOnshapeContext(): built from the active tab's URL (OnshapeLocationProvider.tsx).
  *  - useOnshapeClient().showMessageBubble(): a side-panel toast.
  *
  * (The page used to run inside an Onshape tab, where both came from Onshape's
  * iframe messaging. That app is retired; these names are kept so the page
  * reads the same.)
  */
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useMemo } from "react";
 import type { OnshapeLocation } from "./onshapeTab";
-import { showToast } from "./panel/toast";
+import { showToast } from "./panel/toastStore";
 
 /** The Onshape document/element the panel is showing. */
 export interface OnshapeContext {
@@ -32,17 +32,8 @@ export interface OnshapeClient {
   showMessageBubble(message: string): void;
 }
 
-const LocationContext = createContext<OnshapeLocation | null>(null);
-
-export function OnshapeLocationProvider({
-  location,
-  children,
-}: {
-  location: OnshapeLocation | null;
-  children: ReactNode;
-}) {
-  return <LocationContext.Provider value={location}>{children}</LocationContext.Provider>;
-}
+/** Provided by OnshapeLocationProvider.tsx. */
+export const LocationContext = createContext<OnshapeLocation | null>(null);
 
 export function useOnshapeContext(): OnshapeContext {
   const loc = useContext(LocationContext);
