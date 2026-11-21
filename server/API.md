@@ -81,7 +81,7 @@ The server makes one query per level, then one for all the parts. A sub-assembly
 
 | Route | Body | Reply |
 |---|---|---|
-| `GET /all` | | Every work order, oldest first. See [Lists](#lists). |
+| `GET /all` | | Every work order, oldest first. `?bomID=` keeps only the work orders of that assembly (also with paging). See [Lists](#lists). |
 | `GET /id/:id` | | The work order, or `404`. |
 | `POST /id/:id` | The work order's fields | Creates or updates it: `201` or `200`. `parts` is used only on create (deduplicated by `partID`, first wins); `cncGroups` is ignored. Both change only through the routes below. |
 | `POST /id/:id/part` | `{ partID, changes: { field: value } }` | Changes one part of the work order (it is added if missing). Returns that part. Editable fields: `statusCode`, `Priority`, `manufacturingMethod`, `productionGCOwner`, `productionMakingOwner`, `comments`, `links`, `approxArrivalDate`, `quantityMade`. |
@@ -107,6 +107,7 @@ The whole change is a single atomic update, so people merging at the same time d
   - `after`: the previous page's `next`.
   - `q`: text that one of these fields contains, in any case. Parts: `name`, `catalogNumber`, `description`, `vendor`, `id`. BOMs: `name`, `catalogNumber`, `projectCatalogNumber`, `description`, `id`. Work orders: `name`, `description`, `workOrderOwner`, `id`.
   - `next` is `null` on the last page.
+- **Work orders only:** `?bomID=<assembly id>` keeps just that assembly's work orders, with or without paging.
 
 ## Google Drive: `/api/drive`
 

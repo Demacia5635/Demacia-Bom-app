@@ -14,13 +14,23 @@ const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"
  *   limit: 1-500 (default 100). after: the `next` of the previous page.
  *   q: text that one of `searchFields` contains (any case).
  *   next is null on the last page.
+ * - `exactFields` (e.g. bomID): ?field=value keeps only records with exactly
+ *   that value, in either mode.
  */
-export function makeListAll(model: Model<any>, sort: Record<string, SortOrder>, searchFields: string[]) {
+export function makeListAll(model: Model<any>, sort: Record<string, SortOrder>, searchFields: string[], exactFields: string[] = []) {
     return async function listAll(req: Request, res: Response, next: NextFunction) {
         try {
             const { limit, after, q } = req.query;
+            const exact: Record<string, string> = {};
+            for (const field of exactFields) {
+                const value = req.query[field];
+                if (value === undefined) continue;
+                if (typeof value !== "string" || value === "" || value.length > 200)
+                    return res.status(400).json({ message: `${field} must be one ID`, fields: [field] });
+                exact[field] = value;
+            }
             if (limit === undefined && after === undefined && q === undefined) {
-                return res.status(200).json(await model.find().sort(sort));
+                return res.status(200).json(await model.find(exact).sort(sort));
             }
 
             const size = limit === undefined ? DEFAULT_LIMIT : Number(limit);
@@ -31,7 +41,7 @@ export function makeListAll(model: Model<any>, sort: Record<string, SortOrder>, 
             if (q !== undefined && (typeof q !== "string" || q.length > MAX_QUERY_LENGTH))
                 return res.status(400).json({ message: `q must be text of up to ${MAX_QUERY_LENGTH} characters`, fields: ["q"] });
 
-            const filter: Record<string, unknown> = {};
+            const filter: Record<string, unknown> = { ...exact };
             if (after) filter.id = { $gt: after };
             if (q) {
                 const pattern = new RegExp(escapeRegex(q), "i");

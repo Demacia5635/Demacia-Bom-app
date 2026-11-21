@@ -35,9 +35,10 @@ interface WorkOrderBody {
 /**
  * GET /all: every work order, oldest first (IDs are UUIDs now, so they don't
  * follow creation order; older documents without createdAt come first), or
- * one page of them (see makeListAll).
+ * one page of them (see makeListAll). ?bomID= keeps only the work orders
+ * of that assembly.
  */
-export const getAllWorkOrders = makeListAll(WorkOrder, { createdAt: 1, id: 1 }, ["name", "description", "workOrderOwner", "id"]);
+export const getAllWorkOrders = makeListAll(WorkOrder, { createdAt: 1, id: 1 }, ["name", "description", "workOrderOwner", "id"], ["bomID"]);
 
 export async function getWorkOrderByID(
   req: Request<{ id: string }>,
