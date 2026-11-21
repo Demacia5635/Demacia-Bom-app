@@ -21,19 +21,13 @@
   display: none !important;
 }
 
-/* The Demacia logo (logo.svg), filled with the icon color via a mask. */
+/* The Demacia logo: an inline <svg> filled with the icon color (content.ts). */
 #demacia-bom-open .demacia-bom-logo {
   display: block;
   flex: none;
   width: 20px;
   height: 20px;
-  background-color: currentColor;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+  fill: currentColor;
 }
 
 /* Only while Onshape's sidebar isn't there (e.g. still loading). */

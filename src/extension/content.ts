@@ -11,6 +11,8 @@
 const OPEN_PANEL_MESSAGE = "demacia-bom:openPanel";
 const BUTTON_ID = "demacia-bom-open";
 const HINT_ID = "demacia-bom-hint";
+/** The logo's shapes, put in at build time (vite.extension.config.ts readLogo). */
+declare const __DEMACIA_LOGO__: { viewBox: string; transform: string; d: string };
 
 (() => {
   const w = window as Window & { __demaciaBomLoaded?: boolean };
@@ -68,13 +70,21 @@ const HINT_ID = "demacia-bom-hint";
   btn.hidden = true;
   btn.title = "Demacia BOM";
   btn.setAttribute("aria-label", "Open the Demacia BOM side panel");
-  // Demacia logo (logo.svg, from public/favicon.svg) drawn in the icon color.
-  const logo = document.createElement("span");
-  logo.className = "demacia-bom-logo";
+  // Demacia logo (from public/favicon.svg, see vite.extension.config.ts) as an
+  // inline SVG in the icon color: no extension file the page could probe for.
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const LOGO = __DEMACIA_LOGO__; // read once: each mention is replaced by the whole object
+  const logo = document.createElementNS(SVG_NS, "svg");
+  logo.setAttribute("class", "demacia-bom-logo");
+  logo.setAttribute("viewBox", LOGO.viewBox);
   logo.setAttribute("aria-hidden", "true");
-  const logoUrl = `url("${chrome.runtime.getURL("logo.svg")}")`;
-  logo.style.setProperty("-webkit-mask-image", logoUrl);
-  logo.style.setProperty("mask-image", logoUrl);
+  const logoGroup = document.createElementNS(SVG_NS, "g");
+  if (LOGO.transform) logoGroup.setAttribute("transform", LOGO.transform);
+  logoGroup.setAttribute("fill", "currentColor");
+  const logoPath = document.createElementNS(SVG_NS, "path");
+  logoPath.setAttribute("d", LOGO.d);
+  logoGroup.append(logoPath);
+  logo.append(logoGroup);
   btn.append(logo);
 
   /** A short note in the page's corner, gone after a few seconds. */
