@@ -160,3 +160,23 @@ The extension's record of the Onshape calls it made, shown on the website's unli
 |---|---|---|
 | `POST /events` | `{ events: [...] }` (1-200) | `201 { saved }`. Unknown fields are dropped. Each event has `at`, `user`, `action`, `assembly`, `documentID`, `elementID`, `counts: { kind: number }`, `failed`, `durationMs`, `ok`, `error` and `version`. |
 | `GET /events?limit=&since=` | | The newest events first: up to `limit` (default 500, at most 2000), from `since` (an ISO date) onward. |
+| `GET /stats?from=&to=` | | Totals for charts, aggregated in MongoDB (below). |
+
+### `GET /api/telemetry/stats`
+
+`from` and `to` are ISO dates or times. `to` is an exact moment, so to include a whole day, send the start of the next day. The default is the last 30 days, and the range can be at most 366 days.
+
+```json
+{
+  "from": "...", "to": "...", "timezone": "Asia/Jerusalem",
+  "days": [{ "day": "2026-11-02", "events": 3, "requests": 40, "failed": 1, "failedEvents": 1, "byKind": { "bom": 30, "stl": 10 } }],
+  "users": [{ "user": "Dana", "events": 3, "requests": 40, "failed": 1 }]
+}
+```
+
+- **Days:** counted in Israel time. Only days with events are listed, oldest first.
+- **`requests`:** the number of Onshape requests (the events' `total`).
+- **`failed`:** Onshape requests that failed.
+- **`failedEvents`:** operations that ended with an error.
+- **`byKind`:** requests per kind.
+- **`users`:** the users with the most requests come first; `""` means the user is unknown.
