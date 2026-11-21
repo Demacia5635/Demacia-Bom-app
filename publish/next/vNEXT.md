@@ -21,11 +21,17 @@
   - Never grouped: empty or placeholder catalog numbers ("-", "?", "TBD", "N/A", "none"…), default "Part N" names, and bought items (Standard Content, vendor, marked standard). Spaces around names and numbers, and upper/lower case, don't matter.
 - **Light mode.** The BOM header has the same theme button as the website: 🌙 while light (click for dark), ☀️ while dark (click for light). Until you first click it, the panel follows your browser's or computer's colour scheme, so **if yours is set to light, the panel turns light after updating.** Click 🌙 to make it dark; the panel then remembers your choice. Dark mode looks exactly as before. (`7be21f1`, `3821d89`)
 
+## Fixes from the code-review checklist (on branch `fix/ext`, not on MASTER yet)
+
+- **One failed request no longer breaks the whole Refresh BOM.** A request to Onshape or the server that failed once is tried again the next time it's needed, instead of failing every later part of the load and every sub-assembly you open afterwards. (B12, `1b65342`)
+- **A failed Publish BOM is shown in the Publish dialog,** above its buttons, instead of being hidden until the dialog closes. It's cleared when the dialog opens again or the BOM reloads. (B14, `2c1548c`; a clearer explanation of why it failed is being added.)
+
 ## Removed
 
 - The automatic shape-based combining from `ef4a751`, **Not the same part** from `b91e47c`, and the list of copies and "×N copies" label on a combined row (all pushed, never in a built extension). The modeler fixes a wrong name or catalog number in Onshape instead. (`1039c40`, `3178eb4`, `b92855e`)
 
 ## Not tested yet
 
+- The checklist fixes haven't been run in the real extension, and no failure was forced to see the messages.
 - Not run in the real panel in Onshape or against the live database: the notice, Combine, the red catalog-number problems, and the Publish dialog's database check (the full parts list may be slow to load). The grouping and combining rules, the dialog and the notice passed scripted checks.
 - Light mode hasn't been opened in Chrome or Firefox at all, so some parts of the panel may still be dark.
