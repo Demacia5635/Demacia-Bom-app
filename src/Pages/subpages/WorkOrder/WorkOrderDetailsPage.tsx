@@ -5,7 +5,6 @@ import { loadBomTree, workOrderLines } from "../../../util/bomTree";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import Table from "../../../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
-import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
@@ -22,6 +21,8 @@ import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 import { useCncGroups } from "./useCncGroups";
+import { toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
+import WorkOrderFilters from "./WorkOrderFilters";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -59,34 +60,6 @@ const SAVED_PART_FIELDS = [
     "approxArrivalDate",
 ] as const satisfies readonly (keyof WorkOrderTableRow)[];
 
-/** Made already: status "Finished Manufacturing" or priority "Finished" (the table keeps them in step). */
-const isFinishedRow = (row: WorkOrderTableRow) =>
-    row.statusCode === "Finished Manufacturing" || row.Priority === "Finished";
-
-/** Bought, not made: Onshape Standard Content, marked standard, a vendor part, or set to "Purchased". */
-const isPurchasedRow = (row: WorkOrderTableRow) =>
-    !!row.isStandardContent || !!row.markedStandard || (row.vendor ?? "").trim() !== "" || row.manufacturingMethod === "Purchased";
-
-// The work-order filters are remembered in this browser (the same for every work order).
-const FILTER_STORAGE_PREFIX = "workOrderFilter:";
-function readFilter(name: string): string[] {
-    try {
-        const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_PREFIX + name) || "[]");
-        return Array.isArray(saved) ? saved.filter((v) => typeof v === "string") : [];
-    } catch {
-        return [];
-    }
-}
-function writeFilter(name: string, values: string[]) {
-    try {
-        localStorage.setItem(FILTER_STORAGE_PREFIX + name, JSON.stringify(values));
-    } catch {
-        // Storage unavailable (private window): filters just aren't remembered.
-    }
-}
-
-const toggleIn = (list: string[], value: string) =>
-    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
 export default function WorkOrderDetailsPage() {
     const { workOrderID } = useParams<{ workOrderID: string }>();
@@ -374,25 +347,8 @@ export default function WorkOrderDetailsPage() {
     };
 
     // ---- Filters for the people making the parts (remembered in this browser) ----
-    const [methodFilter, setMethodFilter] = useState<string[]>(() => readFilter("methods"));
-    const [priorityFilter, setPriorityFilter] = useState<string[]>(() => readFilter("priorities"));
-    const [hidePurchased, setHidePurchased] = useState<boolean>(() => readFilter("hidePurchased").length > 0);
-    const [hideFinished, setHideFinished] = useState<boolean>(() => readFilter("hideFinished").length > 0);
-    useEffect(() => {
-        writeFilter("methods", methodFilter);
-        writeFilter("priorities", priorityFilter);
-        writeFilter("hidePurchased", hidePurchased ? ["1"] : []);
-        writeFilter("hideFinished", hideFinished ? ["1"] : []);
-    }, [methodFilter, priorityFilter, hidePurchased, hideFinished]);
-
-    const rowFilter = useMemo(() => {
-        if (methodFilter.length === 0 && priorityFilter.length === 0 && !hidePurchased && !hideFinished) return undefined;
-        return (row: WorkOrderTableRow) =>
-            (methodFilter.length === 0 || methodFilter.includes(row.manufacturingMethod)) &&
-            (priorityFilter.length === 0 || priorityFilter.includes(row.Priority)) &&
-            !(hidePurchased && isPurchasedRow(row)) &&
-            !(hideFinished && isFinishedRow(row));
-    }, [methodFilter, priorityFilter, hidePurchased, hideFinished]);
+    const filters = useWorkOrderFilters();
+    const { rowFilter } = filters;
     const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
 
     // ---- Export the shown parts (image, name, quantity) to PDF ----
@@ -411,12 +367,7 @@ export default function WorkOrderDetailsPage() {
             return;
         }
 
-        const filters = [
-            methodFilter.length > 0 && `Manufacturing method: ${methodFilter.join(", ")}`,
-            priorityFilter.length > 0 && `Priority: ${priorityFilter.join(", ")}`,
-            hidePurchased && "purchased & standard parts hidden",
-            hideFinished && "finished parts hidden",
-        ].filter(Boolean);
+        const filterLines = filters.describe();
 
         setPdfProgress({ loaded: 0, total: 0 });
         try {
@@ -424,7 +375,7 @@ export default function WorkOrderDetailsPage() {
                 title: workOrderData?.name || "Work order",
                 subtitleLines: [
                     shownBomName ? `Assembly: ${shownBomName}` : "",
-                    filters.length > 0 ? `Filters: ${filters.join(" · ")}` : "All parts",
+                    filterLines.length > 0 ? `Filters: ${filterLines.join(" · ")}` : "All parts",
                     `Exported ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Jerusalem" })}`,
                 ],
                 rows: shownRows.map((r) => ({
@@ -491,10 +442,6 @@ export default function WorkOrderDetailsPage() {
     const loadingText = isLight ? "text-zinc-500" : "text-zinc-400";
     const filterCard = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
     const filterLabel = isLight ? "text-zinc-600" : "text-zinc-400";
-    const chipOn = "bg-blue-600 border-blue-600 text-white";
-    const chipOff = isLight
-        ? "border-zinc-300 text-zinc-700 hover:bg-zinc-100"
-        : "border-zinc-700 text-zinc-300 hover:bg-zinc-800";
 
     return (
         <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
@@ -537,94 +484,21 @@ export default function WorkOrderDetailsPage() {
             ) : (
                 <>
                 {rows.length > 0 && (
-                    <div className={`mb-3 rounded-xl border p-3 space-y-2 text-xs ${filterCard}`}>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            <span className={`w-36 shrink-0 font-semibold ${filterLabel}`}>Manufacturing method</span>
-                            {MANUFACTURING_METHODS.map((m) => {
-                                const count = rows.filter((r) => r.manufacturingMethod === m).length;
-                                return (
-                                    <button
-                                        key={m}
-                                        type="button"
-                                        onClick={() => setMethodFilter((list) => toggleIn(list, m))}
-                                        aria-pressed={methodFilter.includes(m)}
-                                        className={`rounded-full border px-2.5 py-0.5 transition-colors ${methodFilter.includes(m) ? chipOn : chipOff} ${count === 0 ? "opacity-50" : ""}`}
-                                    >
-                                        {m} <span className="opacity-70">{count}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            <span className={`w-36 shrink-0 font-semibold ${filterLabel}`}>Priority</span>
-                            {PRIORITIES.map((p) => {
-                                const count = rows.filter((r) => r.Priority === p).length;
-                                return (
-                                    <button
-                                        key={p}
-                                        type="button"
-                                        onClick={() => setPriorityFilter((list) => toggleIn(list, p))}
-                                        aria-pressed={priorityFilter.includes(p)}
-                                        className={`rounded-full border px-2.5 py-0.5 transition-colors ${priorityFilter.includes(p) ? chipOn : chipOff} ${count === 0 ? "opacity-50" : ""}`}
-                                    >
-                                        {p} <span className="opacity-70">{count}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                            <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                                <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
-                                    <input
-                                        type="checkbox"
-                                        checked={hidePurchased}
-                                        onChange={(e) => setHidePurchased(e.target.checked)}
-                                    />
-                                    Hide purchased & standard parts ({rows.filter(isPurchasedRow).length})
-                                </label>
-                                <label className={`flex items-center gap-2 cursor-pointer ${filterLabel}`}>
-                                    <input
-                                        type="checkbox"
-                                        checked={hideFinished}
-                                        onChange={(e) => setHideFinished(e.target.checked)}
-                                    />
-                                    Hide finished parts ({rows.filter(isFinishedRow).length})
-                                </label>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <span className={filterLabel}>
-                                    Showing {shownCount} of {rows.length} parts
-                                </span>
-                                {rowFilter && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setMethodFilter([]);
-                                            setPriorityFilter([]);
-                                            setHidePurchased(false);
-                                            setHideFinished(false);
-                                        }}
-                                        className="font-semibold text-blue-500 hover:underline"
-                                    >
-                                        Clear filters
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={handleExportPdf}
-                                    disabled={pdfProgress !== null || shownCount === 0}
-                                    title="Save the parts shown below (image, name, quantity) as a PDF"
-                                    className="rounded-lg bg-blue-600 px-3 py-1 font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-default"
-                                >
-                                    {pdfProgress === null
-                                        ? "Export PDF"
-                                        : pdfProgress.total > 0
-                                            ? `Loading images ${pdfProgress.loaded}/${pdfProgress.total}…`
-                                            : "Preparing PDF…"}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+                    <WorkOrderFilters rows={rows} filters={filters} shownCount={shownCount}>
+                        <button
+                            type="button"
+                            onClick={handleExportPdf}
+                            disabled={pdfProgress !== null || shownCount === 0}
+                            title="Save the parts shown below (image, name, quantity) as a PDF"
+                            className="rounded-lg bg-blue-600 px-3 py-1 font-semibold text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-default"
+                        >
+                            {pdfProgress === null
+                                ? "Export PDF"
+                                : pdfProgress.total > 0
+                                    ? `Loading images ${pdfProgress.loaded}/${pdfProgress.total}…`
+                                    : "Preparing PDF…"}
+                        </button>
+                    </WorkOrderFilters>
                 )}
                 {rows.length > 0 && (suggestions.length > 0 || mergeSelection.length > 0 || cncGroups.length > 0 || unsizedCount > 0) && (
                     <div className={`mb-3 rounded-xl border p-3 space-y-1.5 text-xs ${filterCard}`}>
