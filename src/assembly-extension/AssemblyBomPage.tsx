@@ -12,7 +12,6 @@ import {
   updateOnshapeBomMetadata,
   syncPartFilesToDrive,
   syncBomThumbnailToDrive,
-  getOnshapeThumbnailSrc,
   deleteDriveFile,
   getAllRecords,
   getBomsByIds,
@@ -25,16 +24,24 @@ import SameNumberNotice from "./SameNumberNotice";
 import { usePanelThemeSetting } from "../extension/panel/theme";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
-import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
+import type { OnshapeBomTable } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import { childrenByParent, distinctRows, linkArrays, publishPhases, ROOT_PARENT } from "./publishPlan";
 import PublishBomModal, { type PublishBomFormValues, type PublishCheck, type PublishPreview, type PublishProgress } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
-import { assemblyKeyId, bomIdOf, itemKey, keyOf, keyString, recordId } from "./onshapeKeys";
+import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, keyOf, keyString, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
 import ProgressBar from "./ProgressBar";
+import {
+  assemblyNameOf,
+  expandTree,
+  loadSubtree,
+  prefetchTree,
+  REFRESH_CONCURRENCY,
+  resolveBomNode,
+} from "./treeLoader";
 import BomToolbar from "./BomToolbar";
 import BomHeader from "./BomHeader";
 import {
@@ -43,27 +50,20 @@ import {
   DATABASE_ONLY_FIELDS,
   EDITABLE_FIELDS,
   editableValues,
-  fileDefaultsForMaterial,
   fileRuleForMaterial,
-  fillCatalogNumberFromName,
   isExternalRow,
   isHiddenByStandardToggle,
   isStandardRow,
   retrackRow,
   stampOf,
   STANDARD_PART_ENGINEER,
-  withChangeTracking,
-  type FieldValues,
 } from "./rowRules";
 import { findWorkOrderProblems, TOP_ASSEMBLY_ID } from "./workOrderProblems";
 import {
   createCachedSources,
   createLimiter,
-  directSources,
   LOAD_CANCELLED,
-  recordOrNull,
   type Limiter,
-  type TreeSources,
 } from "./requestPool";
 import { computeImageVersions, computeModelVersions, partFilesVersion, type ModelVersions } from "./modelVersions";
 import { isSavedSizeStale, needsSize, readPartSize, SIZE_CONCURRENCY } from "./partSize";
@@ -75,22 +75,9 @@ function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspa
   return null;
 }
 
-function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string {
-  const base = server || "https://cad.onshape.com";
-  return `${base}/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
-}
-
 /** What the saved copy of a tree keeps of the root Onshape BOM. */
 function rootBomSummary(bom: OnshapeBomTable | null | undefined) {
   return bom ? { id: bom.id, name: bom.name, description: bom.description || "", partNumber: bom.partNumber || "" } : null;
-}
-
-/**
- * The assembly's name from its Onshape BOM name ("BOM of <assembly>"), without
- * the prefix. "" when there is no name, so callers can fall back with `||`.
- */
-function assemblyNameOf(bom: Pick<OnshapeBomTable, "name"> | null | undefined): string {
-  return (bom?.name ?? "").replace(/^\s*BOM of\b\s*/i, "").trim();
 }
 
 /**
@@ -116,62 +103,12 @@ interface LoadedTree {
 }
 
 /**
- * Starts every request the tree walk will need, in parallel: each
- * sub-assembly's Onshape BOM and database record, and each part's record.
- * The insides of a sub-assembly the walk won't open (marked standard, or
- * from a vendor) are skipped. A failure is dropped from the cache, so the
- * walk asks again and reports it if it fails again.
- */
-async function prefetchTree(bom: OnshapeBomTable, src: TreeSources, seen = new Set<string>()): Promise<void> {
-  await Promise.all(
-    parseOnshapeBomTable(bom).map(async (item) => {
-      const key = itemKey(item);
-      if (!item.isSubassembly) {
-        await src.dbPart(key, item.itemSource.partId || "").catch(() => {});
-        return;
-      }
-      if (seen.has(keyString(key))) return;
-      seen.add(keyString(key));
-      const sub = await src.onshapeBom(key).catch(() => null);
-      if (!sub) return;
-      // Same test as the walk (resolveBomNode): a bought item's insides aren't loaded.
-      const record = await src.dbBom(key, bomIdOf(sub, key)).catch(() => null);
-      if (record?.markedStandard || record?.vendor || sub.bomSource?.element?.vendor) return;
-      await prefetchTree(sub, src, seen);
-    })
-  );
-}
-
-/** Requests in flight at once during Refresh BOM (Onshape + our server). */
-const REFRESH_CONCURRENCY = 6;
-
-/**
  * Items (parts / sub-assemblies) published at once. Each part exports its
  * thumbnail, STL and Parasolid together, so this is up to 3x as many Onshape
  * exports in flight. If Onshape rate-limits, those items are reported as
  * problems and retried by the next Publish BOM.
  */
 const PUBLISH_CONCURRENCY = 5;
-
-/** What a walk of the assembly tree (expandTree) works with. */
-interface ExpandContext {
-  src: TreeSources;
-  /** The top assembly's database record (null when it isn't saved). */
-  rootBomDB: BomModel | null;
-  /** Sub-assemblies already in the tree (listed once). */
-  visited: Set<string>;
-  /** Rows found, in Onshape's order. */
-  out: AssemblyBomRow[];
-  /** Called for each item as the walk reaches it (progress). */
-  onItem?: (name: string) => void;
-}
-
-interface ResolvedNode {
-  row: AssemblyBomRow;
-  key?: OnshapeKey;
-  bomID?: string;
-  onshapeBom?: OnshapeBomTable;
-}
 
 export default function AssemblyBomPage() {
   const context = useOnshapeContext();
@@ -247,260 +184,6 @@ export default function AssemblyBomPage() {
       : null;
   }, [documentId, workspaceId, versionId, elementId]);
 
-  const resolveBomNode = useCallback(
-    async (
-      key: OnshapeKey,
-      parentRowId: string | null,
-      rootBom: BomModel | null | 'root',
-      /** The parent BOM's line for this sub-assembly (its part number etc.); absent for the root. */
-      parentItem?: ParsedOnshapeBomRow,
-      /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
-      src: TreeSources = directSources
-    ): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
-      const onshapeBom = await src.onshapeBom(key, rootBom === 'root');
-      const bomID = bomIdOf(onshapeBom, key);
-
-      const dbBom = await recordOrNull(src.dbBom(key, bomID));
-      const rowId = recordId(key, bomID);
-
-      const isPublished = Boolean(dbBom);
-      const onshapeUrl = buildOnshapeElementURL(context.server, key);
-      // Onshape where its BOM has the value, the database for the rest.
-      const fromOnshape = parentItem?.onshapeFields ?? {};
-      const pick = (field: OptionalBomField, dbValue: string | undefined, fallback = "") =>
-        field in fromOnshape ? String(fromOnshape[field] ?? "") : dbValue || fallback;
-      const vendor = dbBom?.vendor || onshapeBom.bomSource?.element?.vendor || "";
-      // Marked as a standard (bought) part: one item, its insides aren't loaded.
-      // One from a vendor always is.
-      const markedStandard = (!!dbBom?.markedStandard || vendor !== "") && rootBom !== "root";
-
-      const row: AssemblyBomRow = {
-        id: rowId,
-        parentId: parentRowId,
-        isExpanded: true,
-        source: isPublished ? "db" : "onshape-only",
-        isAssembly: true,
-        // Always Onshape's current thumbnail; the saved one is replaced on Publish BOM.
-        avatar: getOnshapeThumbnailSrc(key),
-        name: parentItem?.name || assemblyNameOf(onshapeBom) || dbBom?.name || key.elementID,
-        catalogNumber: pick("partNumber", dbBom?.catalogNumber, onshapeBom.partNumber || ""),
-        revision: "-",
-        description: onshapeBom.description || pick("description", dbBom?.description),
-        engineer: markedStandard ? STANDARD_PART_ENGINEER : pick("engineer", dbBom?.engineer),
-        material: "-",
-        mass: 0,
-        price: 0,
-        quantity: parentItem?.quantity || 1,
-        comments: pick("comments", dbBom?.comments),
-        saved: { avatarID: dbBom?.avatarID || undefined, filesModelVersion: dbBom?.filesModelVersion || undefined },
-        dbUpdatedAt: stampOf(dbBom?.updatedAt),
-        documentID: key.documentID,
-        wvmType: key.wvmType,
-        wvmID: key.wvmID,
-        elementID: key.elementID,
-        entityID: bomID,
-        onshapeURL: dbBom?.onshapeURL || onshapeUrl,
-        exportSTL: "",
-        exportParasolid: "",
-        vendor,
-        markedStandard,
-      };
-
-      const tracked = withChangeTracking(
-        row,
-        dbBom
-          ? ({
-              name: dbBom.name ?? "",
-              description: dbBom.description ?? "",
-              catalogNumber: dbBom.catalogNumber ?? "",
-              engineer: dbBom.engineer ?? "",
-              comments: dbBom.comments ?? "",
-              markedStandard,
-            } as unknown as FieldValues)
-          : null
-      );
-      // A sub-assembly named like a catalog number gets it as its number (the top
-      // assembly has no row: the Publish form fills it the same way).
-      const filled = rootBom === "root" ? tracked : fillCatalogNumberFromName(tracked);
-      return { node: { row: filled, key, bomID, onshapeBom }, dbBom };
-    },
-    [context.server]
-  );
-
-  const resolvePartRow = useCallback(
-    async (
-      parsedItem: ParsedOnshapeBomRow,
-      parentRowId: string | null,
-      /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
-      src: TreeSources = directSources
-    ): Promise<AssemblyBomRow> => {
-      const key = itemKey(parsedItem);
-      const partID = parsedItem.itemSource.partId || "";
-
-      const dbPart: PartModel | null = await recordOrNull(src.dbPart(key, partID));
-      const rowId = recordId(key, partID);
-
-      const isPublished = Boolean(dbPart);
-      const onshapeUrl = buildOnshapeElementURL(context.server, key);
-      // Onshape where its BOM has the value, the database for the rest.
-      const fromOnshape = parsedItem.onshapeFields;
-      const pickText = (field: OptionalBomField, dbValue: string | undefined) =>
-        field in fromOnshape ? String(fromOnshape[field] ?? "") : dbValue || "";
-      const pickNumber = (field: OptionalBomField, dbValue: number | undefined) =>
-        field in fromOnshape ? Number(fromOnshape[field]) || 0 : dbValue || 0;
-
-      // Standard Content (screws, nuts...) and parts marked standard here: bought,
-      // so no engineer, files or Onshape link. Vendor parts are always marked.
-      const vendor = dbPart?.vendor || parsedItem.vendor || "";
-      const markedStandard = !parsedItem.itemSource.isStandardContent && (!!dbPart?.markedStandard || vendor !== "");
-      const standard = !!parsedItem.itemSource.isStandardContent || markedStandard;
-
-      // Which files Publish BOM keeps: the saved choice; for parts saved before
-      // choices existed, the files they already have; otherwise from the material.
-      const material = pickText("material", dbPart?.material);
-      const hasSavedChoice = !!dbPart && (typeof dbPart.wantStl === "boolean" || typeof dbPart.wantParasolid === "boolean");
-      const files = standard
-        ? { wantStl: false, wantParasolid: false }
-        : hasSavedChoice
-          ? { wantStl: !!dbPart!.wantStl, wantParasolid: !!dbPart!.wantParasolid }
-          : dbPart
-            ? { wantStl: !!dbPart.stlLink, wantParasolid: !!dbPart.parasolidLink }
-            : fileDefaultsForMaterial(material);
-
-      const savedValues: FieldValues | null = dbPart
-        ? ({
-            name: dbPart.name ?? "",
-            description: dbPart.description ?? "",
-            catalogNumber: dbPart.catalogNumber ?? "",
-            revision: dbPart.revision ?? "",
-            engineer: dbPart.engineer ?? "",
-            material: dbPart.material ?? "",
-            price: dbPart.price ?? 0,
-            comments: dbPart.comments ?? "",
-            wantStl: files.wantStl,
-            wantParasolid: files.wantParasolid,
-            markedStandard,
-          } as unknown as FieldValues)
-        : null;
-
-      return fillCatalogNumberFromName(withChangeTracking({
-        id: rowId,
-        parentId: parentRowId,
-        isExpanded: false,
-        source: isPublished ? "db" : "onshape-only",
-        isAssembly: false,
-        // Always Onshape's current image; the saved one is replaced on Publish BOM.
-        avatar: getOnshapeThumbnailSrc(key, partID, parsedItem.itemSource),
-        name: parsedItem.name || dbPart?.name || partID,
-        catalogNumber: pickText("partNumber", dbPart?.catalogNumber),
-        revision: pickText("revision", dbPart?.revision),
-        description: pickText("description", dbPart?.description),
-        engineer: standard ? STANDARD_PART_ENGINEER : pickText("engineer", dbPart?.engineer),
-        material,
-        mass: pickNumber("mass", dbPart?.mass),
-        // The saved size (checked against the current model after the load).
-        ...(dbPart?.size ? { size: dbPart.size, sizeVersion: dbPart.filesModelVersion ?? "" } : {}),
-        price: pickNumber("price", dbPart?.price),
-        quantity: parsedItem.quantity || 1,
-        comments: pickText("comments", dbPart?.comments),
-        saved: {
-          avatarID: dbPart?.avatarID || undefined,
-          stlLink: dbPart?.stlLink || undefined,
-          parasolidLink: dbPart?.parasolidLink || undefined,
-          filesModelVersion: dbPart?.filesModelVersion || undefined,
-        },
-        dbUpdatedAt: stampOf(dbPart?.updatedAt),
-        wantStl: files.wantStl,
-        wantParasolid: files.wantParasolid,
-        documentID: key.documentID,
-        wvmType: key.wvmType,
-        wvmID: key.wvmID,
-        elementID: key.elementID,
-        entityID: partID,
-        onshapeURL: standard ? "" : dbPart?.onshapeURL || onshapeUrl,
-        exportSTL: standard ? "" : dbPart?.stlLink || "",
-        exportParasolid: standard ? "" : dbPart?.parasolidLink || "",
-        vendor,
-        configuration: parsedItem.itemSource.configuration || "",
-        isStandardContent: !!parsedItem.itemSource.isStandardContent,
-        markedStandard,
-      }, savedValues));
-    },
-    [context.server]
-  );
-
-  /**
-   * Adds the rows under `node` (its parts and sub-assemblies, all the way down)
-   * to `ctx.out`, in Onshape's order. A sub-assembly used in several places
-   * gets a row under each parent (so each parent's saved BOM lists it), but its
-   * contents are listed once: rows share the sub-assembly's id, and the table
-   * shows those contents under every row with that id. `ancestors` (the
-   * sub-assemblies above `node`) stops an assembly that contains itself. One
-   * marked as a standard part is one bought item, so its insides aren't loaded.
-   */
-  const expandTree = useCallback(
-    // Named so it can call itself (a sub-assembly's insides).
-    async function expand(node: ResolvedNode, isRoot: boolean, ctx: ExpandContext, ancestors: ReadonlySet<string>): Promise<void> {
-      const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
-      const childParentId = isRoot ? null : node.row.id;
-
-      for (const item of parsedItems) {
-        ctx.onItem?.(item.name);
-        if (item.isSubassembly) {
-          const subKey = itemKey(item);
-          const subKeyId = assemblyKeyId(subKey);
-          if (ancestors.has(subKeyId)) continue; // contains itself
-
-          // Another use of an already-loaded sub-assembly is served from the per-load cache.
-          const { node: subNode } = await resolveBomNode(subKey, childParentId, ctx.rootBomDB, item, ctx.src);
-          ctx.out.push(subNode.row);
-          if (ctx.visited.has(subKeyId)) continue; // its contents are already listed
-          ctx.visited.add(subKeyId);
-          if (!subNode.row.markedStandard) await expand(subNode, false, ctx, new Set([...ancestors, subKeyId]));
-        } else {
-          ctx.out.push(await resolvePartRow(item, childParentId, ctx.src));
-        }
-      }
-    },
-    [resolveBomNode, resolvePartRow]
-  );
-
-  /**
-   * Loads the insides of one sub-assembly row (after its standard-part mark is
-   * removed: they weren't loaded while it was marked). Rows already in the tree
-   * aren't added again.
-   */
-  const loadSubtree = useCallback(
-    async (row: AssemblyBomRow, existing: AssemblyBomRow[]): Promise<AssemblyBomRow[]> => {
-      // Closing the panel stops the requests not started yet (LOAD_CANCELLED).
-      const limit = createLimiter(REFRESH_CONCURRENCY, () => !mountedRef.current);
-      const src = createCachedSources(limit);
-      const key = keyOf(row);
-      const onshapeBom = await src.onshapeBom(key);
-      // Sub-assemblies whose contents the tree already lists (not marked standard).
-      const visited = new Set(
-        existing.filter((r) => r.isAssembly && !r.markedStandard).map((r) => assemblyKeyId(r))
-      );
-      visited.add(assemblyKeyId(key));
-      // This row and the assemblies above it (by parentId), for the cycle guard.
-      const byId = new Map(existing.map((r) => [r.id, r]));
-      const ancestors = new Set<string>();
-      for (let r: AssemblyBomRow | undefined = row; r && !ancestors.has(assemblyKeyId(r)); r = r.parentId ? byId.get(r.parentId) : undefined) {
-        ancestors.add(assemblyKeyId(r));
-      }
-      ancestors.add(assemblyKeyId(rootKey ?? key));
-      const out: AssemblyBomRow[] = [];
-      await expandTree(
-        { row, key, bomID: row.entityID, onshapeBom },
-        false,
-        { src, rootBomDB: currentTreeRef.current.rootBomDB, visited, out },
-        ancestors
-      );
-      return out;
-    },
-    [expandTree, rootKey]
-  );
-
   /**
    * Loads the assembly tree from Onshape + the database and returns it (null
    * on failure). With `preferCache`, a saved copy is shown instead when there
@@ -561,7 +244,7 @@ export default function AssemblyBomPage() {
     const allRows: AssemblyBomRow[] = [];
 
     try {
-      const { node: rootNode, dbBom } = await resolveBomNode(rootKey, null, 'root', undefined, src);
+      const { node: rootNode, dbBom } = await resolveBomNode(context.server, rootKey, null, 'root', undefined, src);
       if (stale()) throw LOAD_CANCELLED;
       if (rootNode.onshapeBom) void prefetchTree(rootNode.onshapeBom, src);
       setTelemetryAssembly(assemblyNameOf(rootNode.onshapeBom) || dbBom?.name || "", rootKey.documentID, rootKey.elementID);
@@ -573,6 +256,7 @@ export default function AssemblyBomPage() {
       setLoadProgress({ done: 0, total, current: "" });
 
       await expandTree(rootNode, true, {
+        server: context.server,
         src,
         rootBomDB: dbBom,
         visited: visitedBomIds,
@@ -615,7 +299,7 @@ export default function AssemblyBomPage() {
       if (!stale()) setLoading(false);
     }
     });
-  }, [rootKey, resolveBomNode, expandTree]);
+  }, [rootKey, context.server]);
 
   // Opening an assembly: show its saved copy if there is one; otherwise load it.
   useEffect(() => {
@@ -813,7 +497,12 @@ export default function AssemblyBomPage() {
       for (const row of unmarkedNow) {
         if (nextRows.some((r) => r.parentId === row.id)) continue;
         setSubtreeLoads((n) => n + 1);
-        void loadSubtree(row, nextRows)
+        void loadSubtree(row, nextRows, {
+          server: context.server,
+          rootKey,
+          rootBomDB: currentTreeRef.current.rootBomDB,
+          isCancelled: () => !mountedRef.current,
+        })
           .then((children) => {
             if (!mountedRef.current) return; // panel closed: don't touch the saved copy
             const current = currentTreeRef.current.rows;
@@ -831,7 +520,7 @@ export default function AssemblyBomPage() {
           .finally(() => setSubtreeLoads((n) => n - 1));
       }
     },
-    [rows, client, loading, publishing, subtreeLoads, saveRows, loadSubtree]
+    [rows, client, loading, publishing, subtreeLoads, saveRows, context.server, rootKey]
   );
 
   /**

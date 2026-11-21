@@ -43,3 +43,9 @@ export const recordId = (k: KeyFields, entityID: string): string => `${assemblyK
 export function bomIdOf(bom: Pick<OnshapeBomTable, "id"> | null | undefined, key: Pick<OnshapeKey, "elementID">): string {
   return bom?.id || key.elementID;
 }
+
+/** The Onshape page of a tab, on `server` (enterprise users aren't on cad.onshape.com). */
+export function buildOnshapeElementURL(server: string | null, key: OnshapeKey): string {
+  const base = server || "https://cad.onshape.com";
+  return `${base}/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
+}
