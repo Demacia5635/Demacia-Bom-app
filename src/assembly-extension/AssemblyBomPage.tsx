@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Table from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
@@ -623,11 +623,14 @@ export default function AssemblyBomPage() {
   const [loadProgress, setLoadProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   /** When the rows on screen come from the saved copy: when it was saved. */
   const [cachedAt, setCachedAt] = useState<number | null>(null);
-  /** When the tree on screen was loaded from Onshape (kept when edits update the saved copy). */
-  const treeSavedAtRef = useRef<number>(Date.now());
+  /** When the tree on screen was loaded from Onshape (kept when edits update the saved copy). Set by every load. */
+  const treeSavedAtRef = useRef<number>(0);
   /** The tree on screen, for handlePublish when it isn't handed a freshly loaded one. */
   const currentTreeRef = useRef<LoadedTree>({ rows: [], rootBomDB: null, rootOnshapeBom: null });
-  currentTreeRef.current = { rows, rootBomDB, rootOnshapeBom };
+  // Kept in step with the state after every render (handlers read it, not render).
+  useLayoutEffect(() => {
+    currentTreeRef.current = { rows, rootBomDB, rootOnshapeBom };
+  });
 
   const [publishOpen, setPublishOpen] = useState(false);
   /** Progress of a running Publish / Update BOM; null when idle. */
@@ -858,7 +861,8 @@ export default function AssemblyBomPage() {
    * marked as a standard part is one bought item, so its insides aren't loaded.
    */
   const expandTree = useCallback(
-    async (node: ResolvedNode, isRoot: boolean, ctx: ExpandContext, ancestors: ReadonlySet<string>): Promise<void> => {
+    // Named so it can call itself (a sub-assembly's insides).
+    async function expand(node: ResolvedNode, isRoot: boolean, ctx: ExpandContext, ancestors: ReadonlySet<string>): Promise<void> {
       const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
       const childParentId = isRoot ? null : node.row.id;
 
@@ -874,7 +878,7 @@ export default function AssemblyBomPage() {
           ctx.out.push(subNode.row);
           if (ctx.visited.has(subKeyId)) continue; // its contents are already listed
           ctx.visited.add(subKeyId);
-          if (!subNode.row.markedStandard) await expandTree(subNode, false, ctx, new Set([...ancestors, subKeyId]));
+          if (!subNode.row.markedStandard) await expand(subNode, false, ctx, new Set([...ancestors, subKeyId]));
         } else {
           ctx.out.push(await resolvePartRow(item, childParentId, ctx.src));
         }
@@ -1038,6 +1042,8 @@ export default function AssemblyBomPage() {
   // Opening an assembly: show its saved copy if there is one; otherwise load it.
   useEffect(() => {
     if (rootKey) {
+      // Loading is syncing with Onshape and the database: its loading state is set right away.
+      // eslint-disable-next-line react/set-state-in-effect
       loadTree({ preferCache: true });
     }
   }, [rootKey, loadTree]);
@@ -1054,8 +1060,6 @@ export default function AssemblyBomPage() {
   }, [rootOnshapeBom, rootBomDB]);
   const workOrderProblems = useMemo(() => findWorkOrderProblems(rows, topAssembly, onshapeUserName), [rows, topAssembly, onshapeUserName]);
   const topProblem = workOrderProblems.get(TOP_ASSEMBLY_ID)?.get("catalogNumber");
-  const problemsRef = useRef(workOrderProblems);
-  problemsRef.current = workOrderProblems;
   const problemCount = useMemo(
     () => Array.from(workOrderProblems.values()).reduce((n, byField) => n + byField.size, 0),
     [workOrderProblems]
@@ -1067,16 +1071,16 @@ export default function AssemblyBomPage() {
   const [showSize, setShowSize] = useState(() => readToggle("showSize"));
   useEffect(() => writeToggle("showSize", showSize), [showSize]);
 
-  // Problems are read through a ref, so the columns are only rebuilt when the
-  // default engineer or "Show size" changes, not on every edit.
+  // Rebuilt when the problems change (after edits): cheap, the table only
+  // re-reads its column list.
   const columns = useMemo(
     () =>
       buildAssemblyBomColumns(
-        (row, key) => problemsRef.current.get(row.id)?.get(key),
+        (row, key) => workOrderProblems.get(row.id)?.get(key),
         onshapeUserName,
         showSize
       ),
-    [onshapeUserName, showSize]
+    [workOrderProblems, onshapeUserName, showSize]
   );
 
   /** Sub-assemblies whose insides are being loaded after their standard mark was removed. */
@@ -1110,7 +1114,9 @@ export default function AssemblyBomPage() {
   const sizeRequestedRef = useRef(new Set<string>());
   /** A load or publish replaces the rows: sizes arriving then are dropped (and read again after). */
   const sizeBusyRef = useRef(false);
-  sizeBusyRef.current = loading || publishing;
+  useLayoutEffect(() => {
+    sizeBusyRef.current = loading || publishing;
+  });
   /** Bumped when "Show size" is unticked or the panel closes: reads from before are dropped. */
   const sizeRunRef = useRef(0);
   useEffect(() => {
@@ -1864,7 +1870,6 @@ export default function AssemblyBomPage() {
   useEffect(() => {
     if (!publishOpen) return;
     let cancelled = false;
-    setSavedRecords(null);
     getAllRecords().then(
       (records) => !cancelled && setSavedRecords(records),
       () => !cancelled && setSavedRecords("failed")
@@ -2006,6 +2011,7 @@ export default function AssemblyBomPage() {
               className="publish-btn-primary shadow-md"
               onClick={() => {
                 setPublishError(null);
+                setSavedRecords(null); // checked again for this dialog
                 setPublishOpen(true);
               }}
               disabled={loading || publishing || subtreeLoads > 0 || rows.length === 0}
