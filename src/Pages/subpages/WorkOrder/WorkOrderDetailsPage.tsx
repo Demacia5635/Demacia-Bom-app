@@ -20,6 +20,7 @@ import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, toCncG
 import ImageLightbox from "../../../components/ImageLightbox";
 import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
+import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -105,7 +106,6 @@ export default function WorkOrderDetailsPage() {
 
     const rowPartMapRef = useRef<Map<string, string>>(new Map());
     /** Edits waiting to be saved, per row (merged until the save goes out). */
-    const pendingSavesRef = useRef<Map<string, { changes: Record<string, unknown>; timer?: ReturnType<typeof setTimeout> }>>(new Map());
     const [saveError, setSaveError] = useState<string | null>(null);
     // The assembly's name, from the BOM loaded for the rows (work orders don't store it).
     const [bomName, setBomName] = useState<{ workOrderID: string; name: string } | null>(null);
@@ -274,37 +274,27 @@ export default function WorkOrderDetailsPage() {
      * change, but per part and only the fields that changed, so people editing
      * different parts of the same work order don't overwrite each other.
      */
-    // `name` only labels a failure message (so this doesn't depend on `rows` and
-    // stays the same function between edits).
-    const queueSave = useCallback((rowId: string, changes: Record<string, unknown>, name?: string) => {
-        const partID = rowPartMapRef.current.get(rowId);
-        if (!workOrderID || !partID) return;
-
-        const pending = pendingSavesRef.current.get(rowId) ?? { changes: {}, timer: undefined };
-        Object.assign(pending.changes, changes);
-        if (pending.timer) clearTimeout(pending.timer);
-        pending.timer = setTimeout(async () => {
-            pendingSavesRef.current.delete(rowId);
-            try {
-                const saved = await fetchFromApi<{ updatedAt?: string } | null>(
-                    `/db/workOrder/id/${encodeURIComponent(workOrderID)}/part`,
-                    { method: "POST", body: JSON.stringify({ partID, changes: pending.changes }) }
-                );
-                if (saved?.updatedAt) {
-                    setRows((current) => current.map((r) => (r.id === rowId ? { ...r, lastUpadte: formatIsraelTime(saved.updatedAt) } : r)));
-                }
-            } catch (err: any) {
-                console.error("Failed to save work order changes:", err);
-                // Kept for the next edit of this part, so a retry sends them again
-                // (newer edits made meanwhile win).
-                const next = pendingSavesRef.current.get(rowId);
-                if (next) next.changes = { ...pending.changes, ...next.changes };
-                else pendingSavesRef.current.set(rowId, { changes: pending.changes, timer: undefined });
-                setSaveError(`Couldn't save the change to "${name || partID}": ${err?.message || err}`);
+    // Keyed by row; `name` only labels a failure message.
+    const queueRowSave = useDebouncedFieldSave<{ updatedAt?: string } | null>({
+        save: (rowId, changes) =>
+            fetchFromApi<{ updatedAt?: string } | null>(
+                `/db/workOrder/id/${encodeURIComponent(workOrderID!)}/part`,
+                { method: "POST", body: JSON.stringify({ partID: rowPartMapRef.current.get(rowId), changes }) }
+            ),
+        onSaved: (rowId, saved) => {
+            if (saved?.updatedAt) {
+                setRows((current) => current.map((r) => (r.id === rowId ? { ...r, lastUpadte: formatIsraelTime(saved.updatedAt) } : r)));
             }
-        }, 600);
-        pendingSavesRef.current.set(rowId, pending);
-    }, [workOrderID]);
+        },
+        onFailed: (rowId, err: any, name) => {
+            console.error("Failed to save work order changes:", err);
+            setSaveError(`Couldn't save the change to "${name || rowPartMapRef.current.get(rowId)}": ${err?.message || err}`);
+        },
+    });
+    const queueSave = (rowId: string, changes: Record<string, unknown>, name?: string) => {
+        if (!workOrderID || !rowPartMapRef.current.get(rowId)) return;
+        queueRowSave(rowId, changes, name);
+    };
 
 
     /** The rows as the table shows them: groups together, sharing their links. */

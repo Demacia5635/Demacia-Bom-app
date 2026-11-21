@@ -16,6 +16,7 @@ import { readShowSize, writeShowSize } from "../../../util/partSize";
 import ImageLightbox from "../../../components/ImageLightbox";
 import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
+import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -160,11 +161,18 @@ export default function BomDetailsPage() {
   const [showSize, setShowSize] = useState(readShowSize);
   useEffect(() => writeShowSize(showSize), [showSize]);
 
-  // Ref to hold debounced save timeouts per part ID
-  const saveTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  // Fields changed since that part's last save (an edit restarts the timer, so
-  // earlier edits must still go out with the later one).
-  const pendingFieldsRef = useRef<Record<string, Partial<BomTableRow>>>({});
+  // Edits go out shortly after the last change, per part and only the changed
+  // fields: the rest of the record (e.g. a newer publish from the extension) is
+  // left as it is. A failed save is shown, and retried with the part's next edit.
+  const queuePartSave = useDebouncedFieldSave({
+    save: (partId, changes) =>
+      fetchFromApi(`/db/part/id/${encodeURIComponent(partId)}`, { method: "POST", body: JSON.stringify(changes) }),
+    onSaved: (partId) => setSaveErrors(({ [partId]: _done, ...rest }) => rest),
+    onFailed: (partId, err: any, name) => {
+      console.error("Failed to sync grid updates to part database:", err);
+      setSaveErrors((prev) => ({ ...prev, [partId]: `"${name || partId}" wasn't saved: ${err?.message || err}` }));
+    },
+  });
   // Edits made on this page, per part: laid over the loaded tree when a view
   // builds its rows, so switching views shows them (the tree itself is state
   // and isn't changed in place).
@@ -236,38 +244,7 @@ export default function BomDetailsPage() {
         // Kept in the loaded tree too, so switching views shows the edit.
         const edits = Object.fromEntries(changed.map((k) => [k, newRow[k]])) as Partial<PartModel>;
         partEditsRef.current.set(partId, { ...partEditsRef.current.get(partId), ...edits });
-        pendingFieldsRef.current[partId] = {
-          ...pendingFieldsRef.current[partId],
-          ...Object.fromEntries(changed.map((k) => [k, newRow[k]])),
-        };
-
-        // Clear previous pending timeout for this specific part while typing
-        if (saveTimeoutsRef.current[partId]) {
-          clearTimeout(saveTimeoutsRef.current[partId]);
-        }
-
-        // Set a new timeout to send request 600ms after typing stops
-        saveTimeoutsRef.current[partId] = setTimeout(async () => {
-          // Only the changed fields: the rest of the record (e.g. a newer publish
-          // from the extension) is left as it is.
-          const payload = pendingFieldsRef.current[partId] ?? {};
-          delete pendingFieldsRef.current[partId];
-          try {
-
-            // Same server as every other request (localhost:5050 when run locally);
-            // throws on an HTTP error too, so a failed save is shown.
-            await fetchFromApi(`/db/part/id/${encodeURIComponent(partId)}`, {
-              method: "POST",
-              body: JSON.stringify(payload),
-            });
-            setSaveErrors(({ [partId]: _done, ...rest }) => rest);
-          } catch (err: any) {
-            console.error("Failed to sync grid updates to part database:", err);
-            // Kept for the next edit of this part, so a retry sends them again.
-            pendingFieldsRef.current[partId] = { ...payload, ...pendingFieldsRef.current[partId] };
-            setSaveErrors((prev) => ({ ...prev, [partId]: `"${newRow.name || partId}" wasn't saved: ${err?.message || err}` }));
-          }
-        }, 600);
+        queuePartSave(partId, edits, newRow.name);
       }
     }
   };
