@@ -61,6 +61,13 @@ function sameLocation(a: OnshapeLocation | null, b: OnshapeLocation | null): boo
   );
 }
 
+/** The tab ID in panel.html?tab=<id> (Firefox's per-tab panels), else null. */
+function ownTabParam(): number | null {
+  const tabParam = Number(new URLSearchParams(window.location.search).get("tab"));
+  return Number.isInteger(tabParam) && tabParam > 0 ? tabParam : null;
+}
+const hasOwnTabParam = () => ownTabParam() !== null;
+
 /**
  * The tab this panel document was opened for. Firefox gives each tab its own
  * panel document, panel.html?tab=<id> (background.firefox.ts). Otherwise
@@ -68,8 +75,8 @@ function sameLocation(a: OnshapeLocation | null, b: OnshapeLocation | null): boo
  * panel loads.
  */
 export function getOwnTab(): Promise<chrome.tabs.Tab | undefined> {
-  const tabParam = Number(new URLSearchParams(window.location.search).get("tab"));
-  return Number.isInteger(tabParam) && tabParam > 0
+  const tabParam = ownTabParam();
+  return tabParam !== null
     ? chrome.tabs.get(tabParam).catch(() => undefined)
     : chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => tab);
 }
@@ -105,6 +112,8 @@ const PANEL_PORT_PREFIX = "demacia-bom:panel:";
  * and then follows only that tab's own navigation (Onshape changes the URL
  * when you switch element tabs). Switching to other tabs doesn't change it:
  * Chrome hides this panel there and shows it again, as it was, on return.
+ * The exception is Firefox's default sidebar (no ?tab=), which follows the
+ * active tab of its window.
  * `location` keeps the same object identity while the Onshape location is
  * unchanged, so it's safe to use as an effect dependency.
  *
@@ -131,15 +140,30 @@ export function useOwnOnshapeTab(): ActiveTabState {
       if (tabId === ownTabId && (info.url || info.status === "complete")) apply(tab);
     };
 
+    // Firefox's default sidebar (opened without ?tab=, e.g. from the sidebar
+    // menu) is one document for the whole window, shown on every tab that has
+    // no panel of its own: it follows whichever tab is active in its window.
+    const followsActiveTab = !hasOwnTabParam() && !("sidePanel" in chrome);
+    const onActivated = (info: { tabId: number; windowId: number }) => {
+      void getOwnTab().then((tab) => {
+        // Only a tab switch in this panel's own window.
+        if (cancelled || tab?.id !== info.tabId) return;
+        ownTabId = tab.id;
+        apply(tab);
+      });
+    };
+
     void getOwnTab().then((tab) => {
       if (cancelled) return;
       ownTabId = tab?.id ?? null;
       apply(tab);
     });
     chrome.tabs.onUpdated.addListener(onUpdated);
+    if (followsActiveTab) chrome.tabs.onActivated.addListener(onActivated);
     return () => {
       cancelled = true;
       chrome.tabs.onUpdated.removeListener(onUpdated);
+      if (followsActiveTab) chrome.tabs.onActivated.removeListener(onActivated);
     };
   }, []);
 
