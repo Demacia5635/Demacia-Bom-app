@@ -168,11 +168,8 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
         ro.observe(wrapper);
         return () => ro.disconnect();
     }, [wrapperRef]);
-    // On a narrow table (a phone) the frozen columns share at most half its
-    // width, so the other half is left for the columns that scroll (QW25).
-    const narrowFrozenWidth = frozenColumns > 0 && wrapperWidth > 0 && wrapperWidth < 640
-        ? Math.max(64, Math.floor(wrapperWidth / 2 / frozenColumns))
-        : null;
+    // A narrow table (a phone, the side panel): frozen columns are capped (colWidth).
+    const isNarrow = frozenColumns > 0 && wrapperWidth > 0 && wrapperWidth < 640;
 
     // Remember the layout as it changes (only with a storageKey).
     useEffect(() => {
@@ -247,11 +244,32 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     };
 
 
-    /** Width of the column at `idx` (the last one stretches to fill the table). */
-    const colWidth = (col: ColumnConfig, idx: number): number => {
+    /** The column's width as set, or its default (the last one stretches to fill the table). */
+    const baseColWidth = (col: ColumnConfig, idx: number): number => {
         const isLast = idx === columns.length - 1;
-        const width = columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
-        return narrowFrozenWidth !== null && idx < frozenColumns && !isLast ? Math.min(width, narrowFrozenWidth) : width;
+        return columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
+    };
+
+    // On a narrow table the frozen columns share at most half its width, so the
+    // other half is left for the columns that scroll (QW25). Narrowest first: a
+    // column under its share keeps its width and leaves the rest to the others.
+    const frozenCaps = new Map<string, number>();
+    if (isNarrow) {
+        const frozen = columns
+            .slice(0, Math.min(frozenColumns, columns.length - 1))
+            .map((col, idx) => ({ key: col.key, width: baseColWidth(col, idx) }))
+            .sort((a, b) => a.width - b.width);
+        let budget = Math.floor(wrapperWidth / 2);
+        frozen.forEach((col, i) => {
+            const width = Math.max(48, Math.min(col.width, Math.floor(budget / (frozen.length - i))));
+            frozenCaps.set(col.key, width);
+            budget -= width;
+        });
+    }
+
+    /** Width of the column at `idx`: as set, capped when frozen on a narrow table. */
+    const colWidth = (col: ColumnConfig, idx: number): number => {
+        return frozenCaps.get(col.key) ?? baseColWidth(col, idx);
     };
 
     // Frozen columns stick to the left; each one's offset is the width of those before it.
