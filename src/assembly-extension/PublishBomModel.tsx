@@ -168,7 +168,7 @@ export default function PublishBomModal({
             <input
               value={defaultEngineer}
               onChange={(e) => setDefaultEngineer(e.target.value)}
-              placeholder="Applied to any item without one set"
+              placeholder="For new items without one; saved items keep theirs"
               disabled={submitting}
             />
           </label>

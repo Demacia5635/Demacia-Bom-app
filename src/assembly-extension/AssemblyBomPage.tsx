@@ -191,7 +191,7 @@ const TOP_ASSEMBLY_ID = "__top__";
 function findWorkOrderProblems(
   rows: AssemblyBomRow[],
   top: { name: string; number: string },
-  /** Used by Publish BOM for a made part without an engineer ("" if none). */
+  /** Used by Publish BOM for a made part not in the database yet without an engineer ("" if none). */
   defaultEngineer: string
 ): Map<string, Map<string, string>> {
   const problems = new Map<string, Map<string, string>>();
@@ -236,8 +236,15 @@ function findWorkOrderProblems(
     seen.add(part.id);
     if (!String(part.material ?? "").trim()) add(part.id, "material", "Work orders need a material for made parts.");
     const engineer = String(part.engineer ?? "").trim();
-    if ((!engineer || engineer === STANDARD_PART_ENGINEER) && !defaultEngineer) {
-      add(part.id, "engineer", "Work orders need an engineer for made parts (or fill Default engineer when publishing).");
+    // Only a part not in the database yet gets the default engineer on Publish.
+    if ((!engineer || engineer === STANDARD_PART_ENGINEER) && (part.source === "db" || !defaultEngineer)) {
+      add(
+        part.id,
+        "engineer",
+        part.source === "db"
+          ? "Work orders need an engineer for made parts."
+          : "Work orders need an engineer for made parts (or fill Default engineer when publishing)."
+      );
     }
   }
   return problems;
@@ -594,18 +601,17 @@ export default function AssemblyBomPage() {
 
   const [rows, setRows] = useState<AssemblyBomRow[]>([]);
   /**
-   * The signed-in Onshape user: the default engineer. Empty engineer cells show
-   * it greyed, Publish BOM writes it for items without one, and an empty
-   * engineer isn't a problem while it's known. Not put into the rows, so it
-   * isn't counted as an unpublished change.
+   * The signed-in Onshape user: the default engineer for items not in the
+   * database yet. Their empty engineer cells show it greyed, Publish BOM writes
+   * it (the dialog's Default engineer) for them, and their empty engineer isn't
+   * a problem while it's known. Items already saved keep the saved engineer,
+   * even an empty one. Not put into the rows, so it isn't counted as an
+   * unpublished change.
    */
   const [onshapeUserName, setOnshapeUserName] = useState("");
-  /** For handlePublish, which reads the tree through refs too. */
-  const onshapeUserNameRef = useRef("");
   useEffect(() => {
     let cancelled = false;
     getOnshapeUserName().then((name) => {
-      onshapeUserNameRef.current = name;
       if (!cancelled) setOnshapeUserName(name);
     });
     return () => {
@@ -1513,12 +1519,14 @@ export default function AssemblyBomPage() {
 
           // 2. The full record, with fresh files.
           // ("Standard Part" left over from a standard mark that was removed counts as none.)
+          // The default engineer is only for items not in the database yet; a saved
+          // item keeps its engineer. An emptied Default engineer means none.
           const ownEngineer = row.engineer === STANDARD_PART_ENGINEER ? "" : row.engineer;
           const engineer = isStandardRow(row)
             ? STANDARD_PART_ENGINEER
             : row.vendor !== ""
               ? row.vendor
-              : ownEngineer || values.defaultEngineer || onshapeUserNameRef.current;
+              : ownEngineer || (row.source === "db" ? "" : values.defaultEngineer);
           const toDelete: string[] = [];
           if (row.isAssembly && row.markedStandard) {
             // A sub-assembly marked standard (a motor...): one bought item. Its
@@ -1814,7 +1822,8 @@ export default function AssemblyBomPage() {
           description: values.description,
           comments: values.comments,
           catalogNumber: values.catalogNumber,
-          engineer: rootBomDB?.engineer || values.defaultEngineer || onshapeUserNameRef.current,
+          // Saved: keep its engineer. New: the dialog's Default engineer.
+          engineer: rootBomDB ? rootBomDB.engineer ?? "" : values.defaultEngineer,
           parts: rootLinks.parts,
           subAssemblies: rootLinks.subAssemblies,
           avatarID: replaceFile(rootBomDB?.avatarID, rootAvatar, rootToDelete),

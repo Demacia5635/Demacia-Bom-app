@@ -16,8 +16,8 @@ export type CellProblem = (row: AssemblyBomRow, key: string) => string | undefin
  * until Publish BOM. NOTE: for `type: 'button'` columns, Table.tsx enables the
  * button from the truthiness of `row[col.key]` itself.
  * `cellProblem` marks values that would stop a work order (read on every render).
- * `defaultEngineer` is shown greyed in an empty engineer cell: what Publish BOM
- * writes there.
+ * `defaultEngineer` is shown greyed in the empty engineer cell of an item not
+ * in the database yet: what Publish BOM writes there.
  * `showSize` adds the read-only Size column (bounding box) after Name.
  */
 export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defaultEngineer = "", showSize = false): ColumnConfig[] {
@@ -41,7 +41,9 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
     editable("revision", "Revision", "string"),
     {
       ...editable("engineer", "Engineer", "string"),
-      placeholder: (row: AssemblyBomRow) => (isStandardContent(row) ? undefined : defaultEngineer || undefined),
+      // Only items not in the database yet get the default engineer on Publish.
+      placeholder: (row: AssemblyBomRow) =>
+        isStandardContent(row) || row.source === "db" ? undefined : defaultEngineer || undefined,
     },
     // Must stay read-only: Table writes an edit to every row with the same id,
     // and rows of an item used in several places share an id but each has its
