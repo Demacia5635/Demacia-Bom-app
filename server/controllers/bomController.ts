@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
 import Part from '../models/Part';
-import { cleanUpdateBody, upsertByID } from './upsert';
+import { cleanUpdateBody, updatedByOf, upsertByID } from './upsert';
 import { makeGetByIds } from './getByIds';
 import { makeListAll } from './listAll';
 
@@ -140,7 +140,7 @@ export async function upsertBomByID(
         const id = req.params.id;
         // Plain fields only, under $set: the body used to be passed as the
         // update itself, so {"$unset": ...} or {"$rename": ...} ran as operators.
-        const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...cleanUpdateBody(req.body), id: id } });
+        const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...cleanUpdateBody(req.body), ...updatedByOf(req), id: id } });
 
         return res.status(created ? 201 : 200).json(bom);
     } catch (err) {

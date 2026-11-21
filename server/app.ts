@@ -68,7 +68,7 @@ app.use(cors({
         }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"],
+    allowedHeaders: ["Content-Type", "x-client-secret", "Authorization", "X-Updated-By"],
     // Lets the website and extension read it, e.g. to show it with an error.
     exposedHeaders: ["X-Request-Id"],
     // Browsers may reuse a preflight answer for 2 hours (Chrome's maximum)

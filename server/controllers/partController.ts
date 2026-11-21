@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
-import { cleanUpdateBody, upsertByID } from "./upsert";
+import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
 import { makeGetByIds } from "./getByIds";
 import { makeListAll } from "./listAll";
 
@@ -79,7 +79,7 @@ export async function upsertPartByID(
       delete updateData.name;
     }
 
-    const { doc: part, created } = await upsertByID(Part, id, { $set: updateData });
+    const { doc: part, created } = await upsertByID(Part, id, { $set: { ...updateData, ...updatedByOf(req) } });
 
     return res.status(created ? 201 : 200).json(part);
   } catch (err) {

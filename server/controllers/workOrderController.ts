@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
-import { cleanUpdateBody, upsertByID } from "./upsert";
+import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
 import { makeListAll } from "./listAll";
 
 interface SubPartBody {
@@ -85,7 +85,7 @@ export async function upsertWorkOrderByID(
     // cncGroups are written only by POST /id/:id/cncGroup, so a save sent with
     // an older copy can't undo someone's merge.
     const { parts, cncGroups: _ignored, ...fields } = cleanUpdateBody(req.body);
-    const update: Record<string, unknown> = { $set: { ...fields, id: id } };
+    const update: Record<string, unknown> = { $set: { ...fields, ...updatedByOf(req), id: id } };
     if (parts !== undefined) update.$setOnInsert = { parts: uniqueParts(parts) };
 
     const { doc: workOrder, created } = await upsertByID(WorkOrder, id, update);
@@ -135,10 +135,11 @@ export async function updateWorkOrderPart(
     if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No editable fields in changes", fields: ["changes"] });
 
     const now = new Date();
-    const set = Object.fromEntries(Object.entries(changes).map(([k, v]) => [`parts.$.${k}`, v]));
+    const by = updatedByOf(req);
+    const set = Object.fromEntries(Object.entries({ ...changes, ...by }).map(([k, v]) => [`parts.$.${k}`, v]));
     let result = await WorkOrder.findOneAndUpdate(
       { id, "parts.partID": partID },
-      { $set: { ...set, "parts.$.updatedAt": now } },
+      { $set: { ...set, ...by, "parts.$.updatedAt": now } },
       { returnDocument: "after", runValidators: true },
     );
 
@@ -146,7 +147,7 @@ export async function updateWorkOrderPart(
       // The part isn't in the work order yet (or the work order doesn't exist).
       result = await WorkOrder.findOneAndUpdate(
         { id, "parts.partID": { $ne: partID } },
-        { $push: { parts: { partID, ...changes, createdAt: now, updatedAt: now } } },
+        { $push: { parts: { partID, ...changes, ...by, createdAt: now, updatedAt: now } }, $set: by },
         { returnDocument: "after", runValidators: true },
       );
       if (!result) {
@@ -224,6 +225,7 @@ export async function updateCncGroup(
       return res.status(400).json({ message: "A new group needs at least 2 parts", fields: ["partIDs"] });
     const links = body.links as string | undefined;
     const now = new Date();
+    const { updatedBy } = updatedByOf(req);
 
     // $literal: IDs and links are values, never field paths or operators.
     const groups = { $ifNull: ["$cncGroups", []] };
@@ -266,6 +268,8 @@ export async function updateCncGroup(
       {
         $set: {
           ...(partIDs.length > 0 ? addParts : {}),
+          ...(updatedBy ? { updatedBy: { $literal: updatedBy } } : {}),
+          updatedAt: now,
           cncGroups: {
             $filter: {
               input: {
