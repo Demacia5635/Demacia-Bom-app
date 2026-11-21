@@ -1,4 +1,5 @@
 import { goToProblemCell } from "./problemNavigation";
+import { SEARCH_INPUT_ID, SHORTCUTS } from "./shortcuts";
 
 /**
  * The row of controls above the BOM table: search, the work-order problems
@@ -55,8 +56,10 @@ export default function BomToolbar({
           onKeyDown={(e) => {
             if (e.key === "Escape") setSearch("");
           }}
+          id={SEARCH_INPUT_ID}
           placeholder="Search name, catalog #, description..."
           aria-label="Search the BOM"
+          title={`Search the BOM (${SHORTCUTS.search}); Esc clears it`}
         />
       </div>
       {problemCount > 0 ? (

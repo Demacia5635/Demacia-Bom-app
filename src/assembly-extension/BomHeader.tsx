@@ -2,6 +2,7 @@ import type { usePanelThemeSetting } from "../extension/panel/theme";
 import { openExternal } from "../util/openExternal";
 import { describeAge } from "./treeCache";
 import { useNow } from "./useNow";
+import { SHORTCUTS } from "./shortcuts";
 import ServerStatusDot from "./ServerStatusDot";
 import type { ServerStatus } from "./useServerStatus";
 
@@ -27,6 +28,7 @@ export default function BomHeader({
   pendingEditCount,
   onRefresh,
   onPublish,
+  onShowShortcuts,
 }: {
   displayName: string;
   description: string | undefined;
@@ -49,6 +51,7 @@ export default function BomHeader({
   pendingEditCount: number;
   onRefresh: () => void;
   onPublish: () => void;
+  onShowShortcuts: () => void;
 }) {
   const now = useNow(30_000);
   return (
@@ -94,6 +97,15 @@ export default function BomHeader({
       </div>
 
       <div className="flex items-center gap-4">
+        <button
+          type="button"
+          onClick={onShowShortcuts}
+          aria-label="Keyboard shortcuts"
+          title={`Keyboard shortcuts (${SHORTCUTS.help})`}
+          className="p-1.5 rounded-md text-sm text-zinc-400 hover:text-zinc-100"
+        >
+          ?
+        </button>
         {theme && (
           // Same as the website's switch (components/Appbar.tsx).
           <button
@@ -113,7 +125,7 @@ export default function BomHeader({
           className="publish-btn-primary shadow-md"
           onClick={onRefresh}
           disabled={busy}
-          title="Reload everything from Onshape (the database only for fields Onshape doesn't have). Saves nothing; discards edits not published yet."
+          title={`Reload everything from Onshape (the database only for fields Onshape doesn't have). Saves nothing; discards edits not published yet. (${SHORTCUTS.refresh})`}
         >
           {loading ? "Refreshing..." : "Refresh BOM"}
         </button>
@@ -123,7 +135,7 @@ export default function BomHeader({
           className="publish-btn-primary shadow-md"
           onClick={onPublish}
           disabled={busy || !hasRows}
-          title="Save everything shown to the database, replacing the saved data and files, and write edited cells to Onshape"
+          title={`Save everything shown to the database, replacing the saved data and files, and write edited cells to Onshape (${SHORTCUTS.publish})`}
         >
           {publishing ? "Publishing..." : pendingEditCount > 0 ? `Publish BOM (${pendingEditCount} changes)` : "Publish BOM"}
         </button>

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ProgressBar from "./ProgressBar";
 import { timeLeftSuffix } from "./publishTree";
@@ -98,12 +98,25 @@ export default function PublishBomModal({
   const [acknowledged, setAcknowledged] = useState(false);
   const isUpdate = mode === "update";
 
+  const formRef = useRef<HTMLFormElement>(null);
+
   if (!open) return null;
 
   const needsAck = checks.some((c) => c.kind !== "note");
   const combines = checks.some((c) => c.kind === "combine");
   const canSubmit =
     !blockedReason && name.trim().length > 0 && catalogNumber.trim().length > 0 && (!needsAck || acknowledged);
+
+  /** Esc closes the dialog (not while publishing); Ctrl+Enter publishes. */
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && !submitting) {
+      e.preventDefault();
+      onCancel();
+    } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      formRef.current?.requestSubmit();
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +126,7 @@ export default function PublishBomModal({
 
   return createPortal(
     <div className="publish-modal-overlay" onClick={submitting ? undefined : onCancel}>
-      <div className="publish-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="publish-modal" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown}>
         <div className="publish-modal-header">
           <h2>Publish BOM</h2>
           <p>
@@ -123,7 +136,7 @@ export default function PublishBomModal({
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="publish-modal-form">
+        <form ref={formRef} onSubmit={handleSubmit} className="publish-modal-form">
           <label className="publish-field">
             <span>Name</span>
             <input
@@ -258,10 +271,10 @@ export default function PublishBomModal({
           )}
 
           <div className="publish-modal-actions">
-            <button type="button" className="publish-btn-secondary" onClick={onCancel} disabled={submitting}>
+            <button type="button" className="publish-btn-secondary" onClick={onCancel} disabled={submitting} title="Close (Esc)">
               Cancel
             </button>
-            <button type="submit" className="publish-btn-primary" disabled={!canSubmit || submitting}>
+            <button type="submit" className="publish-btn-primary" disabled={!canSubmit || submitting} title="Publish (Ctrl+Enter)">
               {submitting ? "Publishing..." : combines ? "Combine and publish" : "Publish"}
             </button>
           </div>

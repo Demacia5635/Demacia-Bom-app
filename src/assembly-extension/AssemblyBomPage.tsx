@@ -51,6 +51,8 @@ import BomToolbar from "./BomToolbar";
 import BomHeader from "./BomHeader";
 import { bomPageUrl } from "./websiteLinks";
 import { useServerStatus } from "./useServerStatus";
+import ShortcutsHelp from "./ShortcutsHelp";
+import { isTyping, SEARCH_INPUT_ID } from "./shortcuts";
 import {
   catalogNumberInName,
   changedFields,
@@ -981,6 +983,43 @@ export default function AssemblyBomPage() {
   }, [loadTree]);
   const cancelDiscard = useCallback(() => setDiscardEdits(null), []);
 
+  const busy = loading || publishing || subtreeLoads > 0;
+  /** Opens the Publish dialog (the header button and Ctrl+Enter). */
+  const openPublish = useCallback(() => {
+    checkServer(); // shown in the header while the dialog is open
+    setPublishError(null);
+    setSavedRecords(null); // checked again for this dialog
+    setPublishOpen(true);
+  }, [checkServer]);
+
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const closeShortcuts = useCallback(() => setShowShortcuts(false), []);
+  /** Keyboard shortcuts (shortcuts.ts). Dialogs handle their own keys while open. */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (publishOpen || discardEdits || showShortcuts) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && !e.altKey && e.key.toLowerCase() === "f") {
+        const search = document.getElementById(SEARCH_INPUT_ID) as HTMLInputElement | null;
+        if (!search) return;
+        e.preventDefault();
+        search.focus();
+        search.select();
+      } else if (e.altKey && !ctrl && (e.code === "KeyR" || e.key.toLowerCase() === "r")) {
+        e.preventDefault();
+        if (!busy) handleRefresh();
+      } else if (ctrl && e.key === "Enter") {
+        e.preventDefault();
+        if (!busy && rows.length > 0) openPublish();
+      } else if (e.key === "?" && !ctrl && !e.altKey && !isTyping(e.target)) {
+        e.preventDefault();
+        setShowShortcuts(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [publishOpen, discardEdits, showShortcuts, busy, rows.length, handleRefresh, openPublish]);
+
   if (!rootKey) {
     return (
       <div className="p-8 text-center text-zinc-400">
@@ -1007,19 +1046,16 @@ export default function AssemblyBomPage() {
           topProblem={topProblem}
           topNumber={topAssembly.number}
           theme={theme}
-          busy={loading || publishing || subtreeLoads > 0}
+          busy={busy}
           loading={loading}
           publishing={publishing}
           hasRows={rows.length > 0}
           pendingEditCount={pendingEditCount}
           onRefresh={handleRefresh}
-          onPublish={() => {
-            checkServer(); // shown in the header while the dialog is open
-            setPublishError(null);
-            setSavedRecords(null); // checked again for this dialog
-            setPublishOpen(true);
-          }}
+          onPublish={openPublish}
+          onShowShortcuts={() => setShowShortcuts(true)}
         />
+        {showShortcuts && <ShortcutsHelp onClose={closeShortcuts} />}
 
         {error && (
           <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
