@@ -39,7 +39,22 @@ export interface PublishPreview {
   filesToDelete: number;
 }
 
+/**
+ * Something the user should know before publishing (catalog numbers shared
+ * in the tree or already used in the database). "combine": Publish will
+ * combine items into one part; "warning": published as it is unless fixed
+ * first; "note": for information only (no confirmation needed).
+ */
+export interface PublishCheck {
+  kind: "combine" | "warning" | "note";
+  text: string;
+}
+
 interface PublishBomModalProps {
+  /** Shown above the buttons; any "combine" or "warning" needs a tick before Publish. */
+  checks?: PublishCheck[];
+  /** Still checking the database: shown as a note; Publish isn't held up by it. */
+  checking?: boolean;
   progress?: PublishProgress | null;
   /** Summary shown above the buttons until the publish starts. */
   preview?: PublishPreview | null;
@@ -62,17 +77,22 @@ export default function PublishBomModal({
   submitting = false,
   progress = null,
   preview = null,
+  checks = [],
+  checking = false,
 }: PublishBomModalProps) {
   const [name, setName] = useState(initialValues.name ?? "");
   const [description, setDescription] = useState(initialValues.description ?? "");
   const [comments, setComments] = useState(initialValues.comments ?? "");
   const [catalogNumber, setCatalogNumber] = useState(initialValues.catalogNumber ?? "");
   const [defaultEngineer, setDefaultEngineer] = useState(initialValues.defaultEngineer ?? "");
+  const [acknowledged, setAcknowledged] = useState(false);
   const isUpdate = mode === "update";
 
   if (!open) return null;
 
-  const canSubmit = name.trim().length > 0 && catalogNumber.trim().length > 0;
+  const needsAck = checks.some((c) => c.kind !== "note");
+  const combines = checks.some((c) => c.kind === "combine");
+  const canSubmit = name.trim().length > 0 && catalogNumber.trim().length > 0 && (!needsAck || acknowledged);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +187,24 @@ export default function PublishBomModal({
             </div>
           )}
 
+          {!submitting && (checking || checks.length > 0) && (
+            <div className="publish-checks" aria-label="Catalog numbers to check before publishing">
+              <div className="publish-checks-title">Catalog numbers</div>
+              <ul>
+                {checks.map((c, i) => (
+                  <li key={i} className={`publish-check publish-check-${c.kind}`}>{c.text}</li>
+                ))}
+                {checking && <li className="publish-check publish-check-note">Checking which catalog numbers are already used in the database...</li>}
+              </ul>
+              {needsAck && (
+                <label className="publish-checks-ack">
+                  <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
+                  {combines ? "Combine these and publish" : "I understand, publish anyway"}
+                </label>
+              )}
+            </div>
+          )}
+
           {submitting && progress && (
             <div className="publish-progress" role="status" aria-live="polite">
               <div className="publish-progress-row">
@@ -200,7 +238,7 @@ export default function PublishBomModal({
               Cancel
             </button>
             <button type="submit" className="publish-btn-primary" disabled={!canSubmit || submitting}>
-              {submitting ? "Publishing..." : "Publish"}
+              {submitting ? "Publishing..." : combines ? "Combine and publish" : "Publish"}
             </button>
           </div>
         </form>

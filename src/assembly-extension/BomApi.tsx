@@ -164,6 +164,13 @@ export function getBomsByIds(ids: string[]): Promise<BomModel[]> {
   return recordsByIds<BomModel>("/db/bom/ids", ids);
 }
 
+/** Every saved part and assembly (Publish BOM's check for catalog numbers already in use; once per publish). */
+export function getAllRecords(): Promise<{ parts: PartModel[]; boms: BomModel[] }> {
+  return Promise.all([fetchJsonFromApi<PartModel[]>("/db/part/all"), fetchJsonFromApi<BomModel[]>("/db/bom/all")]).then(
+    ([parts, boms]) => ({ parts: parts ?? [], boms: boms ?? [] })
+  );
+}
+
 export function getPartsByIds(ids: string[]): Promise<PartModel[]> {
   return recordsByIds<PartModel>("/db/part/ids", ids);
 }

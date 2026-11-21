@@ -40,8 +40,8 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
       label: "Avatar",
       type: "image",
       isDisabled: isStandardContent,
-      // A part modeled several times in one Part Studio, listed as one row.
-      badge: (row: AssemblyBomRow) => (row.copies?.length && !row.copyOf ? `×${row.copies.length} copies` : undefined),
+      // Several items with the same catalog number, combined into one part (copyRows.ts).
+      badge: (row: AssemblyBomRow) => ((row.copies?.length ?? 0) > 1 && !row.copyOf ? `×${row.copies!.length} copies` : undefined),
     },
     editable("name", "Name", "string"),
     // Parts named only by catalog number (spacers...) can be told apart by size.

@@ -23,7 +23,8 @@ import type { OnshapeKey } from "./BomApi";
 // 9: rows carry dbUpdatedAt (Publish BOM's check for newer publishes).
 // 10: vendor parts and sub-assemblies are always marked standard.
 // 11: parts modeled several times in one Part Studio are one row with its copies (copies, copyGroup, keepSeparate).
-const VERSION = 11;
+// 12: parts are combined by catalog number only when the user says so; no copyGroup / keepSeparate.
+const VERSION = 12;
 const PREFIX = "demacia-bom-tree:";
 const INDEX_KEY = "demacia-bom-tree-index";
 const MAX_ENTRIES = 20;

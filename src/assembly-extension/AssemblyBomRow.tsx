@@ -67,28 +67,15 @@ export default interface AssemblyBomRow extends BomTableRow {
    */
   sizeVersion?: string;
   /**
-   * Parts modeled several times in the same Part Studio are one row (quantity
-   * = all copies, see sameParts.ts); these are the other copies' Onshape part
-   * IDs. Publish BOM writes edits to every copy; the record is saved once,
-   * under `entityID`.
-   */
-  copyPartIDs?: string[];
-  /**
-   * The copies a combined row stands for, the shown one included, each as its
-   * own row (own quantity, name, thumbnail). Shown under the combined row
-   * (see copyOf) but never published, counted or checked themselves.
+   * A part combined from several items with the same catalog number (the user
+   * chose "Combine", see copyRows.ts): the copies used under this row's
+   * parent, each as its own row (own Onshape part, quantity, thumbnail). Shown
+   * under the row (see copyOf) when there are several; never published,
+   * counted or checked themselves. Publish BOM writes edits to every copy.
    */
   copies?: AssemblyBomRow[];
   /** Set only on the display rows of `copies` in the table: the combined row's id. */
   copyOf?: string;
-  /** Parts of the same Part Studio with the same shape share this, whatever keepSeparate says (for moving copies between rows). */
-  copyGroup?: string;
-  /**
-   * Marked "not the same part" (a wrong guess by the copy check, e.g. a
-   * mirrored part): combined only with other parts marked so, never with
-   * unmarked ones. An edit, saved on Publish BOM.
-   */
-  keepSeparate?: boolean;
   /** Parts: whether Publish BOM keeps an STL / Parasolid (unticking deletes it on publish). */
   wantStl?: boolean;
   wantParasolid?: boolean;

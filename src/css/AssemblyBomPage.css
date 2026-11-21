@@ -328,3 +328,76 @@ body.light-theme-active .bom-toolbar-btn:hover:not(:disabled) {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* ---- Catalog numbers used by several items (SameNumberNotice) ----------- */
+
+.same-number-notice {
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  background-color: rgba(251, 191, 36, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  color: #fde68a;
+}
+
+.same-number-notice-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.same-number-notice ul {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.same-number-notice li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.same-number-notice li.same-number-conflict {
+  color: #fca5a5;
+}
+
+/* ---- Publish dialog: catalog-number checks ------------------------------ */
+
+.publish-checks {
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+}
+
+.publish-checks-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.publish-checks ul {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.publish-check-combine {
+  color: #fde68a;
+}
+
+.publish-check-warning {
+  color: #fca5a5;
+}
+
+.publish-check-note {
+  color: #a1a1aa;
+}
+
+.publish-checks-ack {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}

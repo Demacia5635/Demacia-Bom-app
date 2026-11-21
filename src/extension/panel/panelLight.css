@@ -87,3 +87,11 @@ body.light-theme-active .publish-btn-secondary {
   color: #3f3f46;
 }
 body.light-theme-active .publish-btn-secondary:hover:not(:disabled) { background: #f4f4f5; }
+
+/* Catalog numbers used by several items (notice above the table, Publish dialog checks). */
+body.light-theme-active .same-number-notice { color: #78350f; background-color: #fffbeb; border-color: #f59e0b; }
+body.light-theme-active .same-number-notice li.same-number-conflict { color: #b91c1c; }
+body.light-theme-active .publish-checks { border-color: #f59e0b; }
+body.light-theme-active .publish-check-combine { color: #92400e; }
+body.light-theme-active .publish-check-warning { color: #b91c1c; }
+body.light-theme-active .publish-check-note { color: #52525b; }

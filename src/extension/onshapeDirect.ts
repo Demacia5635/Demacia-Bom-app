@@ -319,27 +319,6 @@ export function getPartBoundingBox(key: OnshapeElementKey, partID: string, confi
   return onshapeJson<BoundingBox>(`/parts/${seg(key)}/partid/${pid(partID)}/boundingboxes${configQuery(configuration, "?")}`);
 }
 
-/** Mass properties of one part as Onshape returns them: each value is [value, min, max], SI units. */
-export interface PartMassBody {
-  volume?: number[];
-  /** Surface area. */
-  periphery?: number[];
-  /** Moments about the principal axes (only meaningful with a material). */
-  principalInertia?: number[];
-  hasMass?: boolean;
-}
-
-/** Mass properties of every part in a Part Studio, by part ID, in the configuration used in the assembly. */
-export async function getPartStudioMassProperties(
-  key: OnshapeElementKey,
-  configuration?: string
-): Promise<Record<string, PartMassBody>> {
-  const res = await onshapeJson<{ bodies?: Record<string, PartMassBody> }>(
-    `/partstudios/${seg(key)}/massproperties?massAsGroup=false${configQuery(configuration, "&")}`
-  );
-  return res?.bodies ?? {};
-}
-
 /** `?configuration=...` (or "") so exports match the configuration used in the assembly. */
 function configQuery(configuration: string | undefined, sep: "?" | "&"): string {
   return configuration ? `${sep}configuration=${encodeURIComponent(configuration)}` : "";
