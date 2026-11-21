@@ -17,7 +17,8 @@ if (!CLIENT_SECRET) {
     throw new Error("CLIENT_SECRET is not set. Add it to server/.env (or the host's environment variables); the server won't start without it.");
 }
 
-const defaultOrigins = [
+// The local dev servers, allowed only outside production.
+const defaultOrigins = process.env.NODE_ENV === "production" ? [] : [
     "http://localhost:5173",
     "http://localhost:5050",
     "http://127.0.0.1:5173",
