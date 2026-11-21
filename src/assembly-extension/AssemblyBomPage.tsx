@@ -1,18 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Table from "../components/Table";
-import { fetchFromApi, type ApiError } from "../util/ApiService";
+import type { ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import { useOnshapeClient, useOnshapeContext } from "../extension/onshapeHostShim";
 import "../css/AssemblyBomPage.css";
 import {
-  updateOnshapePartMetadata,
   upsertBomById,
-  upsertPartById,
   type OnshapeKey,
-  updateOnshapeBomMetadata,
-  syncPartFilesToDrive,
   syncBomThumbnailToDrive,
-  deleteDriveFile,
   getAllRecords,
   getBomsByIds,
   getPartsByIds
@@ -31,9 +26,10 @@ import PublishBomModal, { type PublishBomFormValues, type PublishCheck, type Pub
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
-import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, keyOf, keyString, recordId } from "./onshapeKeys";
+import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
 import ProgressBar from "./ProgressBar";
+import { deleteReplaced, publishRow, PUBLISH_CONCURRENCY, replaceFile, type PublishRowContext } from "./publishTree";
 import {
   assemblyNameOf,
   expandTree,
@@ -47,7 +43,6 @@ import BomHeader from "./BomHeader";
 import {
   catalogNumberInName,
   changedFields,
-  DATABASE_ONLY_FIELDS,
   EDITABLE_FIELDS,
   editableValues,
   fileRuleForMaterial,
@@ -56,7 +51,6 @@ import {
   isStandardRow,
   retrackRow,
   stampOf,
-  STANDARD_PART_ENGINEER,
 } from "./rowRules";
 import { findWorkOrderProblems, TOP_ASSEMBLY_ID } from "./workOrderProblems";
 import {
@@ -101,14 +95,6 @@ interface LoadedTree {
   rootBomDB: BomModel | null;
   rootOnshapeBom: OnshapeBomTable | null;
 }
-
-/**
- * Items (parts / sub-assemblies) published at once. Each part exports its
- * thumbnail, STL and Parasolid together, so this is up to 3x as many Onshape
- * exports in flight. If Onshape rate-limits, those items are reported as
- * problems and retried by the next Publish BOM.
- */
-const PUBLISH_CONCURRENCY = 5;
 
 export default function AssemblyBomPage() {
   const context = useOnshapeContext();
@@ -662,18 +648,6 @@ export default function AssemblyBomPage() {
         };
       };
 
-      /** New Drive file if one was made, else the saved one; remembers the replaced file. */
-      const replaceFile = (oldId: string | undefined, newId: string | null, toDelete: string[]) => {
-        if (newId && oldId && oldId !== newId) toDelete.push(oldId);
-        return newId || oldId || "";
-      };
-      /** Deletes replaced files once the record pointing at the new ones is saved. */
-      const deleteReplaced = async (ids: string[]) => {
-        for (const id of ids) {
-          if (!(await deleteDriveFile(id))) console.warn(`[publish] could not delete replaced Drive file ${id}`);
-        }
-      };
-
       // The Onshape host this tab is on (enterprise users aren't on cad.onshape.com).
       const onshapeUrlOf = (k: OnshapeKey) => buildOnshapeElementURL(context.server, k);
 
@@ -725,240 +699,15 @@ export default function AssemblyBomPage() {
         // Rows whose edits could not be written to Onshape stay marked.
         const unsavedEdits = new Set<string>();
 
-        /** Publishes one sub-assembly or part (edits to Onshape, files, record). */
-        const publishRow = async (row: AssemblyBomRow, progress: ReturnType<typeof track>) => {
-          const key = keyOf(row);
-
-          // 1. Cells changed from what was loaded from Onshape go to Onshape first.
-          const edited = changedFields(row, row.loaded);
-          if (edited.length > 0 && row.vendor === "") {
-            progress.step("Writing edits to Onshape");
-            const values_ = row as unknown as Record<string, unknown>;
-            try {
-              if (row.isAssembly) {
-                const data: Record<string, unknown> = {};
-                if (edited.includes("name")) data.name = row.name;
-                if (edited.includes("description")) data.description = row.description;
-                if (edited.includes("catalogNumber")) data["part number"] = row.catalogNumber;
-                if (Object.keys(data).length > 0) await updateOnshapeBomMetadata(key, data);
-              } else {
-                // Material (a library reference in Onshape) and the file choices are database-only.
-                const data = Object.fromEntries(edited.filter((k) => !DATABASE_ONLY_FIELDS.has(k)).map((k) => [k, values_[k]]));
-                // A combined part: every copy gets the edits, under every parent it's used in (copyRows.ts).
-                if (Object.keys(data).length > 0) {
-                  const targets = new Map<string, { key: OnshapeKey; partID: string }>();
-                  for (const use of rows) {
-                    if (use.id !== row.id) continue;
-                    for (const m of membersOf(use)) {
-                      const copyKey = keyOf(m);
-                      targets.set(`${keyString(copyKey)}/${m.entityID}`, { key: copyKey, partID: m.entityID });
-                    }
-                  }
-                  for (const t of targets.values()) await updateOnshapePartMetadata(t.key, t.partID, data);
-                }
-              }
-            } catch (err: any) {
-              unsavedEdits.add(row.id);
-              problems.push(`Writing the edits of "${row.name}" to Onshape failed: ${describePublishError(err)}`);
-            }
-          }
-
-          // 2. The full record, with fresh files.
-          // ("Standard Part" left over from a standard mark that was removed counts as none.)
-          // The default engineer is only for items not in the database yet; a saved
-          // item keeps its engineer. An emptied Default engineer means none.
-          const ownEngineer = row.engineer === STANDARD_PART_ENGINEER ? "" : row.engineer;
-          const engineer = isStandardRow(row)
-            ? STANDARD_PART_ENGINEER
-            : row.vendor !== ""
-              ? row.vendor
-              : ownEngineer || (row.source === "db" ? "" : values.defaultEngineer);
-          const toDelete: string[] = [];
-          if (row.isAssembly && row.markedStandard) {
-            // A sub-assembly marked standard (a motor...): one bought item. Its
-            // assembly record keeps the mark (so Refresh BOM doesn't load its
-            // insides); a part record with the same id lists it in its parents'
-            // parts, so the website and work orders show it as one purchased part.
-            const unchanged = !!versions.tree && row.saved?.filesModelVersion === versions.tree && !!row.saved?.avatarID;
-            let avatar: string | null = null;
-            if (!unchanged) {
-              progress.step("Saving thumbnail");
-              avatar = await syncBomThumbnailToDrive(key, row.name);
-              if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
-            }
-            const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
-            const filesModelVersion = !unchanged && !avatar ? "" : versions.tree ?? "";
-            const savedBom = await upsertBomById(row.id, {
-              id: row.id,
-              name: row.name,
-              description: row.description,
-              catalogNumber: row.catalogNumber,
-              comments: row.comments,
-              engineer,
-              onshapeURL: onshapeUrlOf(key),
-              avatarID,
-              filesModelVersion,
-              onshapeID: { ...key, bomID: row.entityID },
-              vendor: row.vendor,
-              markedStandard: true,
-            });
-            progress.step("Saving as a standard part");
-            await upsertPartById(row.id, {
-              id: row.id,
-              name: row.name,
-              description: row.description,
-              catalogNumber: row.catalogNumber,
-              comments: row.comments,
-              engineer,
-              avatarID,
-              stlLink: "",
-              parasolidLink: "",
-              onshapeURL: "",
-              onshapeID: { ...key, partID: row.entityID },
-              vendor: row.vendor,
-              isStandardContent: true,
-              markedStandard: true,
-              wantStl: false,
-              wantParasolid: false,
-              filesModelVersion,
-            });
-            rowUpdates.set(row.id, {
-              engineer,
-              saved: { avatarID, filesModelVersion: filesModelVersion || undefined },
-              dbUpdatedAt: stampOf(savedBom?.updatedAt),
-            });
-          } else if (row.isAssembly) {
-            const links = buildLinkArrays(row.id);
-            // The picture shows parts from across the tree: re-rendered when anything in it changed.
-            const unchanged = !!versions.tree && row.saved?.filesModelVersion === versions.tree && !!row.saved?.avatarID;
-            let avatar: string | null = null;
-            if (!unchanged) {
-              progress.step("Saving thumbnail");
-              avatar = await syncBomThumbnailToDrive(key, row.name);
-              if (!avatar) problems.push(`Thumbnail of "${row.name}"`);
-            }
-            const avatarID = replaceFile(row.saved?.avatarID, avatar, toDelete);
-            const savedBom = await upsertBomById(row.id, {
-              id: row.id,
-              name: row.name,
-              description: row.description,
-              catalogNumber: row.catalogNumber,
-              comments: row.comments,
-              engineer,
-              parts: links.parts,
-              subAssemblies: links.subAssemblies,
-              onshapeURL: onshapeUrlOf(key),
-              avatarID,
-              // A failed render leaves no version, so the next publish tries again.
-              filesModelVersion: !unchanged && !avatar ? "" : versions.tree ?? "",
-              onshapeID: {
-                ...key,
-                bomID: row.entityID,
-              },
-              vendor: row.vendor,
-              markedStandard: false,
-            });
-            // Its standard mark was just removed: the part record it was listed
-            // as isn't used any more (it shares its thumbnail, which stays).
-            if (row.baseline?.markedStandard) {
-              progress.step("Removing its standard-part record");
-              await fetchFromApi(`/db/part/id/${encodeURIComponent(row.id)}`, { method: "DELETE" }).catch((err: any) => {
-                if (err?.statusCode !== 404) problems.push(`Removing the standard-part record of "${row.name}": ${err?.message || err}`);
-              });
-            }
-            rowUpdates.set(row.id, {
-              saved: { avatarID, filesModelVersion: !unchanged && !avatar ? undefined : versions.tree ?? undefined },
-              dbUpdatedAt: stampOf(savedBom?.updatedAt),
-            });
-          } else {
-            // Standard Content (screws, nuts...) and parts marked standard are bought,
-            // not made: no STL / Parasolid / Onshape link. Other parts keep the files
-            // ticked in the STL / Parasolid columns.
-            const standard = isStandardRow(row);
-            const wantStl = !standard && !!row.wantStl;
-            const wantParasolid = !standard && !!row.wantParasolid;
-
-            // Files made from the same model version are kept; only changed models,
-            // missing files and newly ticked ones are exported.
-            const version = partFilesVersion(row, versions);
-            const unchanged = !!version && row.saved?.filesModelVersion === version;
-            const toExport = [
-              ...(!(unchanged && row.saved?.avatarID) ? (["thumbnail"] as const) : []),
-              ...(wantStl && !(unchanged && row.saved?.stlLink) ? (["stl"] as const) : []),
-              ...(wantParasolid && !(unchanged && row.saved?.parasolidLink) ? (["parasolid"] as const) : []),
-            ];
-            let files = { avatarID: null as string | null, stlLink: null as string | null, parasolidLink: null as string | null };
-            let exportFailed = false;
-            if (toExport.length > 0) {
-              progress.step(`Exporting ${toExport.map((k) => (k === "stl" ? "STL" : k === "parasolid" ? "Parasolid" : "thumbnail")).join(", ")}`);
-              const result = await syncPartFilesToDrive(key, row.entityID, row.name, {
-                configuration: row.configuration,
-                only: [...toExport],
-              });
-              problems.push(...result.failures);
-              exportFailed = result.failures.length > 0;
-              files = result;
-            }
-            // Unticked (or Standard Content): the saved file is deleted.
-            if (!wantStl && row.saved?.stlLink) toDelete.push(row.saved.stlLink);
-            if (!wantParasolid && row.saved?.parasolidLink) toDelete.push(row.saved.parasolidLink);
-            const saved = {
-              avatarID: replaceFile(row.saved?.avatarID, files.avatarID, toDelete),
-              stlLink: wantStl ? replaceFile(row.saved?.stlLink, files.stlLink, toDelete) : "",
-              parasolidLink: wantParasolid ? replaceFile(row.saved?.parasolidLink, files.parasolidLink, toDelete) : "",
-              // After a failed export the saved files may be stale: no version, so
-              // the next publish exports again.
-              filesModelVersion: exportFailed ? undefined : version ?? undefined,
-            };
-            // Size for the website. Sent only when known: a failed read never blanks a saved one.
-            // Read from Onshape only when there's no size, or the saved one is from an older model.
-            let size = standard || isSavedSizeStale(row, version) ? "" : row.size || "";
-            if (!standard && !size && needsSize(row)) {
-              progress.step("Reading its size");
-              size = await readPartSize(row).catch(() => "");
-            }
-            progress.step("Saving to the database");
-            const savedPart = await upsertPartById(row.id, {
-              ...(size ? { size } : {}),
-              id: row.id,
-              name: row.name,
-              description: row.description,
-              catalogNumber: row.catalogNumber,
-              revision: row.revision,
-              material: row.material,
-              mass: row.mass,
-              price: row.price,
-              comments: row.comments,
-              engineer,
-              avatarID: saved.avatarID,
-              stlLink: saved.stlLink,
-              parasolidLink: saved.parasolidLink,
-              onshapeURL: standard ? "" : onshapeUrlOf(key),
-              onshapeID: {
-                ...key,
-                partID: row.entityID,
-              },
-              vendor: row.vendor,
-              // Work orders treat these as purchased (no catalog number needed).
-              isStandardContent: standard,
-              markedStandard: !!row.markedStandard,
-              wantStl,
-              wantParasolid,
-              filesModelVersion: saved.filesModelVersion ?? "",
-            });
-            rowUpdates.set(row.id, {
-              saved,
-              dbUpdatedAt: stampOf(savedPart?.updatedAt),
-              exportSTL: saved.stlLink,
-              exportParasolid: saved.parasolidLink,
-              ...(size ? { size, sizeVersion: undefined } : {}),
-              ...(standard ? { onshapeURL: "", engineer } : {}),
-            });
-          }
-
-          // 3. The record now points at the new files; remove the ones it replaced.
-          if (toDelete.length > 0) progress.step("Removing replaced files");
-          await deleteReplaced(toDelete);
+        const publishCtx: PublishRowContext = {
+          rows,
+          versions,
+          defaultEngineer: values.defaultEngineer,
+          onshapeUrlOf,
+          linksOf: buildLinkArrays,
+          problems,
+          unsavedEdits,
+          rowUpdates,
         };
 
         // Children are saved before their parents, so a saved assembly never links
@@ -991,7 +740,7 @@ export default function AssemblyBomPage() {
                     failSave(row, `"${row.name}" not saved: "${blocked[0].name}" inside it wasn't saved`);
                     continue;
                   }
-                  await publishRow(row, progress);
+                  await publishRow(row, progress, publishCtx);
                   published.add(row.id);
                 } catch (err: any) {
                   failSave(row, `"${row.name}" failed while ${lowerFirst(progress.current())}: ${describePublishError(err)}`);
