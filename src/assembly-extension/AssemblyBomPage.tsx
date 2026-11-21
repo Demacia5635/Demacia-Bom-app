@@ -29,7 +29,15 @@ import { describePublishError, lowerFirst } from "./publishErrors";
 import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
 import ProgressBar from "./ProgressBar";
-import { deleteReplaced, publishRow, PUBLISH_CONCURRENCY, replaceFile, type PublishRowContext } from "./publishTree";
+import {
+  deleteReplaced,
+  estimateSecondsLeft,
+  publishRow,
+  PUBLISH_CONCURRENCY,
+  replaceFile,
+  timeLeftSuffix,
+  type PublishRowContext,
+} from "./publishTree";
 import {
   assemblyNameOf,
   expandTree,
@@ -622,13 +630,20 @@ export default function AssemblyBomPage() {
       const total = 1 + rowsToPublish.length;
 
       // Progress: items done, and what each item being worked on is doing.
+      const startedAt = Date.now();
       let done = 0;
       let nextTrackId = 0;
       const active = new Map<number, { name: string; step: string }>();
       // Problems don't stop the publish; they're reported at the end.
       const problems: string[] = [];
       const report = () =>
-        setPublishProgress({ done, total, active: Array.from(active.values()), failed: problems.length });
+        setPublishProgress({
+          done,
+          total,
+          active: Array.from(active.values()),
+          failed: problems.length,
+          secondsLeft: estimateSecondsLeft(startedAt, done, total),
+        });
       const track = (name: string, step: string) => {
         const id = nextTrackId++;
         active.set(id, { name, step });
@@ -1039,6 +1054,7 @@ export default function AssemblyBomPage() {
                 <span className="truncate">
                   Publishing to the database
                   {publishProgress.active.length > 1 ? ` - ${publishProgress.active.length} items at once` : ""}
+                  {timeLeftSuffix(publishProgress.secondsLeft)}
                 </span>
                 <span className="shrink-0">
                   {publishProgress.failed > 0 && (

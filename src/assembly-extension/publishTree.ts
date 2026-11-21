@@ -45,6 +45,22 @@ export async function deleteReplaced(ids: string[]): Promise<void> {
   }
 }
 
+/**
+ * Seconds left in a publish, from the average time per item so far; undefined
+ * until 3 items are done (too early to guess).
+ */
+export function estimateSecondsLeft(startedAt: number, done: number, total: number, now = Date.now()): number | undefined {
+  if (done < 3 || done >= total) return undefined;
+  return Math.round((((now - startedAt) / done) * (total - done)) / 1000);
+}
+
+/** " - about 2 min left" for the progress line ("" when unknown). */
+export function timeLeftSuffix(secondsLeft: number | undefined): string {
+  if (secondsLeft === undefined) return "";
+  if (secondsLeft < 60) return " - less than a minute left";
+  return ` - about ${Math.round(secondsLeft / 60)} min left`;
+}
+
 /** What an item's progress line can say (AssemblyBomPage's publish progress). */
 export interface PublishStep {
   step(next: string): void;

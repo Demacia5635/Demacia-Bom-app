@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import ProgressBar from "./ProgressBar";
+import { timeLeftSuffix } from "./publishTree";
 
 export interface PublishBomFormValues {
   name: string;
@@ -21,6 +22,8 @@ export interface PublishProgress {
   active: { name: string; step: string }[];
   /** Problems so far (files not saved, edits not written to Onshape, items not saved). */
   failed: number;
+  /** Estimated seconds left (from the items done so far); undefined until 3 are done. */
+  secondsLeft?: number;
 }
 
 /** What a publish of the tree on screen will do, shown before it starts. */
@@ -218,7 +221,8 @@ export default function PublishBomModal({
               <div className="publish-progress-row">
                 <span>
                   {progress.done < progress.total
-                    ? `${progress.done} of ${progress.total} done${progress.active.length > 1 ? ` - ${progress.active.length} at once` : ""}`
+                    ? `${progress.done} of ${progress.total} done${progress.active.length > 1 ? ` - ${progress.active.length} at once` : ""}` +
+                      timeLeftSuffix(progress.secondsLeft)
                     : `All ${progress.total} items done`}
                 </span>
                 {progress.failed > 0 && (
