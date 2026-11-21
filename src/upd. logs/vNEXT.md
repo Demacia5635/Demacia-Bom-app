@@ -8,6 +8,11 @@
 - The Parasolid download is now named `<part>.x_t`, the standard extension that CAD programs open (it was `.parasolid`). (`371155d`)
 - **New work orders get the right quantities.** Each part's total used to be its quantity in one parent only: a sub-assembly's own quantity wasn't multiplied in, a sub-assembly used twice was counted once, and a part used in several sub-assemblies got a separate line for each. Now each part gets one line with its full total, the same numbers the work-order page shows. Existing work orders aren't changed. (B2, `2d4e822`)
 - **A sub-assembly bought whole (marked standard, or with a vendor) is one "Purchased" line in a work order.** Its insides aren't listed, and they aren't checked for material or engineer, which used to block creating the work order. This applies on the work-order page too, so **existing work orders show such a sub-assembly as one Purchased line instead of its inner parts** (any progress recorded on those inner parts is no longer shown). (B8, `278ec81`)
+- **A work order follows its assembly's current BOM, and says so:** a grey note under the title reads "Parts and quantities follow the assembly's current BOM: publishing it again updates this work order." New work orders no longer store quantities nobody used, and merging into or removing from a CNC job drops parts that are no longer in the BOM. (B9, `f727d21`)
+- A work order no longer flashes an empty table before it loads, and one without a BOM says so instead of showing nothing. (W5, `9bb667f`)
+- The "Create work order" form can't be closed by clicking outside it while it's creating. (W6, `e9642b7`)
+- If "Show Part Data" can't load a part, you're told, instead of nothing happening. (W7, `afca27b`)
+- An empty BOMs list says "No BOMs published yet" instead of showing a blank table. (W8, `30b9651`)
 - **Clicking a part's picture on a work order opens the image viewer again after the Avatar column has been moved,** and on rows of a merged CNC job. (B5, `22fe2fb`)
 - **A failed save on a work order no longer loses your change.** It's sent again with your next edit of that part, as on the BOM page. The "Couldn't save" banner stays as it was. (B6, `9d827b1`)
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)
@@ -36,6 +41,11 @@
 ## For developers
 
 - `npm run build` (the website) stops with an error when `VITE_CLIENT_URL` isn't set, instead of quietly using the production address. The GitHub Pages deploy already sets it. The extension build is unchanged. (C9, `9961bb6`)
+
+## Decided, not done
+
+- Old work orders made before extension 3.2.0 keep the saved status and links of hidden copies of a part hidden; re-enter them on the combined row (B22, the user's choice).
+- Restricting who can open the statistics page (/tele) waits for the sign-in project.
 
 ## Not tested yet
 
