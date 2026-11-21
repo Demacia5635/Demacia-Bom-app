@@ -1,7 +1,7 @@
 import express, { Request, Response, ErrorRequestHandler, Express, NextFunction } from "express";
 import cors from "cors";
 import apiRoutes from './routes';
-import { checkAuth } from "./controllers/healthController";
+import { checkAuth } from "./auth";
 import morgan from "morgan";
 import { allowedOrigins, isAllowedOrigin } from "./config";
 
