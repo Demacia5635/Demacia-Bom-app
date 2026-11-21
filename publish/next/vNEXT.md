@@ -53,8 +53,8 @@
 
 1. The BOM button and the toolbar icon open and close the panel, also after it has been open for over a minute.
 2. Open an assembly: the saved copy shows, and Publish BOM is blocked with the "saved copy" message.
-3. Refresh BOM: the row count matches the previous version. Edit a cell and press Refresh BOM: the in-panel "Discard unpublished edits?" dialog appears.
-4. Publish BOM with an edit: progress, success, and the row is no longer marked as edited.
+3. Refresh BOM: the row count matches the previous version, and opening a sub-assembly or removing a standard mark still loads its insides. Edit a cell and press Refresh BOM: the in-panel "Discard unpublished edits?" dialog appears.
+4. Publish BOM with an edit: progress, success, and the row is no longer marked as edited. Saved items keep their engineer, new ones get the default. Then try one publish while offline: the error shows inside the dialog.
 5. Tick "Show size", then untick it while sizes are still loading.
 6. The logo on the in-page BOM button looks right.
 7. Firefox only: the BOM button's note to use the toolbar icon, and the sidebar following the active tab.
