@@ -69,13 +69,11 @@ export default interface AssemblyBomRow extends BomTableRow {
   /**
    * A part combined from several items with the same catalog number (the user
    * chose "Combine", see copyRows.ts): the copies used under this row's
-   * parent, each as its own row (own Onshape part, quantity, thumbnail). Shown
-   * under the row (see copyOf) when there are several; never published,
-   * counted or checked themselves. Publish BOM writes edits to every copy.
+   * parent, each as it was loaded (own Onshape part, quantity). Not shown in
+   * the table, published, counted or checked themselves: Publish BOM writes
+   * edits to every copy, and the image shows "×N copies".
    */
   copies?: AssemblyBomRow[];
-  /** Set only on the display rows of `copies` in the table: the combined row's id. */
-  copyOf?: string;
   /** Parts: whether Publish BOM keeps an STL / Parasolid (unticking deletes it on publish). */
   wantStl?: boolean;
   wantParasolid?: boolean;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Table, { type ExpandToggleStyle } from "../components/Table";
+import Table from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import { useOnshapeClient, useOnshapeContext } from "../extension/onshapeHostShim";
@@ -1132,9 +1132,7 @@ export default function AssemblyBomPage() {
    * database here.
    */
   const handleTableEdit = useCallback(
-    (tableData: AssemblyBomRow[]) => {
-      // The copies shown under a combined row are display-only (tableRows).
-      const newData = tableData.filter((r) => !r.copyOf);
+    (newData: AssemblyBomRow[]) => {
       const previousById = new Map(rows.map((r) => [r.id, r]));
       let blocked = false;
 
@@ -1243,30 +1241,6 @@ export default function AssemblyBomPage() {
     [rows, loading, publishing, subtreeLoads, client, saveRows]
   );
 
-  /** The table's rows: every row, plus the copies under each combined row (once per combined part). */
-  const tableRows = useMemo(() => {
-    const out: AssemblyBomRow[] = [];
-    const listed = new Set<string>();
-    for (const row of rows) {
-      out.push(row);
-      if ((row.copies?.length ?? 0) < 2 || listed.has(row.id)) continue;
-      listed.add(row.id);
-      for (const copy of row.copies!) {
-        out.push({ ...copy, id: `copy:${row.id}:${copy.id}`, parentId: row.id, copyOf: row.id, isExpanded: false, modified: [], copies: undefined });
-      }
-    }
-    return out;
-  }, [rows]);
-
-  /** The expand button of a part row that opens its copies: blue and round, unlike an assembly's. */
-  const copiesToggle = useCallback(
-    (row: AssemblyBomRow): ExpandToggleStyle | undefined =>
-      !row.isAssembly && (row.copies?.length ?? 0) > 1
-        ? { className: "expand-toggle-copies", title: `Show the ${row.copies!.length} copies of this part`, closed: "▸", open: "▾" }
-        : undefined,
-    []
-  );
-
   /** Search box: rows whose name, catalog number or description contain the text. */
   const [search, setSearch] = useState("");
   /** "N problems" button: show only parts that would stop a work order. */
@@ -1327,9 +1301,7 @@ export default function AssemblyBomPage() {
 
   /** Expand all / Collapse all (kept in the saved copy like any other expand). */
   const setAllExpanded = useCallback(
-    // Expand all opens sub-assemblies only (not the copies under a combined part row).
-    (expanded: boolean) =>
-      handleTableEdit(rows.map((r) => (r.isExpanded === expanded || (expanded && !r.isAssembly) ? r : { ...r, isExpanded: expanded }))),
+    (expanded: boolean) => handleTableEdit(rows.map((r) => (r.isExpanded === expanded ? r : { ...r, isExpanded: expanded }))),
     [rows, handleTableEdit]
   );
 
@@ -2169,8 +2141,7 @@ export default function AssemblyBomPage() {
             </label>
           </div>
           <Table
-            data={tableRows}
-            expandToggle={copiesToggle}
+            data={rows}
             columnsData={columns}
             setData={(newData) => handleTableEdit(newData as AssemblyBomRow[])}
             newRowFunction={undefined}

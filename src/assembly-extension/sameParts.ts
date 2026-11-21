@@ -47,7 +47,7 @@ const isBought = (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardC
 
 /** Whether an item takes part in catalog-number grouping at all. */
 export function isGrouped(row: AssemblyBomRow): boolean {
-  if (row.copyOf || isBought(row) || !catalogKey(row)) return false;
+  if (isBought(row) || !catalogKey(row)) return false;
   const name = nameKey(row);
   return row.isAssembly || (!!name && !DEFAULT_NAME.test(name));
 }

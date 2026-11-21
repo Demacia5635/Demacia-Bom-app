@@ -8,9 +8,6 @@ import { openExternal } from "../util/openExternal";
  */
 const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent || !!row.markedStandard;
 
-/** Not editable either: the copies listed under a combined row (edit the combined row; it goes to every copy). */
-const isReadOnly = (row: AssemblyBomRow) => isStandardContent(row) || !!row.copyOf;
-
 /** Why a cell's value would stop a work order, if it would. */
 export type CellProblem = (row: AssemblyBomRow, key: string) => string | undefined;
 
@@ -29,7 +26,7 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
     key,
     label,
     type,
-    isDisabled: isReadOnly,
+    isDisabled: isStandardContent,
     isModified: (row: AssemblyBomRow) => !!row.modified?.includes(key),
     problem: cellProblem ? (row: AssemblyBomRow) => cellProblem(row, key) : undefined,
   });
@@ -41,7 +38,7 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
       type: "image",
       isDisabled: isStandardContent,
       // Several items with the same catalog number, combined into one part (copyRows.ts).
-      badge: (row: AssemblyBomRow) => ((row.copies?.length ?? 0) > 1 && !row.copyOf ? `×${row.copies!.length} copies` : undefined),
+      badge: (row: AssemblyBomRow) => ((row.copies?.length ?? 0) > 1 ? `×${row.copies!.length} copies` : undefined),
     },
     editable("name", "Name", "string"),
     // Parts named only by catalog number (spacers...) can be told apart by size.
@@ -78,14 +75,14 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
       key: "wantStl",
       label: "STL",
       type: "boolean",
-      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isReadOnly(row),
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantStl"),
     },
     {
       key: "wantParasolid",
       label: "Parasolid",
       type: "boolean",
-      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isReadOnly(row),
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantParasolid"),
     },
     // Bought rather than made (a bearing, a motor...): locked like Standard
