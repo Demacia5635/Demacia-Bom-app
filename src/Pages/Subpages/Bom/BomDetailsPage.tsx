@@ -359,7 +359,7 @@ export default function BomDetailsPage() {
 
 
   return (
-    <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
+    <div className={`p-4 sm:p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
       {mainBomData && <BomBreadcrumbs trail={trail} current={mainBomData} />}
       {mainBomData && (
@@ -383,7 +383,7 @@ export default function BomDetailsPage() {
         </ErrorBanner>
       )}
 
-      <div className="print:hidden flex items-center gap-3 mb-3">
+      <div className="print:hidden flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
         <span className={`text-sm ${theme.textMuted}`}>View:</span>
         <div className={`inline-flex rounded-lg border overflow-hidden ${isLight ? "border-zinc-300" : "border-zinc-700"}`} role="group" aria-label="BOM view">
           {BOM_VIEWS.map((v) => (
@@ -393,7 +393,7 @@ export default function BomDetailsPage() {
               title={v.title}
               aria-pressed={view === v.key}
               onClick={() => changeView(v.key)}
-              className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors ${
                 view === v.key
                   ? "bg-blue-600 text-white"
                   : isLight ? "bg-white text-zinc-700 hover:bg-zinc-100" : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
@@ -414,11 +414,11 @@ export default function BomDetailsPage() {
             downloadTableCsv(tableAreaRef.current, showSize ? BomColumns : COLUMNS_WITHOUT_SIZE, rowOfElement, safeFileName(mainBomData?.name || "BOM", "csv"));
           }}
           title="Save the rows and columns shown below as a CSV file (opens in Excel)"
-          className={`rounded-lg border px-3 py-1 text-xs font-semibold ${theme.border} ${theme.textValue} hover:bg-zinc-500/10 disabled:opacity-50`}
+          className={`rounded-lg border px-3 py-1 text-xs font-semibold whitespace-nowrap ${theme.border} ${theme.textValue} hover:bg-zinc-500/10 disabled:opacity-50`}
         >
           Export CSV
         </button>
-        <label className={`flex items-center gap-2 cursor-pointer text-sm ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
+        <label className={`flex items-center gap-2 cursor-pointer text-sm whitespace-nowrap ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
           <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
           Show size
         </label>

@@ -20,7 +20,7 @@ const VERSIONS = Object.entries(LOGS)
 export default function WhatsNewPage() {
   const theme = useThemeClasses();
   return (
-    <div className={`min-h-screen p-6 transition-colors duration-200 ${theme.page}`}>
+    <div className={`min-h-screen p-4 sm:p-6 transition-colors duration-200 ${theme.page}`}>
       <div className="max-w-3xl mx-auto space-y-4">
         <h1 className={`text-2xl font-bold tracking-tight ${theme.textHeading}`}>What&apos;s new</h1>
         <p className={`text-sm ${theme.textMuted}`}>What each version of the website changed, newest first.</p>

@@ -26,7 +26,7 @@ export default function MainLayout() {
             {isSidebar && (
                 <Sidebar isOpen={isDrawerOpen} onClose={() => setDrawerOpen(false)} />
             )}
-            <main className="flex-1 p-6 items-center justify-center w-full">
+            <main className="flex-1 p-0 sm:p-6 items-center justify-center w-full min-w-0">
                 {/* Pages load on first visit (App.tsx): the bar and sidebar stay meanwhile. */}
                 <Suspense fallback={<div className="p-8 text-center text-sm opacity-60">Loading...</div>}>
                     <Outlet />

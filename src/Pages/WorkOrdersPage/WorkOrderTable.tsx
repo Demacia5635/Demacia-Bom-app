@@ -17,15 +17,15 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[]; summaries?: 
 
 
     return (
-        <div className={`${theme.cardWithText} border rounded-xl overflow-hidden shadow-md`}>
+        <div className={`${theme.cardWithText} border rounded-xl overflow-x-auto shadow-md`}>
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className={`${theme.tableHeader} border-b ${theme.border} text-xs font-semibold uppercase tracking-wider`}>
-                        <th className="py-3.5 px-4 w-24">Image</th>
-                        <th className="py-3.5 px-4">Work Order Name</th>
-                        <th className="py-3.5 px-4">Catalog Number</th>
-                        <th className="py-3.5 px-4">BOM Name</th>
-                        <th className="py-3.5 px-4">Owner</th>
+                        <th className="py-3.5 px-2 sm:px-4 w-16 sm:w-24">Image</th>
+                        <th className="py-3.5 px-2 sm:px-4">Work Order Name</th>
+                        <th className="py-3.5 px-4 hidden md:table-cell">Catalog Number</th>
+                        <th className="py-3.5 px-4 hidden md:table-cell">BOM Name</th>
+                        <th className="py-3.5 px-4 hidden md:table-cell">Owner</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -40,7 +40,7 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[]; summaries?: 
                                 className={`${theme.rowHover} cursor-pointer transition-colors`}
                             >
                                 <td 
-                                    className="py-3 px-4"
+                                    className="py-3 px-2 sm:px-4"
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setEnlargedImageSrc(imageSrc || "FAILED");
@@ -61,17 +61,22 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[]; summaries?: 
                                         )}
                                     </div>
                                 </td>
-                                <td className="py-3 px-4 text-sm">
-                                    <span className="font-medium">{wo.name || "Unnamed Work Order"}</span>
+                                <td className="py-3 px-2 sm:px-4 text-sm">
+                                    <span className="font-medium break-words">{wo.name || "Unnamed Work Order"}</span>
+                                    <span className={`md:hidden flex flex-wrap items-center gap-x-2 text-xs ${theme.textMuted}`}>
+                                        {wo.catalogNumber && <CatalogNumber value={wo.catalogNumber} />}
+                                        {wo.bomName && <span>{wo.bomName}</span>}
+                                        {wo.workOrderOwner && <span>{wo.bomName ? "· " : ""}{wo.workOrderOwner}</span>}
+                                    </span>
                                     {summaries?.get(wo.id) && <WorkOrderProgress summary={summaries.get(wo.id)!} />}
                                 </td>
-                                <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
+                                <td className={`py-3 px-4 text-sm hidden md:table-cell ${theme.textMuted}`}>
                                     <CatalogNumber value={wo.catalogNumber} />
                                 </td>
-                                <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
+                                <td className={`py-3 px-4 text-sm hidden md:table-cell ${theme.textMuted}`}>
                                     {wo.bomName || "N/A"}
                                 </td>
-                                <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
+                                <td className={`py-3 px-4 text-sm hidden md:table-cell ${theme.textMuted}`}>
                                     {wo.workOrderOwner || "N/A"}
                                 </td>
                             </tr>

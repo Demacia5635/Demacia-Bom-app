@@ -159,6 +159,21 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     const { columnWidths, setColumnWidths, autoLastColWidth, handleResizeStart } =
         useColumnResize(columns, wrapperRef, defaultColWidth, minLastColWidth, savedLayout.widths);
 
+    // The table's visible width, for narrow screens (below).
+    const [wrapperWidth, setWrapperWidth] = useState(0);
+    useEffect(() => {
+        const wrapper = wrapperRef.current;
+        if (!wrapper) return;
+        const ro = new ResizeObserver(() => setWrapperWidth(wrapper.clientWidth));
+        ro.observe(wrapper);
+        return () => ro.disconnect();
+    }, [wrapperRef]);
+    // On a narrow table (a phone) the frozen columns share at most half its
+    // width, so the other half is left for the columns that scroll (QW25).
+    const narrowFrozenWidth = frozenColumns > 0 && wrapperWidth > 0 && wrapperWidth < 640
+        ? Math.max(64, Math.floor(wrapperWidth / 2 / frozenColumns))
+        : null;
+
     // Remember the layout as it changes (only with a storageKey).
     useEffect(() => {
         if (!storageKey) return;
@@ -235,7 +250,8 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     /** Width of the column at `idx` (the last one stretches to fill the table). */
     const colWidth = (col: ColumnConfig, idx: number): number => {
         const isLast = idx === columns.length - 1;
-        return columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
+        const width = columnWidths[col.key] ?? (isLast && autoLastColWidth !== null ? autoLastColWidth : defaultColWidth);
+        return narrowFrozenWidth !== null && idx < frozenColumns && !isLast ? Math.min(width, narrowFrozenWidth) : width;
     };
 
     // Frozen columns stick to the left; each one's offset is the width of those before it.

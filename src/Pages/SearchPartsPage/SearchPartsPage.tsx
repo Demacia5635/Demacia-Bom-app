@@ -6,6 +6,7 @@ import type { BomModel, PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import PartPortal from "./PartPortal";
+import RecordDialog from "../../components/RecordDialog";
 import { recordImageSrc } from "../../util/recordImage";
 import { isMadeRecord, splitStandard } from "../../util/standardItems";
 import ErrorBanner, { ApiErrorText } from "../../components/ErrorBanner";
@@ -120,7 +121,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const textSubdued = "text-zinc-600"; // the same in both themes
 
     return (
-        <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
+        <div className={`min-h-screen p-4 sm:p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
             {/* Header & Search Bar */}
             <div className="max-w-6xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -245,20 +246,16 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                 )}
             </div>
             {openPart && createPortal(
-                <div
-                    onClick={() => setOpenPart(null)}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                >
-                    <div onClick={(e) => e.stopPropagation()}>
-                        <PartPortal
-                            key={openPart.id}
-                            part={openPart}
-                            onSaved={(saved) => setItems((list) => list.map((item) =>
-                                item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item
-                            ))}
-                        />
-                    </div>
-                </div>,
+                // Close button, Esc and a tap outside close it (RecordDialog).
+                <RecordDialog onClose={() => setOpenPart(null)}>
+                    <PartPortal
+                        key={openPart.id}
+                        part={openPart}
+                        onSaved={(saved) => setItems((list) => list.map((item) =>
+                            item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item
+                        ))}
+                    />
+                </RecordDialog>,
                 document.body
             )}
         </div>

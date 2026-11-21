@@ -67,9 +67,9 @@ const MainBomDataUI: React.FC<{ bom: BomModel; totals?: { parts: number; quantit
       {isCreatingWO && createPortal(
         <div
           onClick={() => { if (!isCreatingBusy) setCreatingWO(false); }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4"
         >
-          <div onClick={(e) => e.stopPropagation()}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-xl max-h-full overflow-y-auto overscroll-contain">
             <WorkOrderForm
               bomId={resolvedBomId}
               avatarID={bom.avatarID}

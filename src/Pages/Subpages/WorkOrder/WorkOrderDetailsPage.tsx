@@ -273,7 +273,7 @@ export default function WorkOrderDetailsPage() {
 
 
     return (
-        <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
+        <div className={`p-4 sm:p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
             {workOrderData && (
                 <WorkOrderDataUI workOrder={workOrderData} totals={loading ? undefined : rowTotals} />

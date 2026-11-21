@@ -186,7 +186,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
     return (
         <form
             onSubmit={handleSubmit}
-            className={`max-w-xl mx-auto border rounded-2xl p-6 space-y-5 transition-colors duration-200 ${formBg}`}
+            className={`max-w-xl mx-auto border rounded-2xl p-4 sm:p-6 space-y-5 transition-colors duration-200 ${formBg}`}
         >
             <h2 className={`text-xl font-bold tracking-tight mb-4 ${theme.textHeading}`}>
                 Work Order Details

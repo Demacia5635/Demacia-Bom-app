@@ -57,7 +57,7 @@ export default function BomsPage() {
 
   if (loading) {
     return (
-      <div className={`p-8 max-w-7xl mx-auto min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50" : "bg-zinc-950 text-zinc-100"}`}>
+      <div className={`p-4 sm:p-8 max-w-7xl mx-auto min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50" : "bg-zinc-950 text-zinc-100"}`}>
         <h1 className={`text-2xl font-bold mb-6 ${textHeading}`}>Boms</h1>
         <SkeletonList label="Loading BOMs…" />
       </div>
@@ -65,7 +65,7 @@ export default function BomsPage() {
   }
 
   return (
-    <div className={`p-8 max-w-7xl mx-auto min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50" : "bg-zinc-950 text-zinc-100"}`}>
+    <div className={`p-4 sm:p-8 max-w-7xl mx-auto min-h-screen transition-colors duration-200 ${isLight ? "bg-zinc-50" : "bg-zinc-950 text-zinc-100"}`}>
       <div className="flex justify-between items-center mb-6">
         <h1 className={`text-2xl font-bold ${textHeading}`}>Boms</h1>
       </div>

@@ -113,7 +113,7 @@ export function WorkOrdersPage() {
     const textSubdued = "text-zinc-600"; // the same in both themes
 
     return (
-        <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
+        <div className={`min-h-screen p-4 sm:p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
             <div className="max-w-6xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>

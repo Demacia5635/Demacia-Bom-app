@@ -27,7 +27,7 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
                     <button
                         onClick={onOpenDrawer}
                         aria-label="Open Sidebar"
-                        className={`p-1 rounded-md transition-colors focus:outline-none ${buttonHover}`}>
+                        className={`p-2 sm:p-1 rounded-md transition-colors focus:outline-none ${buttonHover}`}>
                         <SidebarIcon className="w-5 h-5" />
                     </button>
                 )}
@@ -46,7 +46,7 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
                     type="button"
                     onClick={toggleTheme}
                     aria-label="Toggle Theme"
-                    className={`p-1.5 rounded-md text-sm transition-colors ${buttonHover}`}
+                    className={`p-2 sm:p-1.5 rounded-md text-sm transition-colors ${buttonHover}`}
                 >
                     {isLight ? "🌙" : "☀️"}
                 </button>

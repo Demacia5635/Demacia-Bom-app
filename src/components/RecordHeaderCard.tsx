@@ -26,11 +26,11 @@ export default function RecordHeaderCard({ imageSrc, imageAlt, title, descriptio
 
 
   return (
-    <div className={`${theme.cardWithText} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200 ${className}`}>
-      <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full lg:w-auto">
+    <div className={`${theme.cardWithText} border rounded-2xl p-4 sm:p-6 shadow-xl flex flex-col lg:flex-row gap-4 sm:gap-6 items-start lg:items-center justify-between transition-colors duration-200 ${className}`}>
+      <div className="flex flex-row gap-4 sm:gap-6 items-start sm:items-center w-full lg:w-auto min-w-0">
         <div
           onClick={() => setEnlargedImageSrc(imageSrc || "FAILED")}
-          className={`w-28 h-28 shrink-0 ${theme.imageBox} border rounded-xl overflow-hidden flex items-center justify-center shadow-inner cursor-pointer hover:opacity-80 transition-opacity`}
+          className={`w-20 h-20 sm:w-28 sm:h-28 shrink-0 ${theme.imageBox} border rounded-xl overflow-hidden flex items-center justify-center shadow-inner cursor-pointer hover:opacity-80 transition-opacity`}
           title="Click to enlarge image"
         >
           {imageSrc ? (
@@ -40,16 +40,15 @@ export default function RecordHeaderCard({ imageSrc, imageAlt, title, descriptio
           )}
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className={`text-2xl font-bold tracking-tight ${theme.textHeading}`}>{title}</h1>
+            <h1 className={`text-xl sm:text-2xl font-bold tracking-tight break-words ${theme.textHeading}`}>{title}</h1>
             {description && <p className={`text-sm ${theme.textMuted} italic`}>{description}</p>}
           </div>
 
-          <div className={`flex items-center gap-4 text-xs ${theme.textMuted} flex-wrap`}>
-            {facts.map((fact, i) => (
+          <div className={`flex items-center gap-x-5 gap-y-1 text-xs ${theme.textMuted} flex-wrap`}>
+            {facts.map((fact) => (
               <Fragment key={fact.label}>
-                {i > 0 && <span>•</span>}
                 <p>
                   {fact.label}:{" "}
                   <span className={`${theme.textValue} font-medium`}>{fact.value}</span>
@@ -60,7 +59,7 @@ export default function RecordHeaderCard({ imageSrc, imageAlt, title, descriptio
         </div>
       </div>
 
-      {middle && <div className="lg:flex-1 flex lg:justify-center">{middle}</div>}
+      {middle && <div className="w-full lg:w-auto lg:flex-1 flex lg:justify-center">{middle}</div>}
 
       <div className={`flex flex-col items-start lg:items-end gap-3 self-stretch lg:self-auto shrink-0 border-t lg:border-t-0 ${theme.border} pt-4 lg:pt-0`}>
         {actions}

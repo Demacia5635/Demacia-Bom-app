@@ -136,7 +136,7 @@ export default function TelemetryPage() {
   const cell = "px-3 py-2 text-sm whitespace-nowrap";
 
   return (
-    <div className={`min-h-screen p-6 transition-colors duration-200 ${theme.page}`}>
+    <div className={`min-h-screen p-4 sm:p-6 transition-colors duration-200 ${theme.page}`}>
       <div className="max-w-7xl mx-auto space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -146,7 +146,7 @@ export default function TelemetryPage() {
               don't call Onshape.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select value={range} onChange={(e) => { setRange(e.target.value); startLoading(); }} className={`border rounded-lg px-3 py-2 text-sm ${inputBg}`}>
               {RANGES.map((r) => (
                 <option key={r.key} value={r.key}>{r.label}</option>
