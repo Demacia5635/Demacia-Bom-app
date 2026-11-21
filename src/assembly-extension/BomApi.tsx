@@ -176,8 +176,9 @@ export function getPartsByIds(ids: string[]): Promise<PartModel[]> {
 /* (src/extension/onshapeDirect.ts). The server never calls Onshape.       */
 /* ---------------------------------------------------------------------- */
 
-export function getOnshapeBom(key: OnshapeKey): Promise<OnshapeBomTable> {
-  return onshapeDirect.getBom(key);
+/** `multiLevel`: the whole tree (for the top assembly), or just its own items. */
+export function getOnshapeBom(key: OnshapeKey, multiLevel = true): Promise<OnshapeBomTable> {
+  return onshapeDirect.getBom(key, multiLevel);
 }
 
 export function updateOnshapePartMetadata(

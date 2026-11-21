@@ -306,13 +306,18 @@ type Limiter = <T>(request: () => Promise<T>) => Promise<T>;
 
 /** Where the tree's Onshape and database data comes from. */
 interface TreeSources {
-  onshapeBom(key: OnshapeKey): Promise<OnshapeBomTable>;
+  /**
+   * The assembly's Onshape BOM. Only the top assembly is fetched multi-level
+   * (its item count is the load's progress total); a sub-assembly's own items
+   * are all the walk reads, so its BOM is fetched single-level.
+   */
+  onshapeBom(key: OnshapeKey, multiLevel?: boolean): Promise<OnshapeBomTable>;
   dbBom(key: OnshapeKey, bomID: string): Promise<BomModel>;
   dbPart(key: OnshapeKey, partID: string): Promise<PartModel>;
 }
 
 const directSources: TreeSources = {
-  onshapeBom: getOnshapeBom,
+  onshapeBom: (key, multiLevel = false) => getOnshapeBom(key, multiLevel),
   dbBom: getBomByOnshapeKey,
   dbPart: getPartByOnshapeKey,
 };
@@ -357,7 +362,8 @@ function createCachedSources(limit: Limiter): TreeSources {
     return p;
   };
   return {
-    onshapeBom: (key) => once(`bom:${keyString(key)}`, () => getOnshapeBom(key)),
+    onshapeBom: (key, multiLevel = false) =>
+      once(`bom:${multiLevel ? "multi" : "single"}:${keyString(key)}`, () => getOnshapeBom(key, multiLevel)),
     dbBom: (key, bomID) => once(`dbBom:${keyString(key)}/${bomID}`, () => getBomByOnshapeKey(key, bomID)),
     dbPart: (key, partID) => once(`dbPart:${keyString(key)}/${partID}`, () => getPartByOnshapeKey(key, partID)),
   };
@@ -665,7 +671,7 @@ export default function AssemblyBomPage() {
       /** Where Onshape/database data comes from (a per-load prefetching cache, or direct). */
       src: TreeSources = directSources
     ): Promise<{ node: ResolvedNode; dbBom: BomModel | null }> => {
-      const onshapeBom = await src.onshapeBom(key);
+      const onshapeBom = await src.onshapeBom(key, rootBom === 'root');
       const bomID = bomIdOf(onshapeBom, key);
 
       const dbBom = await recordOrNull(src.dbBom(key, bomID));

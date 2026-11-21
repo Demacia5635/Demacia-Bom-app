@@ -4,7 +4,8 @@
  * Types + a parser for Onshape's Bill of Materials table, which the panel
  * reads directly from Onshape with the user's session (getBom in
  * src/extension/onshapeDirect.ts: the unversioned
- * /api/assemblies/.../bom?multiLevel=true&indented=true endpoint).
+ * /api/assemblies/.../bom?indented=true endpoint; multiLevel=true for the
+ * top assembly, false for sub-assemblies).
  *
  * CONFIRMED SHAPE (from a real multiLevel response; getBom returns its
  * `bomTable` key):
@@ -227,9 +228,11 @@ function toParsedRow(
 export function parseOnshapeBomTable(table: OnshapeBomTable): ParsedOnshapeBomRow[] {
   const items = Array.isArray(table?.items) ? table.items : [];
 
+  // Works on a single-level table too: every item is then top-level ("1",
+  // "2"...), and sub-assemblies are told apart by their missing partId.
   const topLevel = items.filter((it) => !!it.item && !it.item.includes("."));
   const hasChildren = (itemNumber: string) =>
-    items.some((it) => it.item && it.item.startsWith(`${itemNumber}.`));
+    !!itemNumber && items.some((it) => it.item && it.item.startsWith(`${itemNumber}.`));
 
   // A row without a partId is an assembly even when it has no children in the
   // response (an empty sub-assembly), which the numbering alone can't show.
