@@ -63,6 +63,37 @@ export async function getBomByID(
     }
 }
 
+/**
+ * GET /usedIn/:id: the BOMs that use this BOM as a sub-assembly ("Used in"),
+ * by name: [{ id, name, catalogNumber, quantity, driveFileId, avatarID,
+ * imageUrl, thumbnailURL }]. quantity is how many of it each one lists.
+ * An empty list when nothing uses it (or it isn't saved).
+ */
+export async function getBomUsedIn(
+    req: Request<{ id: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const id = req.params.id;
+        const parents = await Bom.find(
+            { "subAssemblies.bomID": id },
+            { id: 1, name: 1, catalogNumber: 1, subAssemblies: 1, driveFileId: 1, avatarID: 1, imageUrl: 1, thumbnailURL: 1 },
+        ).lean<Record<string, any>[]>();
+        const usedIn = parents
+            .map(({ subAssemblies, _id, ...parent }): Record<string, any> => ({
+                ...parent,
+                quantity: (subAssemblies ?? [])
+                    .filter((sub: { bomID?: string }) => sub?.bomID === id)
+                    .reduce((sum: number, sub: { quantity?: number }) => sum + (sub.quantity ?? 1), 0),
+            }))
+            .sort((a, b) => String(a.name ?? a.id).localeCompare(String(b.name ?? b.id)));
+        return res.status(200).json(usedIn);
+    } catch (err) {
+        return next(err);
+    }
+}
+
 /** Deepest sub-assembly level GET /tree/:id follows (the root is level 0). */
 const MAX_TREE_DEPTH = 10;
 /** Most BOMs one tree request returns. */

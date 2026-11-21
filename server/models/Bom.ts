@@ -66,6 +66,9 @@ const bomSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// GET /usedIn/:id finds the BOMs that list a given sub-assembly.
+bomSchema.index({ "subAssemblies.bomID": 1 });
+
 const Bom = mongoose.model("Bom", bomSchema);
 
 export default Bom;

@@ -19,6 +19,8 @@ router.post('/ids', bomController.getBomsByIds);
 
 // The BOM with all its sub-assemblies and parts, in one request.
 router.get('/tree/:id', bomController.getBomTree);
+// The BOMs that use this one as a sub-assembly.
+router.get('/usedIn/:id', bomController.getBomUsedIn);
 
 router.get('/id/:id', bomController.getBomByID);
 router.post('/id/:id', bomController.upsertBomByID);
