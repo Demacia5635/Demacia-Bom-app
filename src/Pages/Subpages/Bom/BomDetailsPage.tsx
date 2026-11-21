@@ -27,6 +27,7 @@ import BomWorkOrders from "./BomWorkOrders";
 import { bomPath, readTrail } from "../../../util/bomTrail";
 import BomBreadcrumbs from "./BomBreadcrumbs";
 import BomUsedIn from "./BomUsedIn";
+import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -172,6 +173,7 @@ export default function BomDetailsPage() {
   const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<BomTableRow>();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
   const [tree, setTree] = useState<BomTree | null>(null);
+  const tableAreaRef = useRef<HTMLDivElement>(null);
   // The header's totals: distinct parts and pieces for one assembly (QW11).
   const treeTotals = useMemo(() => {
     if (!tree) return undefined;
@@ -395,6 +397,19 @@ export default function BomDetailsPage() {
         </div>
         {/* Right of the view buttons, under the title card: save status, then "Show size". */}
         <span className="ml-auto"><SaveStatus /></span>
+        {/* The table as shown (rows, columns, order) for Excel (QW9). */}
+        <button
+          type="button"
+          disabled={loading || rows.length === 0}
+          onClick={() => {
+            if (!tableAreaRef.current) return;
+            downloadTableCsv(tableAreaRef.current, showSize ? BomColumns : COLUMNS_WITHOUT_SIZE, rowOfElement, safeFileName(mainBomData?.name || "BOM", "csv"));
+          }}
+          title="Save the rows and columns shown below as a CSV file (opens in Excel)"
+          className={`rounded-lg border px-3 py-1 text-xs font-semibold ${theme.border} ${theme.textValue} hover:bg-zinc-500/10 disabled:opacity-50`}
+        >
+          Export CSV
+        </button>
         <label className={`flex items-center gap-2 cursor-pointer text-sm ${theme.textMuted}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
           <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
           Show size
@@ -404,9 +419,10 @@ export default function BomDetailsPage() {
       {loading ? (
         <SkeletonTable label="Loading the BOM…" columns={9} />
       ) : (
-        <div 
+        <div
+          ref={tableAreaRef}
           onClick={handleTableClick}
-          onContextMenuCapture={handleTableContextMenuCapture} 
+          onContextMenuCapture={handleTableContextMenuCapture}
           className="relative cursor-pointer"
         >
           <Table

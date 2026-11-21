@@ -26,6 +26,7 @@ import { showToast } from "../../../util/toast";
 import { usePartInAddress } from "../../../components/usePartInAddress";
 import SaveStatus from "../../../components/SaveStatus";
 import { SkeletonTable } from "../../../components/Skeleton";
+import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -301,6 +302,18 @@ export default function WorkOrderDetailsPage() {
                 <>
                 {rows.length > 0 && (
                     <WorkOrderFilters rows={rows} filters={filters} shownCount={shownCount}>
+                        <button
+                            type="button"
+                            disabled={shownCount === 0}
+                            onClick={() => {
+                                if (!tableAreaRef.current) return;
+                                downloadTableCsv(tableAreaRef.current, showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE, rowFromElement, safeFileName(workOrderData?.name || "Work order", "csv"));
+                            }}
+                            title="Save the parts shown below (their columns, in order) as a CSV file (opens in Excel)"
+                            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${theme.border} ${theme.textValue} hover:bg-zinc-500/10 disabled:opacity-50 disabled:cursor-default`}
+                        >
+                            Export CSV
+                        </button>
                         <button
                             type="button"
                             onClick={handleExportPdf}

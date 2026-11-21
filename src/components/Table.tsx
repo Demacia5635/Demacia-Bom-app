@@ -340,6 +340,7 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                             {columns.map((col, index) => (
                                 <th
                                     key={col.key}
+                                    data-col-key={col.key}
                                     aria-sort={sortConfig?.key === col.key ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : undefined}
                                     draggable={isHandleDragging}
                                     onDragStart={(e) => handleDragStart(e, index)}
