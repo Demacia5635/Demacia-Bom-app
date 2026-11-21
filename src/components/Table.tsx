@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AuthenticatedImage } from "./AuthenticatedImage";
-import DraftInput from "./table/DraftInput";
 import { useColumnResize } from "./table/useColumnResize";
+import ProblemTip from "./table/ProblemTip";
+import TableCell from "./table/TableCell";
+import { useProblemTip } from "./table/useProblemTip";
 import { useColumnReorder } from "./table/useColumnReorder";
 import { useStickyFit } from "./table/useStickyFit";
 import { useSyncedHScroll } from "./table/useSyncedHScroll";
@@ -77,21 +78,8 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
 
-    // Tooltip of a problem cell, drawn by the table: the browser's own title
-    // tooltip is slow, and doesn't show over the cell's input in the extension panel.
-    const [problemTip, setProblemTip] = useState<{ text: string; left: number; top: number } | null>(null);
-    const showProblemTip = (cell: HTMLElement, text: string) => {
-        const r = cell.getBoundingClientRect();
-        const left = Math.max(8, Math.min(r.left, window.innerWidth - 288));
-        setProblemTip({ text, left, top: r.bottom + 4 });
-    };
-    useEffect(() => {
-        if (!problemTip) return;
-        // The tooltip doesn't follow its cell, so scrolling hides it.
-        const hide = () => setProblemTip(null);
-        window.addEventListener('scroll', hide, true);
-        return () => window.removeEventListener('scroll', hide, true);
-    }, [problemTip]);
+    // Tooltip of a problem cell (table/useProblemTip.ts, drawn by ProblemTip).
+    const { problemTip, showProblemTip, hideProblemTip } = useProblemTip();
 
     // Bottom scrollbar synced with the table (table/useSyncedHScroll.ts).
     const { wrapperRef, bottomScrollRef, tableWidth } = useSyncedHScroll();
@@ -391,118 +379,25 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                                     {columns.map((col, colIndex) => {
                                         const span = mergeSpans.get(col.key)?.[rowIndex] ?? 1;
                                         if (span === 0) return null; // covered by the merged cell above
-                                        let isCellDisabled = col.isDisabled ? col.isDisabled(row) : false;
-                                        let displayValue: string | number = row[col.key] as string | number;
-                                        const cellProblem = col.problem?.(row);
-
                                         return (
-                                            <td
+                                            <TableCell
                                                 key={col.key}
-                                                data-col-key={col.key}
-                                                rowSpan={span > 1 ? span : undefined}
+                                                row={row}
+                                                col={col}
+                                                rowIndex={rowIndex}
+                                                colIndex={colIndex}
+                                                span={span}
+                                                isRowParent={isRowParent}
+                                                filtering={!!filterSets}
+                                                className={`${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)}`}
                                                 style={frozenStyle(colIndex)}
-                                                onMouseEnter={cellProblem ? (e) => showProblemTip(e.currentTarget, cellProblem) : undefined}
-                                                onMouseLeave={cellProblem ? () => setProblemTip(null) : undefined}
-                                                onFocus={cellProblem ? (e) => showProblemTip(e.currentTarget, cellProblem) : undefined}
-                                                onBlur={cellProblem ? () => setProblemTip(null) : undefined}
-                                                className={`table-td ${frozenClass(colIndex)} ${getDropIndicatorClass(colIndex)} ${isCellDisabled ? 'cell-disabled' : ''} ${col.isModified?.(row) ? 'cell-modified' : ''} ${cellProblem ? 'cell-problem' : ''}`}>
-                                                <div className="td-content-wrapper" style={colIndex === 0 ? { paddingLeft: `${row.level * 24}px` } : {}}>
-                                                    {colIndex === 0 && isRowParent && (
-                                                        <button
-                                                            className="expand-toggle"
-                                                            onClick={(e) => toggleExpand(row.id, e)}
-                                                            disabled={!!filterSets}
-                                                            title={filterSets ? 'Clear the search to expand or collapse' : undefined}
-                                                        >
-                                                            {row.open ? '▼' : '▶'}
-                                                        </button>
-                                                    )}
-                                                    {colIndex === 0 && !isRowParent && <span className="expand-placeholder" />}
-
-                                                    {col.type === 'select' ? (
-                                                        <select
-                                                            data-row={rowIndex}
-                                                            data-col={colIndex}
-                                                            // Always controlled: an empty value shows the placeholder.
-                                                            value={displayValue ?? ''}
-                                                            onChange={(e) => handleCellChange(row.id, col, e.target.value)}
-                                                            onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className={`cell-input cell-select ${col.valueClass?.(displayValue) ?? ''}`}
-                                                            disabled={isCellDisabled}
-                                                        >
-                                                            <option value="" disabled>Select...</option>
-                                                            {col.options?.map((option) => (
-                                                                <option key={option} value={option}>{option}</option>
-                                                            ))}
-                                                        </select>
-                                                    ) : col.type === 'button' ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                col.onButtonClick?.(row);
-                                                            }}
-                                                            disabled={isCellDisabled}
-                                                            className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        >
-                                                            {col.buttonText || "Action"}
-                                                        </button>
-                                                    ) : col.type === 'image' ? (
-                                                        (() => (
-                                                            <div className="w-8 h-8 rounded overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 my-1">
-                                                                <AuthenticatedImage
-                                                                    src={row[col.key]}
-                                                                    alt={col.label || "Image"}
-                                                                    className="w-full h-full object-cover" />
-                                                            </div>
-                                                        ))()
-
-                                                    ) : col.type === 'boolean' ? (
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={!!row[col.key]}
-                                                            onChange={(e) => handleCellChange(row.id, col, e.target.checked)}
-                                                            className="cell-checkbox"
-                                                            disabled={isCellDisabled}
-                                                        />
-                                                    ) : col.type === 'number' ? (
-                                                        <DraftInput
-                                                            data-row={rowIndex}
-                                                            data-col={colIndex}
-                                                            type="text"
-                                                            inputMode={col.key === 'quantity' || col.key === 'revision' ? 'numeric' : 'decimal'}
-                                                            value={displayValue}
-                                                            onCommit={(text) => handleNumberBlur(row.id, col, text)}
-                                                            onFocus={(e) => e.target.select()}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter') {
-                                                                    e.currentTarget.blur();
-                                                                } else {
-                                                                    handleCellKeyDown(e, rowIndex, colIndex);
-                                                                }
-                                                            }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="cell-input"
-                                                            disabled={isCellDisabled}
-                                                        />
-                                                    ) : (
-                                                        <DraftInput
-                                                            data-row={rowIndex}
-                                                            data-col={colIndex}
-                                                            type="text"
-                                                            value={displayValue}
-                                                            onCommit={(text) => handleCellChange(row.id, col, text)}
-                                                            placeholder={col.placeholder?.(row)}
-                                                            onFocus={(e) => e.target.select()}
-                                                            onKeyDown={(e) => handleCellKeyDown(e, rowIndex, colIndex)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="cell-input"
-                                                            disabled={isCellDisabled}
-                                                        />
-                                                    )}
-                                                </div>
-                                            </td>
+                                                onToggleExpand={toggleExpand}
+                                                onCellChange={handleCellChange}
+                                                onNumberCommit={handleNumberBlur}
+                                                onCellKeyDown={handleCellKeyDown}
+                                                onShowProblem={showProblemTip}
+                                                onHideProblem={hideProblemTip}
+                                            />
                                         );
                                     })}
                                 </tr>
@@ -519,11 +414,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                 </table>
             </div>
 
-            {problemTip && (
-                <div className="cell-problem-tip" role="tooltip" style={{ left: problemTip.left, top: problemTip.top }}>
-                    {problemTip.text}
-                </div>
-            )}
+            <ProblemTip tip={problemTip} />
 
             {/* Synced Bottom Horizontal Scrollbar */}
             <div
