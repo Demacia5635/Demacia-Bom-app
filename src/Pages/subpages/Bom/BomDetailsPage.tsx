@@ -196,6 +196,10 @@ export default function BomDetailsPage() {
   // Fields changed since that part's last save (an edit restarts the timer, so
   // earlier edits must still go out with the later one).
   const pendingFieldsRef = useRef<Record<string, Partial<BomTableRow>>>({});
+  // Edits made on this page, per part: laid over the loaded tree when a view
+  // builds its rows, so switching views shows them (the tree itself is state
+  // and isn't changed in place).
+  const partEditsRef = useRef<Map<string, Partial<PartModel>>>(new Map());
 
   useEffect(() => {
     if (!bomId) return;
@@ -220,6 +224,7 @@ export default function BomDetailsPage() {
     if (!bomId) return;
     let cancelled = false;
     setTree(null);
+    partEditsRef.current = new Map();
     setRows([]);
     setError(null);
     setLoading(true);
@@ -232,7 +237,11 @@ export default function BomDetailsPage() {
 
   // A new view starts as it's defined: Structured all closed, Flattened all open.
   useEffect(() => {
-    if (tree) setRows(buildBomRows(tree, view));
+    if (!tree) return;
+    const edits = partEditsRef.current;
+    const parts = edits.size === 0 ? tree.parts : new Map(tree.parts);
+    for (const [partId, edit] of edits) parts.set(partId, { ...(parts.get(partId) ?? ({ id: partId } as PartModel)), ...edit });
+    setRows(buildBomRows({ ...tree, parts }, view));
   }, [tree, view]);
 
   const changeView = (next: BomView) => {
@@ -256,7 +265,7 @@ export default function BomDetailsPage() {
         const partId = newRow.entityID;
         // Kept in the loaded tree too, so switching views shows the edit.
         const edits = Object.fromEntries(changed.map((k) => [k, newRow[k]])) as Partial<PartModel>;
-        tree?.parts.set(partId, { ...(tree.parts.get(partId) ?? ({ id: partId } as PartModel)), ...edits });
+        partEditsRef.current.set(partId, { ...partEditsRef.current.get(partId), ...edits });
         pendingFieldsRef.current[partId] = {
           ...pendingFieldsRef.current[partId],
           ...Object.fromEntries(changed.map((k) => [k, newRow[k]])),
