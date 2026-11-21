@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthenticatedImage } from "./AuthenticatedImage";
 import DraftInput from "./table/DraftInput";
+import { useColumnReorder } from "./table/useColumnReorder";
 import { useStickyFit } from "./table/useStickyFit";
 import { useSyncedHScroll } from "./table/useSyncedHScroll";
 import { filterMatches, groupChildren, mergedCellSpans, renderKeys, visibleRows } from "./table/visibleRows";
@@ -73,9 +74,6 @@ interface TableParam {
 
 export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }) => {
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-    const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
-    const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
-    const [isHandleDragging, setIsHandleDragging] = useState<boolean>(false);
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
 
@@ -99,37 +97,28 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const { wrapperRef, bottomScrollRef, tableWidth } = useSyncedHScroll();
     const [autoLastColWidth, setAutoLastColWidth] = useState<number | null>(null);
 
-    // Only the user's column order is state; the columns themselves always come
-    // from the current columnsData prop, so later changes to it (labels,
-    // callbacks, added/removed columns) take effect. Pass a stable array
-    // (module constant or useMemo): effects below depend on `columns`.
-    const [columnOrder, setColumnOrder] = useState<string[]>(() => columnsData.map(c => c.key));
-    const columns = useMemo(() => {
-        const byKey = new Map(columnsData.map(c => [c.key, c] as const));
-        // Removed columns drop out without leaving a gap.
-        const order = columnOrder.filter(k => byKey.has(k));
-        // A column not in the order yet (added after mount, e.g. shown by a
-        // checkbox, or hidden while the user dragged columns) goes right after
-        // the column it follows in columnsData, wherever the user moved that one.
-        columnsData.forEach((c, i) => {
-            if (order.includes(c.key)) return;
-            let at = 0;
-            for (let j = i - 1; j >= 0; j--) {
-                const p = order.indexOf(columnsData[j].key);
-                if (p >= 0) { at = p + 1; break; }
-            }
-            order.splice(at, 0, c.key);
-        });
-        return order.map(k => byKey.get(k)!);
-    }, [columnsData, columnOrder]);
+    // Unchanged state when already closed: this runs on every scroll and click,
+    // and a new object each time re-rendered the whole table.
+    const closeContextMenu = () => setContextMenu(prev => (prev.visible ? { ...prev, visible: false } : prev));
+
+    // The columns in the user's order, and dragging them (table/useColumnReorder.ts).
+    const {
+        columns,
+        moveColumn,
+        draggedIdx,
+        isHandleDragging,
+        setIsHandleDragging,
+        handleDragStart,
+        handleDragOver,
+        handleDrop,
+        resetDragState,
+        getDropIndicatorClass,
+    } = useColumnReorder(columnsData, () => closeContextMenu());
     const [sortConfig, setSortConfig] = useState<SortConfig | null>(initialSort ?? null);
 
     // Sticky header: the box is sized to reach the bottom of the window (table/useStickyFit.ts).
     const fitHeight = useStickyFit(wrapperRef, stickyHeader);
 
-    // Unchanged state when already closed: this runs on every scroll and click,
-    // and a new object each time re-rendered the whole table.
-    const closeContextMenu = () => setContextMenu(prev => (prev.visible ? { ...prev, visible: false } : prev));
     const contextMenuRef = useRef<HTMLDivElement>(null);
 
     // The column menu closes on a press anywhere outside it, also outside the
@@ -324,30 +313,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         setData(data.map(row => row.id === id ? { ...row, isExpanded: !row.isExpanded } : row));
     };
 
-    const handleDragStart = (e: React.DragEvent, index: number) => {
-        if (!isHandleDragging) { e.preventDefault(); return; }
-        setDraggedIdx(index);
-        const img = new Image();
-        img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-        e.dataTransfer.setDragImage(img, 0, 0);
-        closeContextMenu();
-    };
-
-    const handleDragOver = (e: React.DragEvent, index: number) => {
-        e.preventDefault();
-        if (draggedIdx === null) return;
-        setDropTargetIdx(index);
-    };
-
-    const handleDrop = (targetIdx: number) => {
-        if (draggedIdx === null || draggedIdx === targetIdx) { resetDragState(); return; }
-        const originalFromIdx = columns.findIndex(c => c.key === columns[draggedIdx].key);
-        const originalToIdx = columns.findIndex(c => c.key === columns[targetIdx].key);
-        moveColumn(originalFromIdx, originalToIdx);
-        resetDragState();
-    };
-
-    const resetDragState = () => { setDraggedIdx(null); setDropTargetIdx(null); setIsHandleDragging(false); };
 
     /** Width of the column at `idx` (the last one stretches to fill the table). */
     const colWidth = (col: ColumnConfig, idx: number): number => {
@@ -366,7 +331,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         idx < frozenCount ? `cell-frozen${idx === frozenCount - 1 ? ' cell-frozen-last' : ''}` : '';
     const frozenStyle = (idx: number): React.CSSProperties | undefined =>
         idx < frozenCount ? { left: frozenLeft[idx] } : undefined;
-    const getDropIndicatorClass = (index: number) => (draggedIdx !== null && dropTargetIdx !== null && index === dropTargetIdx && draggedIdx !== dropTargetIdx) ? 'drop-indicator-both' : '';
 
     const handleCellChange = (rowId: string, col: ColumnConfig, rawValue: any) => {
         setData(
@@ -402,13 +366,6 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         return true;
     };
 
-    const moveColumn = (fromIdx: number, toIdx: number) => {
-        if (toIdx < 0 || toIdx >= columns.length) return;
-        const updatedColumns = [...columns];
-        const [movedItem] = updatedColumns.splice(fromIdx, 1);
-        updatedColumns.splice(toIdx, 0, movedItem);
-        setColumnOrder(updatedColumns.map(c => c.key));
-    };
 
     const handleSortClick = (e: React.MouseEvent, key: string) => {
         e.stopPropagation();
