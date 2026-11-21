@@ -10,6 +10,7 @@ import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import ErrorBanner from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
+import TelemetryCharts from "./TelemetryCharts";
 
 interface TelemetryEvent {
   _id: string;
@@ -184,6 +185,9 @@ export default function TelemetryPage() {
             </div>
           ))}
         </div>
+
+        {/* Charts (QW28): requests per day by kind, per user, failures per day. */}
+        <TelemetryCharts days={RANGES.find((r) => r.key === range)?.days ?? null} events={shown} userPicked={user !== ALL_USERS} />
 
         {/* Per user */}
         <div className={`border rounded-xl overflow-x-auto ${theme.card}`}>
