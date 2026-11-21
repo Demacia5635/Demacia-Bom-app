@@ -7,6 +7,15 @@ import RecordHeaderCard from "../../../components/RecordHeaderCard";
 import { CatalogNumber } from "../../../components/CopyButton";
 import HeaderTotals from "../../../components/HeaderTotals";
 
+const PUBLISHED = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Jerusalem", day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+/** "21/11/26, 14:05" in Israel time, or "" for no / a bad date. */
+function formatPublished(iso: string | undefined): string {
+  const d = iso ? new Date(iso) : null;
+  return d && !Number.isNaN(d.getTime()) ? PUBLISHED.format(d) : "";
+}
+
 const ACTION_BUTTON = "px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md w-full lg:w-auto text-center";
 
 /** The BOM page's header: the assembly, "Create Work Order" and its Onshape link. */
@@ -17,6 +26,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel; totals?: { parts: number; quantit
   const [isCreatingBusy, setCreatingBusy] = useState(false);
 
   const resolvedBomId = bom.id || (bom as any)._id;
+  const publishedAt = formatPublished(bom.updatedAt);
 
   return (
     <div>
@@ -28,6 +38,8 @@ const MainBomDataUI: React.FC<{ bom: BomModel; totals?: { parts: number; quantit
         facts={[
           { label: "Catalog No", value: <CatalogNumber value={bom.catalogNumber} onHover={false} /> },
           { label: "Engineer", value: bom.engineer || "N/A" },
+          // When the BOM was last saved, and by whom once the server records it (QW22).
+          ...(publishedAt ? [{ label: "Last published", value: bom.updatedBy ? `${publishedAt} by ${bom.updatedBy}` : publishedAt }] : []),
         ]}
         actions={
           <>
