@@ -1,6 +1,10 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
 import { defineConfig, loadEnv } from 'vite';
+
+// The app's version, shown in the top bar (components/Appbar.tsx).
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 // https://vite.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -15,6 +19,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     base: '/Demacia-Bom-app/',
+    define: { __APP_VERSION__: JSON.stringify(version) },
     server: {
       port: 5173,
       proxy: {
