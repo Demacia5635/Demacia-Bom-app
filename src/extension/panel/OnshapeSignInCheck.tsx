@@ -21,7 +21,6 @@ export default function OnshapeSignInCheck({ children }: { children: ReactNode }
 
   useEffect(() => {
     let cancelled = false;
-    setState("checking");
     onshapeJson<SessionInfo>("/users/sessioninfo")
       .then((info) => {
         if (cancelled) return;
@@ -52,7 +51,10 @@ export default function OnshapeSignInCheck({ children }: { children: ReactNode }
           <p className="text-xs text-zinc-500 mb-3">Sign in to Onshape in this browser, then try again.</p>
           <button
             type="button"
-            onClick={() => setAttempt((n) => n + 1)}
+            onClick={() => {
+              setState("checking"); // starts as "checking"; a retry goes back to it
+              setAttempt((n) => n + 1);
+            }}
             className="px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-500 text-white"
           >
             Try again
