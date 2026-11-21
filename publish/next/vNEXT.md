@@ -24,7 +24,7 @@
 ## Fixes from the code-review checklist (on branch `fix/ext`, not on MASTER yet)
 
 - **One failed request no longer breaks the whole Refresh BOM.** A request to Onshape or the server that failed once is tried again the next time it's needed, instead of failing every later part of the load and every sub-assembly you open afterwards. (B12, `1b65342`)
-- **A failed Publish BOM is shown in the Publish dialog,** above its buttons, instead of being hidden until the dialog closes. It's cleared when the dialog opens again or the BOM reloads. (B14, `2c1548c`; a clearer explanation of why it failed is being added.)
+- **A failed Publish BOM tells you right away, in the Publish dialog, what went wrong and what to do.** Before, the error was hidden until the dialog closed, and was a raw message like "Failed to fetch". Now it names the step and item that failed, the likely cause (the BOM server or Onshape can't be reached, no permission in Onshape, an item was deleted or changed, too many requests, someone saved the same item at the same moment, an invalid value) and the next step (retry, Refresh BOM, check your Onshape access…), with the raw message as details. It's cleared when the dialog opens again or the BOM reloads. (B14, `2c1548c`, `f4c7249`)
 
 ## Removed
 
