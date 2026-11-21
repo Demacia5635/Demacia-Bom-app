@@ -147,6 +147,7 @@ The zips go to `publish/<version>/` as `demacia-bom-extension-<browser>-<version
 | `npm run package:extension` | Build and zip the extension |
 | `cd server && npm run dev` | Server with auto-reload |
 | `cd server && npm start` | Server without reload |
+| `npm run server` | The same, from the repository root (run `npm --prefix server install` once first) |
 
 ## API
 
