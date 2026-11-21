@@ -14,6 +14,7 @@
 - A CNC job request is limited to 500 parts and 4000 characters of links. (D10, `85cda05`)
 - If the database address is missing, the server now says "MONGODB_URI is not set" instead of "Failed to connect to .env". (D7, `830552b`)
 - An error after a reply was already sent no longer causes a second, broken reply. (D6, `d8f0254`)
+- The server accepts saves of up to 2 MB (was 100 KB), so publishing a very large BOM or sending a big batch of usage events no longer fails with "too large". (D5, `e796f25`)
 
 ## Before you deploy
 
