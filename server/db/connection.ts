@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { MONGODB_URI as mongoUri } from '../config';
 
 export async function connect() {
-    if (!mongoUri) throw new Error('Failed to connect to .env');
+    if (!mongoUri) throw new Error("MONGODB_URI is not set. Add it to server/.env (or the host's environment variables).");
 
     mongoose.connection.on('connected', () => console.log('MongoDB connected'));
     mongoose.connection.on('error', (err) => console.error('MongoDB connection error:', err));

@@ -1,5 +1,6 @@
 import { google, drive_v3 } from "googleapis";
-import { OAuth2Client } from "google-auth-library";
+// google-auth-library isn't a declared dependency: take its types from googleapis.
+import type { Auth } from "googleapis";
 import { Readable } from "stream";
 import { google as googleConfig } from "../config";
 
@@ -58,33 +59,8 @@ const TEAM_FILE_CACHE_MAX = 5000;
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
 
-  constructor(oauth2Client: OAuth2Client) {
+  constructor(oauth2Client: Auth.OAuth2Client) {
     this.drive = google.drive({ version: "v3", auth: oauth2Client });
-  }
-
-  async getAllFilesInFolder(
-    folderId: string = IMAGE_FOLDER_ID,
-  ): Promise<DriveFile[]> {
-    this.assertImageFolderConfigured();
-
-    const files: DriveFile[] = [];
-    let pageToken: string | undefined = undefined;
-
-    do {
-      const res: any = await this.drive.files.list({
-        q: `'${folderId}' in parents and trashed = false`,
-        fields:
-          "nextPageToken, files(id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents)",
-        pageSize: 100,
-        pageToken,
-      });
-
-      const items = (res.data.files ?? []) as drive_v3.Schema$File[];
-      files.push(...items.map(this.mapFile));
-      pageToken = res.data.nextPageToken ?? undefined;
-    } while (pageToken);
-
-    return files;
   }
 
   /** fileId -> whether it's directly inside one of the team folders. */
@@ -180,29 +156,6 @@ export class GoogleDriveService {
     this.teamFileCache.delete(fileId);
   }
 
-  async deleteFolder(folderId: string): Promise<void> {
-    await this.drive.files.delete({ fileId: folderId });
-  }
-
-  async createFolder(
-    folderName: string,
-    parentFolderId: string = IMAGE_FOLDER_ID,
-  ): Promise<DriveFile> {
-    this.assertImageFolderConfigured();
-
-    const res = await this.drive.files.create({
-      requestBody: {
-        name: folderName,
-        mimeType: "application/vnd.google-apps.folder",
-        parents: [parentFolderId],
-      },
-      fields:
-        "id, name, mimeType, createdTime, modifiedTime, webViewLink, parents",
-    });
-
-    return this.mapFile(res.data);
-  }
-
   private assertImageFolderConfigured() {
     if (!IMAGE_FOLDER_ID) {
       throw new Error(
@@ -245,7 +198,7 @@ export class GoogleDriveService {
 }
 
 export function createGoogleDriveService(
-  oauth2Client: OAuth2Client,
+  oauth2Client: Auth.OAuth2Client,
 ): GoogleDriveService {
   return new GoogleDriveService(oauth2Client);
 }

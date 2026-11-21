@@ -52,7 +52,8 @@ const workOrderSchema = new mongoose.Schema(
 
     comments: { type: String },
   },
-  { _id: false, timestamps: true },
+  // No _id: false here: a top-level document needs its _id for .save()/create().
+  { timestamps: true },
 );
 
 const WorkOrder = mongoose.model("Work Order", workOrderSchema);

@@ -1,9 +1,9 @@
 import express, { Request, Response, ErrorRequestHandler, Express, NextFunction } from "express";
 import cors from "cors";
 import apiRoutes from './routes';
-import { checkAuth } from "./controllers/healthController";
+import { checkAuth } from "./auth";
 import morgan from "morgan";
-import { allowedOrigins } from "./config";
+import { allowedOrigins, isAllowedOrigin } from "./config";
 
 const app: Express = express();
 
@@ -13,39 +13,25 @@ app.use(cors({
             return callback(null, true);
         }
 
-        const cleanOrigin = origin.endsWith("/") ? origin.slice(0, -1) : origin;
-
-        const isAllowed = allowedOrigins.some((allowed) => {
-            const cleanAllowed = allowed.endsWith("/") ? allowed.slice(0, -1) : allowed;
-            return cleanAllowed === cleanOrigin;
-        });
-
-        if (isAllowed) {
+        if (isAllowedOrigin(origin)) {
             return callback(null, true);
         } else {
             console.warn(`>>> [CORS BLOCKED] Origin rejected: "${origin}". Allowed:`, allowedOrigins);
             return callback(null, false);
         }
     },
-    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"]
 }));
 
-app.use(express.json());
+// Big enough for a whole BOM or a new work order with all its parts
+// (the default 100 KB is about 400 work-order parts).
+app.use(express.json({ limit: "2mb" }));
 app.use(morgan("dev"));
 
 // Root route to handle Render health checks cleanly (fixes GET / 404)
 app.get("/", (req: Request, res: Response) => {
     res.status(200).json({ status: "online", message: "Demacia BOM API is running" });
-});
-
-// Ensure preflight OPTIONS requests bypass auth checks and return 204
-app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-    }
-    next();
 });
 
 // Selective Auth Middleware: only *reading* a Drive file is public (images in
@@ -72,6 +58,9 @@ const errorHandler: ErrorRequestHandler = (
     next: NextFunction
 ) => {
     console.error(err.stack);
+
+    // A reply was already (partly) sent: Express's default handler closes it.
+    if (res.headersSent) return next(err);
 
     // Bad input the client can fix (e.g. a wrong field type): say what's wrong.
     if (err.name === "ValidationError" || err.name === "CastError") {

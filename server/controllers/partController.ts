@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
-import { cleanUpdateBody, upsertWithRetry } from "./upsert";
+import { cleanUpdateBody, upsertByID } from "./upsert";
+import { makeGetByIds } from "./getByIds";
 
 interface OnshapeID {
   documentID: string;
@@ -69,7 +70,8 @@ export async function upsertPartByID(
 ) {
   try {
     const id = req.params.id;
-    const existing = await Part.findOne({ id: id });
+    // Read only for the name below; 200 vs 201 comes from the write itself.
+    const existing = await Part.exists({ id: id });
 
     const updateData: any = { ...cleanUpdateBody(req.body), id: id };
 
@@ -82,18 +84,9 @@ export async function upsertPartByID(
       delete updateData.name;
     }
 
-    const part = await upsertWithRetry(() => Part.findOneAndUpdate(
-      { id: id },
-      { $set: updateData },
-      {
-        returnDocument: "after",
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-      },
-    ));
+    const { doc: part, created } = await upsertByID(Part, id, { $set: updateData });
 
-    return res.status(existing ? 200 : 201).json(part);
+    return res.status(created ? 201 : 200).json(part);
   } catch (err) {
     return next(err);
   }
@@ -131,22 +124,5 @@ export async function deletePartByOnshapeKey(req: Request<OnshapeID>, res: Respo
   delegateReq.params = { id: id };
   return deletePartByID(delegateReq, res, next);
 }
-/** Most IDs accepted by one batch lookup. */
-const MAX_BATCH_IDS = 500;
-
-/**
- * POST /ids  body: { ids: [...] }  -> the records that exist (any order).
- * Read-only: unlike GET /id/:id it never creates a missing record. Lets a
- * page load all of a BOM's items in one request instead of one per item.
- */
-export async function getPartsByIds(req: Request, res: Response, next: NextFunction) {
-    try {
-        const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((id: unknown) => typeof id === "string") : [];
-        if (ids.length > MAX_BATCH_IDS) return res.status(400).json({ message: `At most ${MAX_BATCH_IDS} ids per request` });
-        if (ids.length === 0) return res.status(200).json([]);
-        const records = await Part.find({ id: { $in: ids } });
-        return res.status(200).json(records);
-    } catch (err) {
-        return next(err);
-    }
-}
+/** POST /ids: the Part records with these ids. */
+export const getPartsByIds = makeGetByIds(Part);

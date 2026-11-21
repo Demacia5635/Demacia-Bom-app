@@ -1,5 +1,41 @@
 import { NextFunction, Request, Response } from "express";
-import { GoogleDriveService, folderForUpload, isTeamFolder } from "../services/driveService";
+import { GoogleDriveService, folderForUpload } from "../services/driveService";
+
+/** What a Drive file ID looks like; anything else isn't sent to Drive. */
+const DRIVE_FILE_ID = /^[A-Za-z0-9_-]{10,100}$/;
+
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+// Blobs without a type are sent as application/octet-stream.
+const CAD_TYPES = (...types: string[]) => [...types, "application/octet-stream"];
+/** File types the team uploads: thumbnails, STL and Parasolid. Extension -> allowed MIME types. */
+const UPLOAD_TYPES: Record<string, string[]> = {
+  png: IMAGE_TYPES,
+  jpg: IMAGE_TYPES,
+  jpeg: IMAGE_TYPES,
+  webp: IMAGE_TYPES,
+  stl: CAD_TYPES("model/stl", "application/sla", "application/vnd.ms-pki.stl"),
+  x_t: CAD_TYPES("application/x-parasolid"),
+  x_b: CAD_TYPES("application/x-parasolid"),
+};
+
+/**
+ * Runs before the upload body is read: anything but an allowed extension with
+ * a MIME type that fits it gets 415, so it's never buffered.
+ */
+export function checkUploadType(
+  req: Request<{ fileName: string; mimeType: string }>,
+  res: Response,
+  next: NextFunction,
+) {
+  const extension = /\.([a-z0-9_]+)$/.exec(req.params.fileName.toLowerCase())?.[1] ?? "";
+  const mimeType = req.params.mimeType.split(";")[0].trim().toLowerCase();
+  if (!UPLOAD_TYPES[extension]?.includes(mimeType)) {
+    return res.status(415).json({
+      message: "Only PNG, JPEG or WebP images, STL and Parasolid (.x_t, .x_b) files can be uploaded",
+    });
+  }
+  return next();
+}
 
 export async function checkConnection(
   client: GoogleDriveService,
@@ -10,29 +46,6 @@ export async function checkConnection(
   return res.status(connected.connected ? 200 : 503).json(connected);
 }
 
-export async function getFilesFromFolder(
-  client: GoogleDriveService,
-  req: Request<{ folderID: string }>,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const folderID = req.params.folderID;
-    if (!folderID)
-      return res.status(400).json({ message: "folder id is required" });
-    // Only the team's own folders (this also keeps the ID out of Drive's
-    // query syntax unless it's one we configured).
-    if (!isTeamFolder(folderID))
-      return res.status(404).json({ message: `Folder ${folderID} not found` });
-    const files = await client.getAllFilesInFolder(folderID);
-    if (!files)
-      return res.status(404).json({ message: `Folder ${folderID} not found` });
-    return res.status(200).json(files);
-  } catch (err) {
-    next(err);
-  }
-}
-
 export async function getFileFromId(
   client: GoogleDriveService,
   req: Request<{ fileID: string }>,
@@ -41,8 +54,8 @@ export async function getFileFromId(
 ) {
   try {
     const fileID = req.params.fileID;
-    if (!fileID) {
-      return res.status(400).json({ message: "File ID is required" });
+    if (!DRIVE_FILE_ID.test(fileID ?? "")) {
+      return res.status(400).json({ message: "A valid file ID is required" });
     }
 
     let file: { data: Buffer; mimeType: string };
@@ -77,7 +90,8 @@ export async function getFileFromId(
     const isRasterImage = /^image\/(png|jpeg|gif|webp|bmp)$/i.test(file.mimeType);
     res.setHeader("Content-Type", isRasterImage ? file.mimeType : "application/octet-stream");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Cache-Control", "public, max-age=86400");
+    // The browser may keep it for a day; shared caches (proxies, CDNs) may not.
+    res.setHeader("Cache-Control", "private, max-age=86400");
     return res.status(200).send(file.data);
   } catch (err: any) {
     console.error(">>> [DRIVE CONTROLLER UNCAUGHT ERROR]:", err?.message || err);
@@ -135,7 +149,7 @@ export async function deleteFile(
 ) {
   try {
     const id = req.params.fileID;
-    if (!id) return res.status(400).json({ message: "file id is required" });
+    if (!DRIVE_FILE_ID.test(id ?? "")) return res.status(400).json({ message: "A valid file ID is required" });
     // Only files in the team folders may be deleted through the API.
     if (!(await client.isInTeamFolders(id)))
       return res.status(404).json({ message: `File ${id} not found` });

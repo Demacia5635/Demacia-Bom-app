@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
-import { cleanUpdateBody, upsertWithRetry } from "./upsert";
+import { cleanUpdateBody, upsertByID } from "./upsert";
 
 interface SubPartBody {
   partID: string;
@@ -37,7 +37,9 @@ export async function getAllWorkOrders(
   next: NextFunction,
 ) {
   try {
-    const workOrders = await WorkOrder.find().sort({ id: 1 });
+    // Oldest first. IDs are UUIDs now, so they don't follow creation order;
+    // older documents without createdAt come first (they're the oldest).
+    const workOrders = await WorkOrder.find().sort({ createdAt: 1, id: 1 });
     return res.status(200).json(workOrders);
   } catch (err) {
     return next(err);
@@ -60,6 +62,22 @@ export async function getWorkOrderByID(
   }
 }
 
+/**
+ * One entry per partID (the first one wins): per-part edits change only the
+ * first match, so a duplicate would drift out of sync.
+ */
+function uniqueParts(parts: unknown): unknown {
+  if (!Array.isArray(parts)) return parts; // The schema rejects it.
+  const seen = new Set<unknown>();
+  return parts.filter((part) => {
+    const partID = (part as SubPartBody | null)?.partID;
+    if (partID === undefined) return true;
+    if (seen.has(partID)) return false;
+    seen.add(partID);
+    return true;
+  });
+}
+
 export async function upsertWorkOrderByID(
   req: Request<{ id: string }, unknown, WorkOrderBody>,
   res: Response,
@@ -67,8 +85,6 @@ export async function upsertWorkOrderByID(
 ) {
   try {
     const id = req.params.id;
-    const existing = await WorkOrder.findOne({ id: id });
-
     // `parts` is written only when the work order is created. Afterwards each
     // part changes through POST /id/:id/part, so a whole-work-order save
     // (sent with an older copy of the parts) can't undo other people's
@@ -77,20 +93,11 @@ export async function upsertWorkOrderByID(
     // an older copy can't undo someone's merge.
     const { parts, cncGroups: _ignored, ...fields } = cleanUpdateBody(req.body);
     const update: Record<string, unknown> = { $set: { ...fields, id: id } };
-    if (parts !== undefined) update.$setOnInsert = { parts };
+    if (parts !== undefined) update.$setOnInsert = { parts: uniqueParts(parts) };
 
-    const workOrder = await upsertWithRetry(() => WorkOrder.findOneAndUpdate(
-      { id: id },
-      update,
-      {
-        returnDocument: 'after', // Fixed deprecation warning
-        upsert: true,
-        runValidators: true,
-        setDefaultsOnInsert: true,
-      },
-    ));
+    const { doc: workOrder, created } = await upsertByID(WorkOrder, id, update);
 
-    return res.status(existing ? 200 : 201).json(workOrder);
+    return res.status(created ? 201 : 200).json(workOrder);
   } catch (err) {
     return next(err);
   }
@@ -125,9 +132,12 @@ export async function updateWorkOrderPart(
     const partID = typeof req.body?.partID === "string" ? req.body.partID : "";
     if (!partID) return res.status(400).json({ message: "partID is required" });
 
+    const given: unknown = req.body?.changes;
+    if (typeof given !== "object" || given === null || Array.isArray(given))
+      return res.status(400).json({ message: "changes must be an object of field: value" });
     const changes: Record<string, unknown> = {};
     for (const field of EDITABLE_PART_FIELDS) {
-      if (req.body?.changes && field in req.body.changes) changes[field] = req.body.changes[field];
+      if (Object.hasOwn(given, field)) changes[field] = (given as Record<string, unknown>)[field];
     }
     if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No editable fields in changes" });
 
@@ -178,15 +188,20 @@ export async function deleteWorkOrderByID(
   }
 }
 const GROUP_ID = /^[A-Za-z0-9_-]{1,64}$/;
+// Size caps: this route writes with the native driver, so no schema checks it.
+const MAX_GROUP_PARTS = 500;
+const MAX_PART_ID_LENGTH = 200;
+const MAX_LINKS_LENGTH = 4000;
 
 /**
  * Creates, changes or dissolves one CNC group of a work order:
  * body { groupID?, partIDs: string[], links?: string }.
  * - No groupID: a new group (the server makes its ID).
- * - partIDs: the group's parts (all must be in the work order). Left out (with
- *   a groupID) = unchanged, e.g. when only the links change. They leave
- *   any other group; a group left with fewer than 2 parts is removed, so an
- *   empty list dissolves it. parts[] is never touched.
+ * - partIDs: the group's parts. Left out (with a groupID) = unchanged, e.g.
+ *   when only the links change. They leave any other group; a group left
+ *   with fewer than 2 parts is removed, so an empty list dissolves it.
+ *   A part parts[] doesn't list yet (added to the BOM after the work order
+ *   was made) is added to it with the defaults, like the per-part route does.
  * - links: the shared G-code link(s); left out = unchanged ("" for a new group).
  * One atomic update, so people merging at the same time don't overwrite each
  * other. Answers with the work order's groups.
@@ -204,8 +219,12 @@ export async function updateCncGroup(
     const keepParts = body.partIDs === undefined && body.groupID !== undefined;
     if (!keepParts && (!Array.isArray(body.partIDs) || !body.partIDs.every((p) => typeof p === "string" && p !== "")))
       return res.status(400).json({ message: "partIDs must be a list of part IDs" });
+    if (!keepParts && ((body.partIDs as string[]).length > MAX_GROUP_PARTS || (body.partIDs as string[]).some((p) => p.length > MAX_PART_ID_LENGTH)))
+      return res.status(400).json({ message: `partIDs may list up to ${MAX_GROUP_PARTS} parts, each up to ${MAX_PART_ID_LENGTH} characters` });
     if (body.links !== undefined && typeof body.links !== "string")
       return res.status(400).json({ message: "links must be text" });
+    if (typeof body.links === "string" && body.links.length > MAX_LINKS_LENGTH)
+      return res.status(400).json({ message: `links may be up to ${MAX_LINKS_LENGTH} characters` });
     const partIDs = keepParts ? [] : [...new Set(body.partIDs as string[])];
     const groupID = (body.groupID as string | undefined) ?? randomUUID();
     if (body.groupID === undefined && partIDs.length < 2)
@@ -232,9 +251,28 @@ export async function updateCncGroup(
         links !== undefined ? { links: { $literal: links } } : {},
       ],
     };
+    // Parts the work order doesn't list yet, with the schema's defaults (the
+    // native driver below doesn't apply them). Only the missing ones are added.
+    const newParts = new WorkOrder({
+      parts: partIDs.map((partID) => ({ partID, createdAt: now, updatedAt: now })),
+    }).toObject().parts;
+    const addParts = {
+      parts: {
+        $concatArrays: [
+          { $ifNull: ["$parts", []] },
+          {
+            $filter: {
+              input: { $literal: newParts },
+              cond: { $not: [{ $in: ["$$this.partID", { $ifNull: ["$parts.partID", []] }] }] },
+            },
+          },
+        ],
+      },
+    };
     const pipeline = [
       {
         $set: {
+          ...(partIDs.length > 0 ? addParts : {}),
           cncGroups: {
             $filter: {
               input: {
@@ -251,17 +289,9 @@ export async function updateCncGroup(
       },
     ];
 
-    // Native driver: a pipeline update, checked against parts[] in the same step.
-    const result = await WorkOrder.collection.findOneAndUpdate(
-      { id, ...(partIDs.length > 0 ? { "parts.partID": { $all: partIDs } } : {}) },
-      pipeline,
-      { returnDocument: "after" },
-    );
-    if (!result) {
-      const exists = await WorkOrder.exists({ id });
-      if (!exists) return res.status(404).json({ message: `Work order ${id} not found` });
-      return res.status(400).json({ message: "Some of those parts aren't in this work order" });
-    }
+    // Native driver: one atomic pipeline update.
+    const result = await WorkOrder.collection.findOneAndUpdate({ id }, pipeline, { returnDocument: "after" });
+    if (!result) return res.status(404).json({ message: `Work order ${id} not found` });
     const cncGroups = (result as { cncGroups?: { id?: string }[] }).cncGroups ?? [];
     // A links-only change for a group someone removed meanwhile wasn't saved: say so.
     if (keepParts && !cncGroups.some((g) => g.id === groupID))

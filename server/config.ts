@@ -17,7 +17,8 @@ if (!CLIENT_SECRET) {
     throw new Error("CLIENT_SECRET is not set. Add it to server/.env (or the host's environment variables); the server won't start without it.");
 }
 
-const defaultOrigins = [
+// The local dev servers, allowed only outside production.
+const defaultOrigins = process.env.NODE_ENV === "production" ? [] : [
     "http://localhost:5173",
     "http://localhost:5050",
     "http://127.0.0.1:5173",
@@ -28,8 +29,15 @@ const envOrigins = (process.env.ALLOWED_ORIGINS || '')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-/** Browser origins allowed to call the API (CORS and checkAuth). */
-export const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+const withoutSlash = (origin: string) => origin.replace(/\/+$/, "");
+
+/** Browser origins allowed to call the API, without trailing slashes. */
+export const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins].map(withoutSlash)));
+
+/** Whether a browser origin may call the API (used by both CORS and checkAuth). */
+export function isAllowedOrigin(origin: string): boolean {
+    return allowedOrigins.includes(withoutSlash(origin));
+}
 
 export const google = {
     clientId: process.env.GOOGLE_CLIENT_ID,

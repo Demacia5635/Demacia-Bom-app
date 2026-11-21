@@ -1,6 +1,7 @@
 /**
  * Shared helpers for the POST /id/:id upsert routes (parts, BOMs, work orders).
  */
+import type { Model } from "mongoose";
 
 /** Fields the server owns: never taken from a request body. */
 const SERVER_OWNED = new Set(["_id", "__v", "id", "createdAt", "updatedAt"]);
@@ -40,4 +41,28 @@ export async function upsertWithRetry<T>(run: () => Promise<T>): Promise<T> {
         if (!isDuplicateKeyError(err)) throw err;
         return await run();
     }
+}
+
+/**
+ * Upserts the record with this id and says whether this request created it.
+ * That comes from the same write (MongoDB's updatedExisting), so two
+ * first-time saves can't both answer 201, as a findOne beforehand allowed.
+ */
+export async function upsertByID(
+    model: Model<any>,
+    id: string,
+    update: Record<string, unknown>,
+): Promise<{ doc: unknown; created: boolean }> {
+    const result = await upsertWithRetry(() => model.findOneAndUpdate(
+        { id },
+        update,
+        {
+            returnDocument: "after",
+            upsert: true,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+            includeResultMetadata: true,
+        },
+    ));
+    return { doc: result.value, created: !result.lastErrorObject?.updatedExisting };
 }

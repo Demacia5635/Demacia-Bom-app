@@ -27,7 +27,7 @@ const partSchema = new mongoose.Schema(
     // (set by Publish BOM in the extension; see src/util/partSize.ts).
     size: { type: String },
     price: { type: Number },
-    productionType: { type: Number, ref: "ProductionType" },
+    productionType: { type: Number },
 
     onshapeURL: { type: String },
     avatarID: { type: String },

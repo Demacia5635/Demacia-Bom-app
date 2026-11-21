@@ -12,7 +12,7 @@ router.post('/id/:id', bomController.upsertBomByID);
 router.delete('/id/:id', bomController.deleteBomByID);
 
 const onshapeKeyPath = '/d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/b/:bomID';
-router.get(onshapeKeyPath, bomController.getBomByOnsahpeKey);
+router.get(onshapeKeyPath, bomController.getBomByOnshapeKey);
 router.post(onshapeKeyPath, bomController.upsertBomByOnshapeKey);
 router.delete(onshapeKeyPath, bomController.deleteBomByOnshapeKey);
 
