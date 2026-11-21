@@ -1,5 +1,5 @@
 import type { ColumnConfig } from "../../../components/Table";
-import { downloadFile } from "../../../util/ApiService";
+import { downloadDriveFile } from "../../../util/ApiService";
 import { openExternal } from "../../../util/openExternal";
 import type BomTableRow from "./BomTableRow";
 import { isLockedBomRow } from "./BomTableRow";
@@ -48,7 +48,7 @@ const BomColumns: ColumnConfig[] = [
     isDisabled: (row: BomTableRow) => row.isSubAssembly || !row.exportSTL,
     onButtonClick: (row: BomTableRow) => {
       if (row.isSubAssembly || !row.exportSTL) return; // Hard block for sub-assemblies
-      downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`, `${row.name || "part"}.stl`);
+      void downloadDriveFile(row.exportSTL, `${row.name || "part"}.stl`);
     },
   },
   // Export Parasolid Action (Disabled and blocked for sub-assemblies)
@@ -60,7 +60,7 @@ const BomColumns: ColumnConfig[] = [
     isDisabled: (row: BomTableRow) => row.isSubAssembly || !row.exportParasolid,
     onButtonClick: (row: BomTableRow) => {
       if (row.isSubAssembly || !row.exportParasolid) return; // Hard block for sub-assemblies
-      downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`, `${row.name || "part"}.x_t`);
+      void downloadDriveFile(row.exportParasolid, `${row.name || "part"}.x_t`);
     },
   },
 ];

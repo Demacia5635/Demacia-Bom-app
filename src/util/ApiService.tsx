@@ -5,6 +5,19 @@ const BACKEND_HOST = (typeof window !== "undefined" && window.location.hostname 
   ? "http://localhost:5050"
   : (import.meta.env.VITE_CLIENT_URL || "https://demacia-bom-app-n2ag.onrender.com");
 
+/**
+ * The full URL of a server route, for code that calls fetch itself (or builds
+ * links): `apiUrl("/telemetry/events")` → `<server>/api/telemetry/events`.
+ * The path may start with or without "/" or "/api", as with fetchFromApi.
+ * The server is localhost:5050 when run locally, else VITE_CLIENT_URL (or the
+ * production URL when that isn't set).
+ */
+export function apiUrl(path: string): string {
+  const withSlash = path.startsWith("/") ? path : `/${path}`;
+  const clean = withSlash === "/api" || withSlash.startsWith("/api/") ? withSlash.slice(4) : withSlash;
+  return `${BACKEND_HOST}/api${clean}`;
+}
+
 export interface ApiError {
   message: string;
   statusCode?: number;
@@ -64,6 +77,19 @@ export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {
   } catch (err: any) {
     if (err.statusCode) throw err;
     throw { message: err.message || "Network error occurred." } as ApiError;
+  }
+}
+
+/**
+ * Downloads a file saved in Google Drive (the STL / Parasolid files saved on
+ * publish) and tells the user if it fails, for download buttons.
+ */
+export async function downloadDriveFile(fileId: string, filename: string): Promise<void> {
+  try {
+    await downloadFile(`/api/drive/file/id/${encodeURIComponent(fileId)}`, filename);
+  } catch (err: any) {
+    console.error("Failed to download file:", err);
+    alert(`Download failed: ${err?.message || "an unexpected error occurred."}`);
   }
 }
 

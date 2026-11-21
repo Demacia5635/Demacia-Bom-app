@@ -1,5 +1,5 @@
 import type { ColumnConfig } from "../../../components/Table";
-import { downloadFile } from "../../../util/ApiService";
+import { downloadDriveFile } from "../../../util/ApiService";
 import { openExternal } from "../../../util/openExternal";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 
@@ -107,7 +107,7 @@ const WorkOrderColumns: ColumnConfig[] = [
         isDisabled: (row: WorkOrderTableRow) => !row.exportSTL,
         onButtonClick: (row: WorkOrderTableRow) => {
             if (!row.exportSTL) return;
-            downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`, `${row.name || "part"}.stl`);
+            void downloadDriveFile(row.exportSTL, `${row.name || "part"}.stl`);
         },
     },
     {
@@ -118,7 +118,7 @@ const WorkOrderColumns: ColumnConfig[] = [
         isDisabled: (row: WorkOrderTableRow) => !row.exportParasolid,
         onButtonClick: (row: WorkOrderTableRow) => {
             if (!row.exportParasolid) return;
-            downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`, `${row.name || "part"}.x_t`);
+            void downloadDriveFile(row.exportParasolid, `${row.name || "part"}.x_t`);
         },
     },
 ];

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
-import { AuthenticatedImage, downloadFile, fetchFromApi } from "../../util/ApiService";
+import { AuthenticatedImage, downloadDriveFile, fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import { isPurchasedPart, type PartModel, type BomModel } from "../../util/Models";
 import { useNavigate } from "react-router-dom";
@@ -23,17 +23,6 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const [saveError, setSaveError] = useState<string | null>(null);
     const [saved, setSaved] = useState(false);
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
-
-    // Files are stored in Google Drive under their file ID.
-    const downloadPartFile = async (fileId: string | undefined, filename: string) => {
-        if (!fileId) return;
-        try {
-            await downloadFile(`/api/drive/file/id/${fileId}`, filename);
-        } catch (err: any) {
-            console.error("Failed to download file:", err);
-            alert(`Download failed: ${err?.message || "an unexpected error occurred."}`);
-        }
-    };
 
     // Linked BOM states
     const [isCheckingBoms, setIsCheckingBoms] = useState(false);
@@ -298,7 +287,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         <button
                             type="button"
                             disabled={!part.stlLink}
-                            onClick={() => downloadPartFile(part.stlLink, `${part.name || "part"}.stl`)}
+                            onClick={() => part.stlLink && downloadDriveFile(part.stlLink, `${part.name || "part"}.stl`)}
                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Download STL
@@ -312,7 +301,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                         <button
                             type="button"
                             disabled={!part.parasolidLink}
-                            onClick={() => downloadPartFile(part.parasolidLink, `${part.name || "part"}.x_t`)}
+                            onClick={() => part.parasolidLink && downloadDriveFile(part.parasolidLink, `${part.name || "part"}.x_t`)}
                             className="mx-auto px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             Download Parasolid
