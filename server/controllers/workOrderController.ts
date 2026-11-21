@@ -125,9 +125,12 @@ export async function updateWorkOrderPart(
     const partID = typeof req.body?.partID === "string" ? req.body.partID : "";
     if (!partID) return res.status(400).json({ message: "partID is required" });
 
+    const given: unknown = req.body?.changes;
+    if (typeof given !== "object" || given === null || Array.isArray(given))
+      return res.status(400).json({ message: "changes must be an object of field: value" });
     const changes: Record<string, unknown> = {};
     for (const field of EDITABLE_PART_FIELDS) {
-      if (req.body?.changes && field in req.body.changes) changes[field] = req.body.changes[field];
+      if (Object.hasOwn(given, field)) changes[field] = (given as Record<string, unknown>)[field];
     }
     if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No editable fields in changes" });
 
