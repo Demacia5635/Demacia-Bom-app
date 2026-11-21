@@ -48,6 +48,7 @@ import {
 } from "./treeLoader";
 import BomToolbar from "./BomToolbar";
 import BomHeader from "./BomHeader";
+import { bomPageUrl } from "./websiteLinks";
 import {
   catalogNumberInName,
   changedFields,
@@ -990,6 +991,7 @@ export default function AssemblyBomPage() {
           displayName={displayName}
           description={rootOnshapeBom?.description || rootBomDB?.description}
           rootIsPublished={rootIsPublished}
+          websiteUrl={rootBomDB?.id ? bomPageUrl(rootBomDB.id) : null}
           topProblem={topProblem}
           topNumber={topAssembly.number}
           theme={theme}

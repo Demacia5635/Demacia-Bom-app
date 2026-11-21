@@ -1,4 +1,5 @@
 import type { usePanelThemeSetting } from "../extension/panel/theme";
+import { openExternal } from "../util/openExternal";
 
 /**
  * The top of the panel: the assembly's name, description and status notes,
@@ -8,6 +9,7 @@ export default function BomHeader({
   displayName,
   description,
   rootIsPublished,
+  websiteUrl,
   topProblem,
   topNumber,
   theme,
@@ -22,6 +24,8 @@ export default function BomHeader({
   displayName: string;
   description: string | undefined;
   rootIsPublished: boolean;
+  /** The assembly's page on the website, once it is saved there. */
+  websiteUrl: string | null;
   /** Why the top assembly's catalog number would stop a work order, if it would. */
   topProblem: string | undefined;
   topNumber: string;
@@ -45,6 +49,21 @@ export default function BomHeader({
         {!rootIsPublished && (
           <p className="assembly-bom-unpublished-hint text-xs text-blue-500 mt-1 italic">
             This assembly isn't in the database yet - it's showing live Onshape data.
+          </p>
+        )}
+        {websiteUrl && (
+          <p className="text-xs mt-1">
+            <a
+              href={websiteUrl}
+              className="assembly-bom-website-link text-blue-500 hover:underline"
+              onClick={(e) => {
+                e.preventDefault();
+                openExternal(websiteUrl);
+              }}
+              title="This assembly's BOM page on the team website (new tab)"
+            >
+              Open on the website ↗
+            </a>
           </p>
         )}
         {topProblem && (
