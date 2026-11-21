@@ -1,12 +1,9 @@
 import type { ColumnConfig } from "../components/Table";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { openExternal } from "../util/openExternal";
-
-/**
- * Not editable: Standard Content (bolts, nuts...) and vendor parts, which come
- * from outside, and parts marked standard here (bought, locked like screws).
- */
-const isStandardContent = (row: AssemblyBomRow) => row.vendor !== "" || !!row.isStandardContent || !!row.markedStandard;
+// Not editable: Standard Content (bolts, nuts...) and vendor parts, which come
+// from outside, and parts marked standard here (bought, locked like screws).
+import { isLockedRow } from "./rowRules";
 
 /** Why a cell's value would stop a work order, if it would. */
 export type CellProblem = (row: AssemblyBomRow, key: string) => string | undefined;
@@ -26,13 +23,13 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
     key,
     label,
     type,
-    isDisabled: isStandardContent,
+    isDisabled: isLockedRow,
     isModified: (row: AssemblyBomRow) => !!row.modified?.includes(key),
     problem: cellProblem ? (row: AssemblyBomRow) => cellProblem(row, key) : undefined,
   });
 
   return [
-    { key: "avatar", label: "Avatar", type: "image", isDisabled: isStandardContent },
+    { key: "avatar", label: "Avatar", type: "image", isDisabled: isLockedRow },
     editable("name", "Name", "string"),
     // Parts named only by catalog number (spacers...) can be told apart by size.
     ...(showSize ? [{ key: "size", label: "Size", type: "string", isDisabled: () => true } satisfies ColumnConfig] : []),
@@ -43,7 +40,7 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
       ...editable("engineer", "Engineer", "string"),
       // Only items not in the database yet get the default engineer on Publish.
       placeholder: (row: AssemblyBomRow) =>
-        isStandardContent(row) || row.source === "db" ? undefined : defaultEngineer || undefined,
+        isLockedRow(row) || row.source === "db" ? undefined : defaultEngineer || undefined,
     },
     // Must stay read-only: Table writes an edit to every row with the same id,
     // and rows of an item used in several places share an id but each has its
@@ -59,7 +56,7 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
       label: "Links",
       type: "button",
       buttonText: "Open Onshape",
-      isDisabled: isStandardContent,
+      isDisabled: isLockedRow,
       onButtonClick: (row: AssemblyBomRow) => {
         openExternal(row.onshapeURL);
       },
@@ -70,14 +67,14 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
       key: "wantStl",
       label: "STL",
       type: "boolean",
-      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isLockedRow(row),
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantStl"),
     },
     {
       key: "wantParasolid",
       label: "Parasolid",
       type: "boolean",
-      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isStandardContent(row),
+      isDisabled: (row: AssemblyBomRow) => row.isAssembly || isLockedRow(row),
       isModified: (row: AssemblyBomRow) => !!row.modified?.includes("wantParasolid"),
     },
     // Bought rather than made (a bearing, a motor...): locked like Standard
