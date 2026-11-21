@@ -49,7 +49,6 @@ const SAVED_PART_FIELDS = [
     "Priority",
     "manufacturingMethod",
     "productionMakingOwner",
-    "comments",
     "links",
     "approxArrivalDate",
 ] as const satisfies readonly (keyof WorkOrderTableRow)[];
@@ -93,7 +92,6 @@ export default function WorkOrderDetailsPage() {
     // table never flashes empty first.
     const [loading, setLoading] = useState<boolean>(true);
     const [workOrderData, setWorkOrderData] = useState<WorkorderModel | null>(null);
-    const [assemblyThumbnailUrl] = useState<string>(""); // image now comes from the BOM record
 
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
     // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
@@ -239,7 +237,7 @@ export default function WorkOrderDetailsPage() {
 
                 const existingWoPart = workOrderData?.parts?.find((p: any) => p.partID === partID);
 
-                let avatarUrl = recordImageSrc(part as any);
+                let avatarUrl = recordImageSrc(part);
 
                 const rowId = `${workOrderID}-part-${partID}`;
                 rowPartMapRef.current.set(rowId, partID);
@@ -625,7 +623,7 @@ export default function WorkOrderDetailsPage() {
 
     const handleShowPartData = async (row: WorkOrderTableRow) => {
         setContextMenu(null);
-        const partId = rowPartMapRef.current.get(row.id) || (row as any).entityID;
+        const partId = rowPartMapRef.current.get(row.id) || row.partID;
         if (!partId) return;
 
         try {
@@ -660,15 +658,9 @@ export default function WorkOrderDetailsPage() {
 
     return (
         <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
-            <div className="flex justify-end mb-4">
-                
-            </div>
 
             {workOrderData && (
-                <WorkOrderDataUI 
-                    workOrder={workOrderData} 
-                    assemblyThumbnailURL={assemblyThumbnailUrl} 
-                />
+                <WorkOrderDataUI workOrder={workOrderData} />
             )}
             {/* Under the title card: the note on the left, "Show size" on the right. */}
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mt-3 mb-3">
@@ -952,7 +944,7 @@ export default function WorkOrderDetailsPage() {
                         >
                             ✕ Close
                         </button>
-                        {enlargedImageSrc === "FAILED" || !enlargedImageSrc ? (
+                        {enlargedImageSrc === "FAILED" ? (
                             <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
                                 <span className="text-xl font-bold">Image Failed to Load</span>
                                 <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>

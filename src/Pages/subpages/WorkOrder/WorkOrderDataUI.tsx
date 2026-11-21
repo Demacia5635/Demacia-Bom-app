@@ -7,10 +7,9 @@ import { recordImageSrc } from "../../../util/recordImage";
 
 interface WorkOrderDataUIProps {
     workOrder: WorkorderModel;
-    assemblyThumbnailURL?: string;
 }
 
-const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyThumbnailURL }) => {
+const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder }) => {
     const { isLight } = useThemeSync();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
     // Kept with the id it was loaded for: another work order's BOM is never shown.
@@ -38,7 +37,7 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyTh
 
     // Resolve image source hierarchy matching the parent BOM exactly
     // The parent BOM's image; the work order's own until the BOM has loaded.
-    const imageSrc = assemblyThumbnailURL || recordImageSrc(bomData as any) || recordImageSrc(workOrder as any);
+    const imageSrc = recordImageSrc(bomData) || recordImageSrc(workOrder as any);
 
     return (
       <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200 mb-6`}>

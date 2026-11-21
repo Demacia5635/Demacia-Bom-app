@@ -73,8 +73,7 @@ const BomRow: React.FC<BomRowProps> = ({
         if (fullBom?.subAssemblies && fullBom.subAssemblies.length > 0) {
           // All sub-assemblies in one request.
           const records = await fetchBomsByIds(fullBom.subAssemblies.map((sub) => sub.bomID));
-          const subBoms = await Promise.all(
-            fullBom.subAssemblies.map(async (sub) => {
+          const subBoms = fullBom.subAssemblies.map((sub) => {
               // Older records also carry driveFileId / imageUrl (not in BomModel).
               const subBomRecord = (records.get(sub.bomID) ?? null) as (BomModel & { driveFileId?: string; imageUrl?: string }) | null;
               return {
@@ -86,8 +85,7 @@ const BomRow: React.FC<BomRowProps> = ({
                 imageUrl: subBomRecord?.imageUrl,
                 onshapeID: subBomRecord?.onshapeID,
               } as BomSummary;
-            })
-          );
+            });
           setSubAssemblies(subBoms);
         }
       } catch (err) {

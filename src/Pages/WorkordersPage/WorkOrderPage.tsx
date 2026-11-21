@@ -81,7 +81,7 @@ export function WorkOrdersPage() {
     // Written out in full: Tailwind only generates classes it finds as literal text.
     const hoverHeading = isLight ? "hover:text-zinc-900" : "hover:text-white";
     const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
-    const textSubdued = isLight ? "text-zinc-600" : "text-zinc-600";
+    const textSubdued = "text-zinc-600"; // the same in both themes
     const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
 
     return (

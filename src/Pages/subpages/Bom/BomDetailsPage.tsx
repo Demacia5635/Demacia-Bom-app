@@ -101,7 +101,7 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
         isExpanded: view === "flattened",
         isSubAssembly: true,
         subBomId: sub.bomID,
-        avatar: recordImageSrc(record as any),
+        avatar: recordImageSrc(record),
         name: partDisplayName(record, sub.bomID),
         catalogNumber: record?.catalogNumber || "",
         revision: "-",
@@ -135,7 +135,7 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
         parentId: parentRowId,
         isExpanded: false,
         isSubAssembly: false,
-        avatar: recordImageSrc(part as any),
+        avatar: recordImageSrc(part),
         name: partDisplayName(part, p.partID),
         catalogNumber: part.catalogNumber || "",
         revision: part.revision || "",
@@ -370,7 +370,7 @@ export default function BomDetailsPage() {
     setContextMenu(null);
     // A sub-assembly marked standard (a motor...) is also saved as a part with
     // its BOM id; one the team makes has only its BOM record.
-    const subBomId = row.isSubAssembly ? ((row as any).subBomId as string | undefined) : undefined;
+    const subBomId = row.isSubAssembly ? row.subBomId : undefined;
     const partId = subBomId || row.entityID;
     if (!partId) return;
 
@@ -399,7 +399,7 @@ export default function BomDetailsPage() {
 
   const handleGoToSubBom = (row: BomTableRow) => {
     setContextMenu(null);
-    const subBomId = (row as any).subBomId;
+    const subBomId = row.subBomId;
     if (subBomId) {
       navigate(`/bom/${subBomId}`);
     }
@@ -410,9 +410,6 @@ export default function BomDetailsPage() {
 
   return (
     <div className={`p-8 min-h-screen transition-colors duration-200 ${pageBg}`}>
-      <div className="flex justify-end mb-4">
-        
-      </div>
 
       {mainBomData && (
         <MainBomDataUI bom={mainBomData} />
@@ -545,7 +542,7 @@ export default function BomDetailsPage() {
             >
               ✕ Close
             </button>
-            {enlargedImageSrc === "FAILED" || !enlargedImageSrc ? (
+            {enlargedImageSrc === "FAILED" ? (
               <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
                 <span className="text-xl font-bold">Image Failed to Load</span>
                 <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>

@@ -88,14 +88,9 @@ const WorkOrderColumns: ColumnConfig[] = [
         label: "CAD Link",
         type: "button",
         buttonText: "Open CAD",
-        isDisabled: (row: WorkOrderTableRow) => !row.onshapeURL && !(row as any).onshapeID?.documentID,
+        isDisabled: (row: WorkOrderTableRow) => !row.onshapeURL,
         onButtonClick: (row: WorkOrderTableRow) => {
-            let url = row.onshapeURL;
-            if (!url && (row as any).onshapeID) {
-                const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
-                url = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
-            }
-            openExternal(url);
+            if (row.onshapeURL) openExternal(row.onshapeURL);
         },
     },
     {
