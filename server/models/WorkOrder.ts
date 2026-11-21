@@ -59,6 +59,9 @@ const workOrderSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+// GET /all lists work orders oldest first (IDs are UUIDs, so not by id).
+workOrderSchema.index({ createdAt: 1, id: 1 });
+
 const WorkOrder = mongoose.model("Work Order", workOrderSchema);
 
 export default WorkOrder;
