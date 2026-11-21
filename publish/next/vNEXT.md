@@ -36,6 +36,7 @@
 - Unticking "Show size" or closing the panel stops the size requests to Onshape. (E8, `4895894`)
 - Closing the panel also stops sub-assembly loads that were still running. (P9, `4e2ac98`)
 - On Chrome, the extension no longer resets the side panel on every page load of every non-Onshape tab, only on tabs that have a panel. (P10, `3aca98a`)
+- Refresh BOM no longer downloads the insides of bought sub-assemblies (vendor or marked standard), which it never shows. Fewer Onshape requests on assemblies with bought sub-assemblies. (P4, `6c4dab1`)
 - If a Refresh BOM fails halfway, the header keeps describing the BOM still shown. (E6, `52892d5`)
 - Assembly names no longer start with a stray space, and record IDs no longer end in "_undefined" when Onshape gives no BOM id. (E2, E3: `516348a`, `dac3361`)
 
