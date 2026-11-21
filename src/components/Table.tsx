@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useColumnResize } from "./table/useColumnResize";
+import { clearTableLayout, readTableLayout, writeTableLayout } from "./table/tableLayout";
 import ProblemTip from "./table/ProblemTip";
 import TableCell from "./table/TableCell";
 import { useProblemTip } from "./table/useProblemTip";
@@ -79,9 +80,19 @@ interface TableParam<T extends RowData> {
     rowFilter?: (row: T) => boolean;
     /** Rows this returns true for are left out (with anything under them); expanding works as usual. */
     hideRow?: (row: T) => boolean;
+    /**
+     * Remember this table's column widths, order, sort and hidden columns in
+     * this browser under this name, and offer "Columns…" and "Reset columns"
+     * in the header menu (QW7/QW8). Left out, nothing is remembered.
+     */
+    storageKey?: string;
 }
 
-export function Table<T extends RowData>({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }: TableParam<T>) {
+export function Table<T extends RowData>({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow, storageKey }: TableParam<T>) {
+    // The remembered layout, read once (table/tableLayout.ts).
+    const [savedLayout] = useState(() => readTableLayout(storageKey));
+    const [hiddenColumns, setHiddenColumns] = useState<ReadonlySet<string>>(() => new Set(savedLayout.hidden ?? []));
+    const [showColumnsList, setShowColumnsList] = useState(false);
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
 
@@ -98,6 +109,9 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     // The columns in the user's order, and dragging them (table/useColumnReorder.ts).
     const {
         columns,
+        allColumns,
+        columnOrder,
+        setColumnOrder,
         moveColumn,
         draggedIdx,
         isHandleDragging,
@@ -107,8 +121,8 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
         handleDrop,
         resetDragState,
         getDropIndicatorClass,
-    } = useColumnReorder(columnsData, () => closeContextMenu());
-    const [sortConfig, setSortConfig] = useState<SortConfig | null>(initialSort ?? null);
+    } = useColumnReorder(columnsData, () => closeContextMenu(), { initialOrder: savedLayout.order, hidden: hiddenColumns });
+    const [sortConfig, setSortConfig] = useState<SortConfig | null>(savedLayout.sort !== undefined ? savedLayout.sort : initialSort ?? null);
 
     // Sticky header: the box is sized to reach the bottom of the window (table/useStickyFit.ts).
     const fitHeight = useStickyFit(wrapperRef, stickyHeader);
@@ -143,7 +157,31 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
 
     // Column widths: dragged, fitted, and the last one filling the table (table/useColumnResize.ts).
     const { columnWidths, setColumnWidths, autoLastColWidth, handleResizeStart } =
-        useColumnResize(columns, wrapperRef, defaultColWidth, minLastColWidth);
+        useColumnResize(columns, wrapperRef, defaultColWidth, minLastColWidth, savedLayout.widths);
+
+    // Remember the layout as it changes (only with a storageKey).
+    useEffect(() => {
+        if (!storageKey) return;
+        writeTableLayout(storageKey, { widths: columnWidths, order: columnOrder, sort: sortConfig, hidden: [...hiddenColumns] });
+    }, [storageKey, columnWidths, columnOrder, sortConfig, hiddenColumns]);
+
+    const toggleColumn = (key: string) =>
+        setHiddenColumns((current) => {
+            const next = new Set(current);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+
+    /** Back to the table as the page defines it: widths, order, sort, all columns shown. */
+    const resetColumns = () => {
+        if (storageKey) clearTableLayout(storageKey);
+        setColumnWidths({});
+        setColumnOrder(columnsData.map((c) => c.key));
+        setSortConfig(initialSort ?? null);
+        setHiddenColumns(new Set());
+        closeContextMenu();
+    };
 
 
 
@@ -254,6 +292,7 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     const handleContextMenu = (e: React.MouseEvent, key: string) => {
         e.preventDefault();
         const originalIndex = columns.findIndex(c => c.key === key);
+        setShowColumnsList(false);
         setContextMenu({ visible: true, x: e.clientX, y: e.clientY, columnIndex: originalIndex });
     };
 
@@ -434,6 +473,33 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
                 <div ref={contextMenuRef} className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => { if (contextMenu.columnIndex > 0) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex - 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === 0}>Move Left</button>
                     <button onClick={() => { if (contextMenu.columnIndex < columns.length - 1) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex + 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === columns.length - 1}>Move Right</button>
+                    {storageKey && (
+                        <>
+                            <button onClick={() => setShowColumnsList((open) => !open)} aria-expanded={showColumnsList}>
+                                Columns… {showColumnsList ? "▴" : "▾"}
+                            </button>
+                            {showColumnsList && (
+                                <div role="group" aria-label="Shown columns" className="max-h-64 overflow-y-auto px-2 pb-1">
+                                    {allColumns.map((col) => {
+                                        const shown = !hiddenColumns.has(col.key);
+                                        return (
+                                            <label key={col.key} className="flex items-center gap-2 py-0.5 text-sm cursor-pointer whitespace-nowrap">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={shown}
+                                                    // The last shown column can't be hidden.
+                                                    disabled={shown && columns.length === 1}
+                                                    onChange={() => toggleColumn(col.key)}
+                                                />
+                                                {col.label}
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <button onClick={resetColumns}>Reset columns</button>
+                        </>
+                    )}
                 </div>
             )}
         </div>

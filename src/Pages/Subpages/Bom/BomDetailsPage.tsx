@@ -438,6 +438,7 @@ export default function BomDetailsPage() {
             columnsData={showSize ? BomColumns : COLUMNS_WITHOUT_SIZE}
             setData={handleTableDataChange}
             newRowFunction={undefined}
+            storageKey="bom-page"
             initialSort={{ key: "catalogNumber", direction: "asc" }}
             // Like Excel's freeze panes: header row + avatar and name stay visible.
             stickyHeader
