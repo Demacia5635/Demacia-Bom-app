@@ -1,108 +1,46 @@
 import { useState } from "react";
-import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import { type BomModel } from "../../../util/Models";
 import { createPortal } from "react-dom";
 import { WorkOrderForm } from "./CreatingWO";
 import { recordImageSrc } from "../../../util/recordImage";
-import { useThemeSync } from "../../../util/misc/useThemeSync";
-import ImageLightbox from "../../../components/ImageLightbox";
+import RecordHeaderCard from "../../../components/RecordHeaderCard";
 
+const ACTION_BUTTON = "px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md w-full lg:w-auto text-center";
+
+/** The BOM page's header: the assembly, "Create Work Order" and its Onshape link. */
 const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
   const [isCreatingWO, setCreatingWO] = useState(false);
   // While the work order is being created, a click on the backdrop doesn't close the form.
   const [isCreatingBusy, setCreatingBusy] = useState(false);
-  const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
-  
-  // The app's theme toggle (like every other page), not the OS setting.
-  const { isLight } = useThemeSync();
 
   const resolvedBomId = bom.id || (bom as any)._id;
 
-  const imageSrc = recordImageSrc(bom as any);
-
-  const containerBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
-  const imageBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
-  const textHeading = isLight ? "text-zinc-900" : "text-white";
-  const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
-  const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
-  const dividerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
-
   return (
     <div>
-      <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200`}>
-        <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full lg:w-auto">
-          <div 
-            onClick={() => setEnlargedImageSrc(imageSrc || "FAILED")}
-            className={`w-28 h-28 shrink-0 ${imageBg} border rounded-xl overflow-hidden flex items-center justify-center shadow-inner cursor-pointer hover:opacity-80 transition-opacity`}
-            title="Click to enlarge image"
-          >
-            {imageSrc ? (
-              <AuthenticatedImage
-                src={imageSrc}
-                alt={bom.name || "BOM Thumbnail"}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className={`${textMuted} text-xs font-mono`}>NO IMAGE</span>
+      <RecordHeaderCard
+        imageSrc={recordImageSrc(bom)}
+        imageAlt={bom.name || "BOM Thumbnail"}
+        title={bom.name || "Unnamed Assembly"}
+        description={bom.description}
+        facts={[
+          { label: "Catalog No", value: bom.catalogNumber || "N/A" },
+          { label: "Engineer", value: bom.engineer || "N/A" },
+        ]}
+        actions={
+          <>
+            <button onClick={() => setCreatingWO(true)} className={ACTION_BUTTON}>
+              Create Work Order
+            </button>
+            {bom.onshapeURL && (
+              <a href={bom.onshapeURL} target="_blank" rel="noopener noreferrer" className={ACTION_BUTTON}>
+                Open Onshape CAD
+              </a>
             )}
-          </div>
+          </>
+        }
+        comments={bom.comments}
+      />
 
-          <div className="space-y-2">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className={`text-2xl font-bold tracking-tight ${textHeading}`}>
-                {bom.name || "Unnamed Assembly"}
-              </h1>
-              {bom.description && (
-                <p className={`text-sm ${textMuted} italic`}>
-                  {bom.description}
-                </p>
-              )}
-            </div>
-
-            <div className={`flex items-center gap-4 text-xs ${textMuted} flex-wrap`}>
-              <p>
-                Catalog No:{" "}
-                <span className={`${textValue} font-medium`}>
-                  {bom.catalogNumber || "N/A"}
-                </span>
-              </p>
-              <span>•</span>
-              <p>
-                Engineer:{" "}
-                <span className={`${textValue} font-medium`}>
-                  {bom.engineer || "N/A"}
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className={`flex flex-col items-start lg:items-end gap-3 self-stretch lg:self-auto shrink-0 border-t lg:border-t-0 ${dividerBorder} pt-4 lg:pt-0`}>
-          <button
-            onClick={() => setCreatingWO(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md w-full lg:w-auto text-center"
-          >
-            Create Work Order
-          </button>
-          {bom.onshapeURL && (
-            <a
-              href={bom.onshapeURL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md w-full lg:w-auto text-center"
-            >
-              Open Onshape CAD
-            </a>
-          )}
-
-          {bom.comments && (
-            <p className={`text-xs ${textMuted} italic max-w-xs text-left lg:text-right`}>
-              {bom.comments}
-            </p>
-          )}
-        </div>
-      </div>
-      
       {isCreatingWO && createPortal(
         <div
           onClick={() => { if (!isCreatingBusy) setCreatingWO(false); }}
@@ -119,8 +57,6 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
         </div>,
         document.body
       )}
-
-      <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
     </div>
   );
 }
