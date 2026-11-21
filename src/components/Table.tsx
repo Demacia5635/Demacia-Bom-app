@@ -246,7 +246,9 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         };
     }, []);
 
-    // Track table content width for the synced bottom scrollbar spacer
+    // Track table content width for the synced bottom scrollbar spacer. The
+    // <table> is always mounted and the observer follows its size, so it's
+    // created once (not again after every edit).
     useEffect(() => {
         const table = wrapperRef.current?.querySelector('table');
         if (!table) return;
@@ -259,7 +261,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         const observer = new ResizeObserver(updateWidth);
         observer.observe(table);
         return () => observer.disconnect();
-    }, [columns, data, columnWidths]);
+    }, []);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -304,7 +306,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
         const ro = new ResizeObserver(recompute);
         ro.observe(wrapper);
         return () => ro.disconnect();
-    }, [columns, columnWidths]);
+    }, [columns, columnWidths, defaultColWidth, minLastColWidth]);
 
     const handleResizeStart = (e: React.PointerEvent, key: string) => {
         e.stopPropagation();
