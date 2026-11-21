@@ -6,7 +6,9 @@
  *    such text from its top-left cell (one value fills the whole selection),
  *    Ctrl+D fills each column down from the selection's top row (one row:
  *    from the row above), Delete clears its text cells;
- *  - Esc or a click outside the table clears it.
+ *  - Esc or a click outside the table clears it (except on an element marked
+ *    data-keep-cell-selection, e.g. a page's bar that edits the selection);
+ *  - keys and copy / paste typed into another field of the page are left alone.
  * Every change is one setData (one undo step); locked (disabled) cells,
  * buttons and pictures are skipped, and text that doesn't fit a column
  * (letters in a number cell...) leaves that cell as it was.
@@ -38,6 +40,12 @@ interface Options<T extends RowData> {
 }
 
 const valueOf = (row: RowData, key: string): unknown => (row as unknown as Record<string, unknown>)[key];
+
+/** A text field, select or editable element (where keys and paste belong to it). */
+function isEditable(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return !!el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+}
 
 export function useCellSelection<T extends RowData>({ enabled, rows, columns, data, setData, wrapperRef, onSelectionChange }: Options<T>) {
   const [anchor, setAnchor] = useState<CellPos | null>(null);
@@ -131,10 +139,14 @@ export function useCellSelection<T extends RowData>({ enabled, rows, columns, da
       dragging.current = false;
     };
     const onPointerDownOutside = (e: PointerEvent) => {
-      if (!wrapperRef.current?.contains(e.target as Node)) clear();
+      const target = e.target as Element | null;
+      if (wrapperRef.current?.contains(target) || target?.closest?.("[data-keep-cell-selection]")) return;
+      clear();
     };
+    /** In a field elsewhere on the page (not one of the table's cells). */
+    const elsewhere = (e: Event) => isEditable(e.target) && !wrapperRef.current?.contains(e.target as Node);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!range) return;
+      if (!range || elsewhere(e)) return;
       if (e.key === "Escape" && multi) {
         clear();
         return;
@@ -157,7 +169,7 @@ export function useCellSelection<T extends RowData>({ enabled, rows, columns, da
       }
     };
     const onCopy = (e: ClipboardEvent) => {
-      if (!range || !multi) return; // one cell: the browser copies the text box's text
+      if (!range || !multi || elsewhere(e)) return; // one cell: the browser copies the text box's text
       const grid: string[][] = [];
       for (let r = range.top; r <= range.bottom; r++) {
         const row = rows[r];
@@ -172,7 +184,7 @@ export function useCellSelection<T extends RowData>({ enabled, rows, columns, da
       e.preventDefault();
     };
     const onPaste = (e: ClipboardEvent) => {
-      if (!range) return;
+      if (!range || elsewhere(e)) return;
       const text = e.clipboardData?.getData("text/plain") ?? "";
       const grid = parseClipboardGrid(text);
       const one = grid.length === 1 && grid[0].length === 1;
