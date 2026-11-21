@@ -1,6 +1,6 @@
 # Extension: next version
 
-**Not built yet.** Commits `ef4a751`, `b91e47c`, `f477d57`, `16e3963`, `7be21f1` and `3821d89` were pushed by 2026-11-21 15:48. `1039c40` is committed but not pushed yet. Replaces [v3.0.0](../3.0.0/v3.0.0.md).
+**Not built yet.** Commits `ef4a751`, `b91e47c`, `f477d57`, `16e3963`, `7be21f1` and `3821d89` were pushed by 2026-11-21 15:48, and `1039c40` on 16:27. Replaces [v3.0.0](../3.0.0/v3.0.0.md).
 
 (`ef4a751` was first logged as 3.1.0. That version was never built, so it's part of the next version.)
 

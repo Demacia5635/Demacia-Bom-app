@@ -1,6 +1,6 @@
 # Website: next version
 
-**Unreleased.** `fe511b9` and `745a04b` are live on the website since 2026-11-21 15:48. `d2024bf` is committed but not pushed yet.
+**Unreleased.** `fe511b9` and `745a04b` are live on the website since 2026-11-21 15:48. `d2024bf` is live since 16:27.
 
 ## Changes
 
