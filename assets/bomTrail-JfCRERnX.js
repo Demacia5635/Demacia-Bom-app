@@ -1,0 +1,1 @@
+function e(e){let t=e.get(`trail`);return t?t.split(`,`).filter(Boolean).map(e=>decodeURIComponent(e)):[]}function t(e,t=[]){let n=t.length>0?`?trail=${t.map(e=>encodeURIComponent(e)).join(`,`)}`:``;return`/bom/${encodeURIComponent(e)}${n}`}export{e as n,t};
