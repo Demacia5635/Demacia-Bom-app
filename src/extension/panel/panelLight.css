@@ -1,10 +1,9 @@
 /*
  * Light theme of the side panel (theme.ts sets body.light-theme-active).
- * The shared Table's light styles come from css/table.css (its light rules); this file
- * covers the panel itself: its background, the Table's colour variables
- * (the web app sets them on .table-page-container, the panel on
- * .assembly-bom-page), the dark Tailwind classes the panel's components use,
- * and the dark-only parts of css/AssemblyBomPage.css. Unlayered, so these
+ * The shared Table's light styles and colours come from css/table.css (its
+ * light rules); this file covers the panel itself: its background, a lighter
+ * Table border, the dark Tailwind classes the panel's components use, and
+ * the dark-only parts of css/AssemblyBomPage.css. Unlayered, so these
  * beat Tailwind's utilities. Dark mode is untouched.
  */
 
@@ -18,27 +17,10 @@ body.light-theme-active main.bg-zinc-950 {
   color: #18181b;
 }
 
-/* Values from table.css (light .table-page-container), lighter border. */
+/* The Table's light colours come from table.css (.table-theme-vars); the
+   panel only uses a lighter border than the website's. */
 body.light-theme-active .assembly-bom-page {
-  --bg-main: #eef2f7;
-  --bg-surface: #ffffff;
-  --bg-surface-hover: #e2e8f0;
-  --bg-surface-disabled: #f1f5f9;
-  --bg-input-focus: #ffffff;
-  --text-main: #0b1622;
-  --text-heading: #020617;
-  --text-muted: #1e2d47;
-  --text-subdued: #334155;
-  --text-disabled: #94a3b8;
   --border-color: #cbd5e1;
-  --btn-primary-bg: #1e40af;
-  --btn-primary-hover: #1e3a8a;
-  --btn-primary-active: #172554;
-  --btn-secondary-bg: #e2e8f0;
-  --btn-secondary-hover: #cbd5e1;
-  --btn-secondary-active: #94a3b8;
-  --shadow-color: rgba(0, 0, 0, 0.08);
-  --context-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
 }
 
 /* ---- Tailwind colour classes used by the panel's components ------------- */

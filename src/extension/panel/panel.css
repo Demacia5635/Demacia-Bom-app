@@ -14,33 +14,6 @@ body {
   background-color: #09090b;
 }
 
-/*
- * Theme variables the shared Table styles (css/table.css) read. The web app
- * defines them on .table-page-container; AssemblyBomPage has no such wrapper.
- * Values copied from table.css (its dark block).
- */
-.assembly-bom-page {
-  --bg-main: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-surface-hover: #334155;
-  --bg-surface-disabled: #1a2235;
-  --bg-input-focus: #0f172a;
-  --text-main: #f1f5f9;
-  --text-heading: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-subdued: #64748b;
-  --text-disabled: #475569;
-  --border-color: #475569;
-  --btn-primary-bg: #3b82f6;
-  --btn-primary-hover: #2563eb;
-  --btn-primary-active: #1d4ed8;
-  --btn-secondary-bg: #334155;
-  --btn-secondary-hover: #475569;
-  --btn-secondary-active: #1e293b;
-  --shadow-color: rgba(0, 0, 0, 0.4);
-  --context-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-}
-
 /* ---- Compact layout for the narrow side panel ---------------------------
  * Unlayered rules beat Tailwind's layered utilities (p-8, mb-6...); the
  * .assembly-bom-page prefix out-ranks AssemblyBomPage.css. */

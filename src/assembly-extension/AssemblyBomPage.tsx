@@ -969,7 +969,7 @@ export default function AssemblyBomPage() {
   const pendingEditCount = rows.reduce((n, r) => n + (r.modified?.length ?? 0), 0);
 
   return (
-    <div className="assembly-bom-page p-8 flex gap-6">
+    <div className="assembly-bom-page table-theme-vars p-8 flex gap-6">
       <div className="flex-1">
         <BomHeader
           displayName={displayName}
