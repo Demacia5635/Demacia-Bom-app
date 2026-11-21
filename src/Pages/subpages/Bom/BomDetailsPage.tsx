@@ -10,7 +10,7 @@ import SubAssemblySummary from "./SubAssemblySummary";
 import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/searchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
-import { fetchBomsByIds, fetchPartsByIds } from "../../../util/records";
+import { loadBomTree, type BomTree } from "../../../util/bomTree";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
@@ -46,40 +46,6 @@ function savedView(): BomView {
     if (BOM_VIEWS.some((v) => v.key === saved)) return saved as BomView;
   } catch { /* storage blocked: default view */ }
   return "single";
-}
-
-/** A BOM with every sub-assembly under it, and all their parts. */
-interface BomTree {
-  rootId: string;
-  root: BomModel;
-  boms: Map<string, BomModel>;
-  parts: Map<string, PartModel>;
-}
-
-/**
- * Loads a BOM's whole tree: one batch request per level of sub-assemblies, then
- * one for the parts. `onRoot` gets the root BOM as soon as it's loaded (the
- * page's header shows it while the rest loads).
- */
-async function loadBomTree(rootId: string, onRoot?: (root: BomModel) => void): Promise<BomTree> {
-  const root = await fetchFromApi<BomModel>(`/db/bom/id/${rootId}`);
-  onRoot?.(root);
-  const boms = new Map<string, BomModel>();
-  const tried = new Set<string>([rootId]);
-  let level: BomModel[] = [root];
-
-  while (level.length > 0) {
-    const next = [...new Set(level.flatMap((b) => (b.subAssemblies || []).map((s) => s.bomID)))]
-      .filter((id) => id && !tried.has(id));
-    next.forEach((id) => tried.add(id));
-    const found = await fetchBomsByIds(next);
-    found.forEach((bom, id) => boms.set(id, bom));
-    level = [...found.values()];
-  }
-
-  const partIds = [root, ...boms.values()].flatMap((b) => (b.parts || []).map((p) => p.partID));
-  const parts = await fetchPartsByIds(partIds);
-  return { rootId, root, boms, parts };
 }
 
 /**

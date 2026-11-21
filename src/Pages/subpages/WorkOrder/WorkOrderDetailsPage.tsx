@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useRef, useCallback, type MouseEvent } fr
 import { useParams } from "react-router-dom";
 import { fetchFromApi, type ApiError } from "../../../util/ApiService";
 import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
-import { collectBomParts } from "../../../util/bomParts";
+import { loadBomTree, workOrderLines } from "../../../util/bomTree";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import Table from "../../../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
@@ -182,33 +182,24 @@ export default function WorkOrderDetailsPage() {
         if (!workOrderID || !workOrderData || !workOrderData.bomID || workOrderData.id !== workOrderID) return;
         let cancelled = false;
 
-        // Sub-assemblies bought whole: one purchased row each (collectBomParts).
-        const boughtAssemblies = new Map<string, BomModel>();
-
-        async function fetchBomPartsRecursively(targetBomId: string): Promise<Map<string, number>> {
-            const aggregated = new Map<string, number>();
-            const fetchBom = async (id: string) => {
-                const bom = await fetchFromApi<BomModel>(`/db/bom/id/${id}`);
-                if (id === targetBomId && !cancelled && bom?.name) setBomName({ workOrderID: workOrderID!, name: bom.name });
-                return bom;
-            };
-            for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1, [], boughtAssemblies)) {
-                aggregated.set(partID, (aggregated.get(partID) || 0) + quantity);
-            }
-            return aggregated;
-        }
-
         async function getPartsData(): Promise<WorkOrderTableRow[]> {
-            const aggregatedQuantities = await fetchBomPartsRecursively(workOrderData!.bomID!);
+            // The live BOM (util/bomTree.ts, as when the work order was made): its
+            // parts with their totals, a bought sub-assembly as one purchased row.
+            const tree = await loadBomTree(workOrderData!.bomID!, (root) => {
+                if (!cancelled && root?.name) setBomName({ workOrderID: workOrderID!, name: root.name });
+            });
+            const { totals: aggregatedQuantities, bought: boughtAssemblies } = workOrderLines(tree);
             const collectedRows: WorkOrderTableRow[] = [];
             // Not cleared: row ids include the work order id, and a save still
             // waiting for a row of the previous work order looks its part up here.
 
-            // All parts in one request instead of one per part.
-            const partRecords = await fetchPartsByIds([...aggregatedQuantities.keys()]);
+            // The tree has every part listed in a BOM; only a bought sub-assembly's
+            // own part record (saved under its BOM id) may still be needed.
+            const missing = [...aggregatedQuantities.keys()].filter((id) => !tree.parts.has(id));
+            const extraRecords = missing.length > 0 ? await fetchPartsByIds(missing) : new Map<string, PartModel>();
 
             for (const [partID, totalQty] of aggregatedQuantities.entries()) {
-                let part: PartModel | null = partRecords.get(partID) ?? null;
+                let part: PartModel | null = tree.parts.get(partID) ?? extraRecords.get(partID) ?? null;
                 const boughtBom = boughtAssemblies.get(partID);
 
                 if (!part && boughtBom) {

@@ -2,10 +2,9 @@ import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { fetchFromApi } from "../../../util/ApiService";
-import { collectBomParts, isBoughtAssembly } from "../../../util/bomParts";
-import { fetchPartsByIds } from "../../../util/records";
-import { isPurchasedPart, type BomModel, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
-import { checkCatalogTree, type CatalogNode } from "../../../util/catalogNumbers";
+import { catalogTree, loadBomTree, workOrderLines, type BomTree } from "../../../util/bomTree";
+import { isPurchasedPart, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
+import { checkCatalogTree } from "../../../util/catalogNumbers";
 
 /**
  * A made part's manufacturing method from the files it keeps (the STL /
@@ -63,35 +62,9 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
      * (util/catalogNumbers.ts, the same the BOM extension shows) and throws
      * listing the problems, if any.
      */
-    async function checkCatalogNumbers(topBomId: string, fetchBom: (id: string) => Promise<BomModel>) {
-        const names = new Map<string, string>();
-        const seen = new Set<string>();
-        async function load(bomId: string): Promise<CatalogNode> {
-            const bom = await fetchBom(bomId);
-            const partRecords = await fetchPartsByIds((bom.parts || []).map((p) => p.partID));
-            // A shared sub-assembly is checked once; the others load in parallel.
-            const subIds = (bom.subAssemblies || []).map((sub) => sub.bomID).filter((id) => !seen.has(id));
-            subIds.forEach((id) => seen.add(id));
-            const children: CatalogNode[] = await Promise.all([...new Set(subIds)].map((id) => load(id)));
-            for (const p of bom.parts || []) {
-                const part = partRecords.get(p.partID) ?? null;
-                const name = part?.name || p.partID;
-                names.set(p.partID, name);
-                children.push({ id: p.partID, name, number: part?.catalogNumber || "", isAssembly: false, exempt: isPurchasedPart(part), children: [] });
-            }
-            const name = bom.name || bom.id;
-            names.set(bom.id, name);
-            return {
-                id: bom.id,
-                name,
-                number: bom.catalogNumber || "",
-                isAssembly: true,
-                exempt: bomId !== topBomId && isBoughtAssembly(bom),
-                children,
-            };
-        }
-
-        const problems = checkCatalogTree(await load(topBomId));
+    function checkCatalogNumbers(tree: BomTree) {
+        const { root, names } = catalogTree(tree);
+        const problems = checkCatalogTree(root);
         if (problems.length === 0) return;
         const shown = problems.slice(0, 5).map((p) => `• "${names.get(p.id) ?? p.id}": ${p.message}`);
         const more = problems.length > 5 ? `\n…and ${problems.length - 5} more.` : "";
@@ -102,27 +75,19 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
 
     /**
      * One work-order line per part under the assembly (a part used in several
-     * places once), the same parts the work-order page lists (it reads them
-     * with collectBomParts too). A bought sub-assembly is one purchased line,
+     * places once), the same parts the work-order page lists (both use
+     * workOrderLines, util/bomTree.ts). A bought sub-assembly is one purchased line,
      * without the parts inside it. Quantities aren't stored: the page shows the
      * BOM's current totals.
      */
-    async function collectWorkOrderParts(targetBomId: string, fetchBom: (id: string) => Promise<BomModel>): Promise<WorkorderPartModel[]> {
-        if (!targetBomId || targetBomId === "undefined") {
-            throw new Error("Assembly ID is missing or undefined.");
-        }
-        const totals = new Map<string, number>();
-        const boughtAssemblies = new Map<string, BomModel>();
-        for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1, [], boughtAssemblies)) {
-            totals.set(partID, (totals.get(partID) || 0) + quantity);
-        }
-
-        // Every part in one request instead of one per part.
-        const partRecords = await fetchPartsByIds([...totals.keys()]);
+    function collectWorkOrderParts(tree: BomTree): WorkorderPartModel[] {
+        const { totals, bought: boughtAssemblies } = workOrderLines(tree);
 
         const collectedParts: WorkorderPartModel[] = [];
         for (const partID of totals.keys()) {
-            const partRecord: PartModel | null = partRecords.get(partID) ?? null;
+            // Every part listed in a BOM is in the tree (a bought sub-assembly
+            // needs no record: it's purchased).
+            const partRecord: PartModel | null = tree.parts.get(partID) ?? null;
 
             const catalogNumber = partRecord?.catalogNumber || "";
             const material = partRecord?.material?.trim() || "";
@@ -172,18 +137,13 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
             // Random, so two work orders made at the same moment can't collide. Older
             // work orders keep their Date.now() ids (and addresses).
             const id = crypto.randomUUID();
-            // Both walks below read the same assemblies: each is fetched once.
-            const bomRequests = new Map<string, Promise<BomModel>>();
-            const fetchBom = (bomID: string) => {
-                let request = bomRequests.get(bomID);
-                if (!request) {
-                    request = fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomID)}`);
-                    bomRequests.set(bomID, request);
-                }
-                return request;
-            };
-            await checkCatalogNumbers(bomId, fetchBom);
-            const parts = await collectWorkOrderParts(bomId, fetchBom);
+            if (!bomId || bomId === "undefined") {
+                throw new Error("Assembly ID is missing or undefined.");
+            }
+            // The whole assembly once (util/bomTree.ts), for both steps below.
+            const tree = await loadBomTree(bomId);
+            checkCatalogNumbers(tree);
+            const parts = collectWorkOrderParts(tree);
 
             const payload: WorkorderModel = {
                 id: id,
