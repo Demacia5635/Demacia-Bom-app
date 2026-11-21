@@ -53,3 +53,18 @@
   width: 28px;
   height: 25px; /* the logo is 377 x 299 */
 }
+
+/* Firefox: shown for a few seconds when the button couldn't open the sidebar. */
+#demacia-bom-hint {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 2147483001;
+  max-width: 320px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #18181b;
+  color: #fff;
+  font: 13px/1.4 system-ui, sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}

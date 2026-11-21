@@ -10,6 +10,7 @@
 // Keep in sync with background.ts.
 const OPEN_PANEL_MESSAGE = "demacia-bom:openPanel";
 const BUTTON_ID = "demacia-bom-open";
+const HINT_ID = "demacia-bom-hint";
 
 (() => {
   const w = window as Window & { __demaciaBomLoaded?: boolean };
@@ -76,9 +77,31 @@ const BUTTON_ID = "demacia-bom-open";
   logo.style.setProperty("mask-image", logoUrl);
   btn.append(logo);
 
+  /** A short note in the page's corner, gone after a few seconds. */
+  let hintTimer: ReturnType<typeof setTimeout> | undefined;
+  const showHint = (text: string) => {
+    let hint = document.getElementById(HINT_ID);
+    if (!hint) {
+      hint = document.createElement("div");
+      hint.id = HINT_ID;
+      hint.setAttribute("role", "status");
+      document.body.appendChild(hint);
+    }
+    hint.textContent = text;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => hint?.remove(), 6000);
+  };
+
   const openPanel = () => {
     try {
-      chrome.runtime.sendMessage({ type: OPEN_PANEL_MESSAGE });
+      // Firefox replies { opened: false } when it refused to open the sidebar
+      // from here (it only allows that from the toolbar icon); Chrome doesn't reply.
+      chrome.runtime.sendMessage({ type: OPEN_PANEL_MESSAGE }, (reply?: { opened?: boolean }) => {
+        void chrome.runtime.lastError; // no reply (Chrome) is fine
+        if (reply?.opened === false) {
+          showHint("Firefox doesn't let this button open the sidebar. Click the Demacia BOM icon in the toolbar instead.");
+        }
+      });
     } catch {
       // Extension was reloaded/updated; this orphaned script can't reach it.
       alert("The Demacia BOM extension was updated - please reload this Onshape tab.");

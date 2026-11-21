@@ -38,17 +38,24 @@ function isOnshapeUrl(url: string | undefined): boolean {
  * already open (a second click on the icon / "BOM" button). Both calls are
  * made synchronously (no awaits before toggle()), as Firefox requires.
  */
-function togglePanelForTab(tabId: number): void {
+function togglePanelForTab(tabId: number): Promise<boolean> {
   sidebarAction.setPanel({ tabId, panel: `${PANEL_PATH}?tab=${tabId}` }).catch(console.error);
-  sidebarAction.toggle().catch((err) => {
-    console.warn("[Demacia BOM] could not open/close the sidebar from here; use the toolbar icon", err);
-  });
+  return sidebarAction.toggle().then(
+    () => true,
+    (err) => {
+      console.warn("[Demacia BOM] could not open/close the sidebar from here; use the toolbar icon", err);
+      return false;
+    }
+  );
 }
 
-// In-page "BOM" button.
-chrome.runtime.onMessage.addListener((msg, sender) => {
+// In-page "BOM" button. A message isn't a user action to Firefox, so toggle()
+// is usually refused: reply { opened: false } and content.ts tells the user
+// to click the toolbar icon (the panel is already assigned to this tab).
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === OPEN_PANEL_MESSAGE && sender.tab?.id !== undefined) {
-    togglePanelForTab(sender.tab.id);
+    void togglePanelForTab(sender.tab.id).then((opened) => sendResponse({ opened }));
+    return true; // replies asynchronously
   }
 });
 
