@@ -60,7 +60,8 @@ const bomSchema = new mongoose.Schema(
     // under `parts` (a part record with the same id) instead of `subAssemblies`.
     markedStandard: { type: Boolean, default: false },
   },
-  { _id: false, timestamps: true },
+  // No _id: false here: a top-level document needs its _id for .save()/create().
+  { timestamps: true },
 );
 
 const Bom = mongoose.model("Bom", bomSchema);
