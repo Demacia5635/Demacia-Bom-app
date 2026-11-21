@@ -53,6 +53,10 @@ export interface PartModel {
    * marked sub-assembly is saved as.
    */
   markedStandard?: boolean;
+  /** Marked "not the same part" in the extension: combined only with other parts marked so. */
+  keepSeparate?: boolean;
+  /** Other copies (Onshape part IDs) of a part modeled several times in one Part Studio that this record stands for. */
+  copyPartIDs?: string[];
   /** Whether Publish BOM keeps an STL / Parasolid for this part (absent on older records). */
   wantStl?: boolean;
   wantParasolid?: boolean;

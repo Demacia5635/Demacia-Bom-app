@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AuthenticatedImage } from "../util/ApiService";
 
 export interface RowData {
@@ -14,11 +14,20 @@ interface ContextMenuState {
     columnIndex: number;
 }
 
+/** One entry of a row's right-click menu (see the rowMenu prop). */
+export interface RowMenuItem {
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    /** Hover text, e.g. what the item does. */
+    title?: string;
+}
+
 interface RowContextMenuState {
     visible: boolean;
     x: number;
     y: number;
-    rowId: string | null;
+    items: RowMenuItem[];
 }
 
 interface DraftInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'> {
@@ -132,16 +141,23 @@ interface TableParam {
     rowFilter?: (row: RowData & any) => boolean;
     /** Rows this returns true for are left out (with anything under them); expanding works as usual. */
     hideRow?: (row: RowData & any) => boolean;
+    /**
+     * Right-click menu of a row: its items, or undefined / [] for no menu.
+     * Without this prop rows have no menu of their own (pages may still add
+     * one around the table).
+     */
+    rowMenu?: (row: RowData & any) => RowMenuItem[] | undefined;
 }
 
-export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }) => {
+export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow, rowMenu }) => {
     const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
     const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
     const [dropTargetIdx, setDropTargetIdx] = useState<number | null>(null);
     const [isHandleDragging, setIsHandleDragging] = useState<boolean>(false);
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
-    const [, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, rowId: null });
+    const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState>({ visible: false, x: 0, y: 0, items: [] });
+    const rowMenuRef = useRef<HTMLDivElement>(null);
 
     // Tooltip of a problem cell, drawn by the table: the browser's own title
     // tooltip is slow, and doesn't show over the cell's input in the extension panel.
@@ -213,11 +229,31 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
 
     const closeContextMenu = () => { setContextMenu(prev => ({ ...prev, visible: false })); setRowContextMenu(prev => ({ ...prev, visible: false })); };
 
-    const handleRowContextMenu = (e: React.MouseEvent, rowId: string) => {
+    const handleRowContextMenu = (e: React.MouseEvent, row: RowData & any) => {
         e.preventDefault();
         e.stopPropagation();
-        setRowContextMenu({ visible: true, x: e.clientX, y: e.clientY, rowId });
+        const items = rowMenu?.(row) ?? [];
+        setContextMenu(prev => ({ ...prev, visible: false }));
+        setRowContextMenu({ visible: items.length > 0, x: e.clientX, y: e.clientY, items });
     };
+
+    // The row menu stays inside the window, and a click anywhere outside it closes it.
+    useLayoutEffect(() => {
+        const menu = rowMenuRef.current;
+        if (!rowContextMenu.visible || !menu) return;
+        const box = menu.getBoundingClientRect();
+        const x = Math.max(4, Math.min(rowContextMenu.x, window.innerWidth - box.width - 4));
+        const y = Math.max(4, Math.min(rowContextMenu.y, window.innerHeight - box.height - 4));
+        if (x !== rowContextMenu.x || y !== rowContextMenu.y) setRowContextMenu(prev => ({ ...prev, x, y }));
+    }, [rowContextMenu]);
+    useEffect(() => {
+        if (!rowContextMenu.visible) return;
+        const onDown = (e: MouseEvent) => {
+            if (!rowMenuRef.current?.contains(e.target as Node)) setRowContextMenu(prev => ({ ...prev, visible: false }));
+        };
+        window.addEventListener("mousedown", onDown, true);
+        return () => window.removeEventListener("mousedown", onDown, true);
+    }, [rowContextMenu.visible]);
 
     // Synchronize horizontal scrolling between the main table wrapper and the bottom scrollbar
     useEffect(() => {
@@ -781,7 +817,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                             const isRowParent = isParent(row.id);
 
                             return (
-                                <tr key={rowKeys.get(row) ?? row.id} data-row-id={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row.id)}>
+                                <tr key={rowKeys.get(row) ?? row.id} data-row-id={row.id} className="table-tr" onContextMenu={(e) => handleRowContextMenu(e, row)}>
                                     {columns.map((col, colIndex) => {
                                         const span = mergeSpans.get(col.key)?.[rowIndex] ?? 1;
                                         if (span === 0) return null; // covered by the merged cell above
@@ -932,6 +968,13 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
                 <div className="context-menu" style={{ top: contextMenu.y, left: contextMenu.x }} onClick={(e) => e.stopPropagation()}>
                     <button onClick={() => { if (contextMenu.columnIndex > 0) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex - 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === 0}>Move Left</button>
                     <button onClick={() => { if (contextMenu.columnIndex < columns.length - 1) moveColumn(contextMenu.columnIndex, contextMenu.columnIndex + 1); closeContextMenu(); }} disabled={contextMenu.columnIndex === columns.length - 1}>Move Right</button>
+                </div>
+            )}
+            {rowContextMenu.visible && (
+                <div ref={rowMenuRef} className="context-menu" role="menu" style={{ top: rowContextMenu.y, left: rowContextMenu.x }} onClick={(e) => e.stopPropagation()}>
+                    {rowContextMenu.items.map((item, i) => (
+                        <button key={i} role="menuitem" title={item.title} disabled={item.disabled} onClick={() => { closeContextMenu(); item.onClick(); }}>{item.label}</button>
+                    ))}
                 </div>
             )}
         </div>
