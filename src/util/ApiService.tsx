@@ -93,6 +93,28 @@ export async function downloadDriveFile(fileId: string, filename: string): Promi
   }
 }
 
+/**
+ * A file the server sent, as a Blob. The server may send the bytes as they
+ * are, or as a serialized Node Buffer ({ type: "Buffer", data: [...] }). Any
+ * other content, JSON included (a .json file), is the file itself.
+ */
+async function fileBlobFromResponse(response: Response, mimeType?: string): Promise<Blob> {
+  const arrayBuffer = await response.arrayBuffer();
+  const looksLikeJson = new Uint8Array(arrayBuffer, 0, Math.min(1, arrayBuffer.byteLength))[0] === 0x7b; // "{"
+  if (looksLikeJson) {
+    try {
+      const json = JSON.parse(new TextDecoder().decode(arrayBuffer));
+      if (json?.type === "Buffer" && Array.isArray(json.data)) {
+        return new Blob([new Uint8Array(json.data)], { type: mimeType ?? "application/octet-stream" });
+      }
+    } catch {
+      // Not JSON after all: the bytes are the file.
+    }
+  }
+  const responseContentType = response.headers.get("content-type") ?? "application/octet-stream";
+  return new Blob([arrayBuffer], { type: mimeType ?? responseContentType });
+}
+
 export async function downloadFile(
   url: string,
   filename: string,
@@ -121,22 +143,7 @@ export async function downloadFile(
     throw new Error(`Download failed with status ${response.status}`);
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
-
-  const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
-
-  let blob: Blob;
-  if (looksLikeJson) {
-    const text = new TextDecoder().decode(arrayBuffer);
-    const json: { type: "Buffer"; data: number[] } = JSON.parse(text);
-    const bytes = new Uint8Array(json.data);
-    blob = new Blob([bytes], { type: mimeType ?? "application/octet-stream" });
-  } else {
-    const responseContentType =
-      response.headers.get("content-type") ?? "application/octet-stream";
-    blob = new Blob([arrayBuffer], { type: mimeType ?? responseContentType });
-  }
+  const blob = await fileBlobFromResponse(response, mimeType);
 
   const objectUrl = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -433,19 +440,5 @@ export async function fetchFileBytes(url: string, mimeType?: string): Promise<Bl
     throw new Error(`Request failed with status ${response.status}`);
   }
 
-  const arrayBuffer = await response.arrayBuffer();
-  const firstBytes = new Uint8Array(arrayBuffer.slice(0, 16));
-
-  const looksLikeJson = firstBytes.length > 0 && firstBytes[0] === 0x7b;
-
-  if (looksLikeJson) {
-    const text = new TextDecoder().decode(arrayBuffer);
-    const json: { type: "Buffer"; data: number[] } = JSON.parse(text);
-    const bytes = new Uint8Array(json.data);
-    return new Blob([bytes], { type: mimeType ?? "application/octet-stream" });
-  }
-
-  const responseContentType =
-    response.headers.get("content-type") ?? "application/octet-stream";
-  return new Blob([arrayBuffer], { type: mimeType ?? responseContentType });
+  return fileBlobFromResponse(response, mimeType);
 }
