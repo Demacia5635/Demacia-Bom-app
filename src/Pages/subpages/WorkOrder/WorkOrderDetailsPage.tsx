@@ -542,11 +542,22 @@ export default function WorkOrderDetailsPage() {
 
     const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
-        const rowEl = target.closest(".table-tr, tr");
+        let rowEl = target.closest(".table-tr, tr");
         if (!rowEl) return;
 
         e.preventDefault();
         e.stopPropagation();
+
+        // A merged Links cell (a CNC job) belongs to the first row of its group:
+        // take the row at the height clicked instead, so the menu is for that part.
+        const mergedCell = target.closest("td[rowspan]");
+        if (mergedCell && rowEl.contains(mergedCell)) {
+            let tr: Element | null = rowEl;
+            for (let i = 0; tr && i < (mergedCell as HTMLTableCellElement).rowSpan; i++, tr = tr.nextElementSibling) {
+                const box = tr.getBoundingClientRect();
+                if (e.clientY >= box.top && e.clientY < box.bottom) { rowEl = tr; break; }
+            }
+        }
 
         const row = rowFromElement(rowEl);
         if (row) {
