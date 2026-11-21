@@ -911,7 +911,8 @@ export default function AssemblyBomPage() {
    */
   const loadSubtree = useCallback(
     async (row: AssemblyBomRow, existing: AssemblyBomRow[]): Promise<AssemblyBomRow[]> => {
-      const limit = createLimiter(REFRESH_CONCURRENCY);
+      // Closing the panel stops the requests not started yet (LOAD_CANCELLED).
+      const limit = createLimiter(REFRESH_CONCURRENCY, () => !mountedRef.current);
       const src = createCachedSources(limit);
       const key: OnshapeKey = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
       const onshapeBom = await src.onshapeBom(key);
@@ -1254,6 +1255,7 @@ export default function AssemblyBomPage() {
         setSubtreeLoads((n) => n + 1);
         void loadSubtree(row, nextRows)
           .then((children) => {
+            if (!mountedRef.current) return; // panel closed: don't touch the saved copy
             const current = currentTreeRef.current.rows;
             // Still unmarked (and still there)? Then add its insides.
             if (!current.some((r) => r.id === row.id && !r.markedStandard)) return;
@@ -1263,6 +1265,7 @@ export default function AssemblyBomPage() {
             saveRows([...current, ...children]);
           })
           .catch((err: any) => {
+            if (!mountedRef.current) return;
             client.showMessageBubble(`Couldn't load the parts of "${row.name}": ${err?.message || err}. Press Refresh BOM.`);
           })
           .finally(() => setSubtreeLoads((n) => n - 1));
