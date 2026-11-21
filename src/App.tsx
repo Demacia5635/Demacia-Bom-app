@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './css/App.css';
 import MainLayout from './components/MainLayout';
 import HomeScreen from './Pages/BomPage/BomsPage';
@@ -25,7 +25,8 @@ export default function App() {
           <Route path="/standardParts" element={<PartsSearchPage key="standard" standard />} />
           {/* Onshape footprint - unlisted on purpose (not in the sidebar). */}
           <Route path="/tele" element={<TelemetryPage />} />
-          <Route path="*" element={<HomeScreen />} />
+          {/* A mistyped address goes to Home, and the address bar says so. */}
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       </Routes>
     </HashRouter>
