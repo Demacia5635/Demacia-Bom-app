@@ -34,17 +34,21 @@ async function thumbnailDataUrl(src: string): Promise<string> {
     if (!src) return "";
     try {
         const bitmap = await createImageBitmap(await fetchImageBlob(src));
-        const scale = Math.min(1, IMAGE_MAX_PX / Math.max(bitmap.width, bitmap.height));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return "";
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        bitmap.close();
-        return canvas.toDataURL("image/jpeg", 0.85);
+        // Closed however drawing ends (no canvas context, a drawing error), to free its memory.
+        try {
+            const scale = Math.min(1, IMAGE_MAX_PX / Math.max(bitmap.width, bitmap.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            const ctx = canvas.getContext("2d");
+            if (!ctx) return "";
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL("image/jpeg", 0.85);
+        } finally {
+            bitmap.close();
+        }
     } catch (err) {
         console.warn("PDF export: image not loaded", src, err);
         return "";

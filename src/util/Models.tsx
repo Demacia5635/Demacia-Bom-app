@@ -22,8 +22,14 @@ export interface BomModel {
   filesModelVersion?: string;
   /** Marked as a standard (bought) part in the extension: its insides aren't used. */
   markedStandard?: boolean;
-  updatedAt?: Date;
-  createdAt?: Date;
+  projectCatalogNumber?: string;
+  /** Older image fields (recordImage.ts); new records use avatarID. */
+  driveFileId?: string;
+  imageUrl?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
 }
 
 export interface PartModel {
@@ -58,8 +64,16 @@ export interface PartModel {
   wantParasolid?: boolean;
   /** Model version the saved thumbnail/STL/Parasolid were made from. */
   filesModelVersion?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  links?: string;
+  /** Production type id (server/db/enum.ts). */
+  productionType?: number;
+  /** Older image fields (recordImage.ts); new records use avatarID. */
+  driveFileId?: string;
+  imageUrl?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
 }
 
 /**
@@ -72,35 +86,59 @@ export function isPurchasedPart(
   return Boolean(part?.isStandardContent || part?.markedStandard || (part?.vendor && part.vendor.trim() !== ""));
 }
 
-export interface WorkorderPartModel {
+export interface WorkOrderPartModel {
   partID: string;
+  /**
+   * Not used: a work order follows its live BOM, so quantities come from the
+   * BOM (WorkOrderDetailsPage). Older work orders still have these stored, and
+   * the server schema defaults them; no longer sent on creation.
+   */
   quantityTotal?: number;
+  /** Not used (nothing records it); see quantityTotal. */
   quantityMade?: number;
   /** A number (older work orders) or a status name such as "In Planning" / "Untracked". */
   statusCode?: number | string;
   /** e.g. "Manual", "CNC", "Purchased". */
   manufacturingMethod?: string;
+  /** "High", "Medium", "Low", "Untracked" or "Finished" (stored with a capital P). */
+  Priority?: string;
   productionGCOwner?: string;
   productionMakingOwner?: string;
-  updatedAt?: Date;
-  createdAt?: Date;
+  comments?: string;
+  links?: string;
+  approxArrivalDate?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
 }
 
-export interface WorkorderModel {
+/** A work order as stored (server/models/WorkOrder.ts). */
+export interface WorkOrderModel {
   id: string;
   name?: string;
   bomID?: string;
-  bomName?: string;
-  catalogNumber?: string;
   workOrderOwner?: string;
   description?: string;
-  parts?: WorkorderPartModel[];
+  parts?: WorkOrderPartModel[];
   /** Parts cut together in one CNC run, sharing one G-code link (WorkOrder/cncGroups.ts). */
   cncGroups?: { id: string; partIDs: string[]; links?: string }[];
   avatarID?: string;
-  thumbnailURL?: string;
-  onshapeID?: OnshapeID & { workOrderID?: string; assemblyID?: string };
   comments?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
+  /** ISO date string (dates arrive as text in JSON). */
+  createdAt?: string;
+  /** ISO date string (dates arrive as text in JSON). */
+  updatedAt?: string;
+}
+
+/**
+ * A work order as the list page shows it: the stored record plus what the
+ * client fills in from its assembly (not stored), and image fields older
+ * records may still have.
+ */
+export interface WorkOrderRow extends WorkOrderModel {
+  bomName?: string;
+  catalogNumber?: string;
+  driveFileId?: string;
+  thumbnailURL?: string;
 }

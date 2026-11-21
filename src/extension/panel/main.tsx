@@ -1,10 +1,9 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./panel.css";
-// Shared Table styles (the web app loads these from MainLayout).
-import "../../css/DarkMode.css";
-// Light theme (theme.ts): the shared Table's, then the panel's own.
-import "../../css/LightMode.css";
+// Shared Table styles, dark then light (the web app loads them from MainLayout).
+import "../../css/table.css";
+// The panel's own light styles (theme.ts).
 import "./panelLight.css";
 import { applyTheme, readThemePreference } from "./theme";
 import PanelApp from "./PanelApp";

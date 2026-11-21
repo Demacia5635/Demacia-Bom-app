@@ -1,6 +1,10 @@
 import { SidebarIcon } from "lucide-react";
 import { useThemeSync } from "../util/misc/useThemeSync"; // Adjust relative path if Appbar is in a different folder
 
+// The running build's version (vite.config.js). Not defined in the extension's
+// build, which doesn't use this bar.
+const APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "";
+
 export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSidebar?: boolean }> = ({ onOpenDrawer, title = "Bom App", isSidebar = true }) => {
     const { isLight, toggleTheme } = useThemeSync();
 
@@ -13,6 +17,7 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
         : "text-gray-300 hover:text-white hover:bg-gray-800";
         
     const titleColor = isLight ? "text-zinc-900" : "text-gray-100";
+    const versionColor = isLight ? "text-zinc-500" : "text-gray-400";
 
     return (
         <header className={`h-12 border-b px-4 flex items-center justify-between sticky top-0 z-35 transition-colors duration-200 ${headerBg}`}>
@@ -27,7 +32,12 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
                 )}
             </div>
 
-            <h1 className={`text-base font-bold tracking-wider flex items-center gap-2 ${titleColor}`}>{title}</h1>
+            <h1 className={`text-base font-bold tracking-wider flex items-baseline gap-2 whitespace-nowrap ${titleColor}`}>
+                {title}
+                {APP_VERSION && (
+                    <span className={`text-xs font-medium tracking-normal ${versionColor}`}>v{APP_VERSION}</span>
+                )}
+            </h1>
 
             <div className="w-10 flex items-center justify-end">
                 <button

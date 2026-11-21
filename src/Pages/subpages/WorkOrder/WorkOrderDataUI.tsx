@@ -1,135 +1,47 @@
 import { useState, useEffect } from "react";
-import type { WorkorderModel, BomModel } from "../../../util/Models";
-import { AuthenticatedImage, fetchFromApi } from "../../../util/ApiService";
-import { useThemeSync } from "../../../util/misc/useThemeSync";
-import { createPortal } from "react-dom";
+import type { WorkOrderModel, BomModel } from "../../../util/Models";
+import { fetchFromApi } from "../../../util/ApiService";
 import { recordImageSrc } from "../../../util/recordImage";
+import RecordHeaderCard from "../../../components/RecordHeaderCard";
 
 interface WorkOrderDataUIProps {
-    workOrder: WorkorderModel;
-    assemblyThumbnailURL?: string;
+    workOrder: WorkOrderModel;
 }
 
-const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, assemblyThumbnailURL }) => {
-    const { isLight } = useThemeSync();
-    const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
-    const [bomData, setBomData] = useState<BomModel | null>(null);
+/** The work-order page's header: the work order, with its assembly's image and catalog number. */
+const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder }) => {
+    // Kept with the id it was loaded for: another work order's BOM is never shown.
+    const [loadedBom, setLoadedBom] = useState<{ bomID: string; bom: BomModel } | null>(null);
+    const bomData = workOrder?.bomID && loadedBom?.bomID === workOrder.bomID ? loadedBom.bom : null;
 
-    // Fetch the parent BOM data using workOrder.bomID to get its exact image source
+    // Fetch the parent BOM data using workOrder.bomID to get its exact image source.
+    // Another work order: a late reply for the previous one is ignored.
     useEffect(() => {
-        if (!workOrder?.bomID) return;
-        fetchFromApi<BomModel>(`/db/bom/id/${workOrder.bomID}`)
-            .then((bom) => setBomData(bom))
+        const bomID = workOrder?.bomID;
+        if (!bomID) return;
+        let cancelled = false;
+        fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomID)}`)
+            .then((bom) => { if (!cancelled) setLoadedBom({ bomID, bom }); })
             .catch(() => {});
+        return () => { cancelled = true; };
     }, [workOrder?.bomID]);
 
-    const containerBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
-    const imageBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
-    const textHeading = isLight ? "text-zinc-900" : "text-white";
-    const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
-    const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
-    const dividerBorder = isLight ? "border-zinc-200" : "border-zinc-800";
-
-    // Resolve image source hierarchy matching the parent BOM exactly
-    // The parent BOM's image; the work order's own until the BOM has loaded.
-    const imageSrc = assemblyThumbnailURL || recordImageSrc(bomData as any) || recordImageSrc(workOrder as any);
-
     return (
-      <div className={`${containerBg} border rounded-2xl p-6 shadow-xl flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between transition-colors duration-200 mb-6`}>
-        <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full lg:w-auto">
-          <div 
-            onClick={() => setEnlargedImageSrc(imageSrc || "FAILED")}
-            className={`w-28 h-28 shrink-0 ${imageBg} border rounded-xl overflow-hidden flex items-center justify-center shadow-inner cursor-pointer hover:opacity-80 transition-opacity`}
-            title="Click to enlarge image"
-          >
-            {imageSrc ? (
-              <AuthenticatedImage
-                src={imageSrc}
-                alt={workOrder.name || "Work Order Thumbnail"}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className={`${isLight ? "text-zinc-400" : "text-zinc-600"} text-xs font-mono`}>NO IMAGE</span>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className={`text-2xl font-bold tracking-tight ${textHeading}`}>
-                {workOrder.name || "Unnamed Assembly"}
-              </h1>
-              {workOrder.description && (
-                <p className={`text-sm ${textMuted} italic`}>
-                  {workOrder.description}
-                </p>
-              )}
-            </div>
-
-            <div className={`flex items-center gap-4 text-xs ${textMuted} flex-wrap`}>
-              <p>
-                Catalog No:{" "}
-                <span className={`${textValue} font-medium`}>
-                  {workOrder.catalogNumber || "N/A"}
-                </span>
-              </p>
-              <span>•</span>
-              <p>
-                Owner:{" "}
-                <span className={`${textValue} font-medium`}>
-                  {workOrder.workOrderOwner || "N/A"}
-                </span>
-              </p>
-              <span>•</span>
-              <p>
-                Parts:{" "}
-                <span className={`${textValue} font-medium`}>
-                  {workOrder.parts?.length || 0}
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Right side: Comments */}
-        <div className={`flex flex-col items-start lg:items-end gap-3 self-stretch lg:self-auto shrink-0 border-t lg:border-t-0 ${dividerBorder} pt-4 lg:pt-0`}>
-          {workOrder.comments && (
-            <p className={`text-xs ${textMuted} italic max-w-xs text-left lg:text-right`}>
-              {workOrder.comments}
-            </p>
-          )}
-        </div>
-
-        {/* Enlarged Image Preview Overlay Modal Portal */}
-        {enlargedImageSrc && createPortal(
-            <div 
-                className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-                onClick={() => setEnlargedImageSrc(null)}
-            >
-                <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-                    <button
-                        type="button"
-                        onClick={() => setEnlargedImageSrc(null)}
-                        className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md"
-                    >
-                        ✕ Close
-                    </button>
-                    {enlargedImageSrc === "FAILED" ? (
-                        <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
-                            <span className="text-xl font-bold">Image Failed to Load</span>
-                            <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>
-                        </div>
-                    ) : (
-                        <AuthenticatedImage
-                            src={enlargedImageSrc}
-                            alt="Enlarged Preview"
-                            className="max-w-full max-h-[85vh] object-contain rounded-xl border border-zinc-700 shadow-2xl"
-                        />
-                    )}
-                </div>
-            </div>,
-            document.body
-        )}
-      </div>
+        <RecordHeaderCard
+            className="mb-6"
+            // The parent BOM's image; the work order's own until the BOM has loaded.
+            imageSrc={recordImageSrc(bomData) || recordImageSrc(workOrder)}
+            imageAlt={workOrder.name || "Work Order Thumbnail"}
+            title={workOrder.name || "Unnamed Assembly"}
+            description={workOrder.description}
+            facts={[
+                // Not stored on the work order: the assembly's.
+                { label: "Catalog No", value: bomData?.catalogNumber || "N/A" },
+                { label: "Owner", value: workOrder.workOrderOwner || "N/A" },
+                { label: "Parts", value: workOrder.parts?.length || 0 },
+            ]}
+            comments={workOrder.comments}
+        />
     );
 };
 

@@ -1,9 +1,10 @@
-import { AuthenticatedImage } from "../../../util/ApiService";
+import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import type { BomModel } from "../../../util/Models";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { openExternal } from "../../../util/openExternal";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { recordImageSrc } from "../../../util/recordImage";
+import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 
 /**
  * "Show Part Data" for a sub-assembly the team makes: it has only a BOM
@@ -12,12 +13,10 @@ import { recordImageSrc } from "../../../util/recordImage";
  */
 export default function SubAssemblySummary({ bom }: { bom: BomModel }) {
     const { isLight } = useThemeSync();
+    const theme = useThemeClasses();
     const imageSrc = recordImageSrc(bom as any);
 
-    const containerBg = isLight ? "bg-white border-zinc-300 text-zinc-900 shadow-xl" : "bg-zinc-900 border-zinc-800 text-zinc-100 shadow-2xl";
-    const imageBoxBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
     const labelColor = isLight ? "text-zinc-600" : "text-zinc-500";
-    const valueColor = isLight ? "text-zinc-800" : "text-zinc-200";
 
     const fields: [string, string | undefined][] = [
         ["Catalog #", bom.catalogNumber],
@@ -27,9 +26,9 @@ export default function SubAssemblySummary({ bom }: { bom: BomModel }) {
     ];
 
     return (
-        <div className={`w-full max-w-4xl border rounded-2xl p-6 sm:p-8 space-y-6 my-auto transition-colors duration-200 ${containerBg}`}>
+        <div className={`w-full max-w-4xl border rounded-2xl p-6 sm:p-8 space-y-6 my-auto transition-colors duration-200 ${theme.raisedCard}`}>
             <div className="flex items-center gap-5 pr-20">
-                <div className={`w-24 h-24 shrink-0 border rounded-xl overflow-hidden flex items-center justify-center ${imageBoxBg}`}>
+                <div className={`w-24 h-24 shrink-0 border rounded-xl overflow-hidden flex items-center justify-center ${theme.imageBox}`}>
                     {imageSrc ? (
                         <AuthenticatedImage src={imageSrc} alt={bom.name || "Sub-assembly"} className="w-full h-full object-cover" />
                     ) : (
@@ -48,7 +47,7 @@ export default function SubAssemblySummary({ bom }: { bom: BomModel }) {
                 {fields.map(([label, value]) => (
                     <div key={label} className={label === "Description" || label === "Comments" ? "sm:col-span-2" : ""}>
                         <dt className={`text-xs font-semibold uppercase tracking-wide ${labelColor}`}>{label}</dt>
-                        <dd className={`mt-1 text-sm whitespace-pre-wrap break-words ${valueColor}`}>{value?.trim() || "—"}</dd>
+                        <dd className={`mt-1 text-sm whitespace-pre-wrap break-words ${theme.textValue}`}>{value?.trim() || "—"}</dd>
                     </div>
                 ))}
             </dl>

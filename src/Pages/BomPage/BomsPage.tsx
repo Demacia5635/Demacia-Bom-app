@@ -4,10 +4,11 @@ import { useThemeSync } from "../../util/misc/useThemeSync";
 import BomTable from "./BomTable";
 import type { BomModel, PartModel } from "../../util/Models";
 import { isMadeRecord, splitStandard } from "../../util/standardItems";
+import ErrorBanner, { ApiErrorText } from "../../components/ErrorBanner";
 
 export type BomSummary = Omit<BomModel, 'description' | 'comments' | 'onshapeURL' | 'onshapeID' | 'parts' | 'subAssemblies' | 'createdAt'>;
 
-export default function HomeScreen() {
+export default function BomsPage() {
   const { isLight } = useThemeSync();
 
   const [boms, setBoms] = useState<BomSummary[]>([]);
@@ -51,14 +52,13 @@ export default function HomeScreen() {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-          <p className="font-semibold">Error Loading BOMs</p>
-          <p>{error.message}</p>
-          {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
-        </div>
+        <ErrorBanner title="Error Loading BOMs" className="mb-6 p-4 rounded-lg">
+          <ApiErrorText error={error} />
+        </ErrorBanner>
       )}
 
-      <BomTable boms={boms} />
+      {/* After a failed load the error says why; an empty table would only add "no BOMs". */}
+      {!error && <BomTable boms={boms} />}
     </div>
   );
 }

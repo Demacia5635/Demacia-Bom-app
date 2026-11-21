@@ -1,20 +1,20 @@
 import type { ColumnConfig } from "../../../components/Table";
-import { downloadFile } from "../../../util/ApiService";
-import { openExternal } from "../../../util/openExternal";
+import { cadLinkColumn, fileDownloadColumns } from "../partColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
+import { isPurchasedPart } from "../../../util/Models";
+import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
 
-/** Onshape Standard Content and parts marked standard in the extension: purchased, so status and method are fixed. */
+/**
+ * Onshape Standard Content and parts marked standard in the extension: status
+ * and method are fixed. Narrower than isPurchasedPart on purpose: a vendor
+ * part's method and priority can still be set here.
+ */
 const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!row.markedStandard;
 
-/** Vendor parts, Standard Content and parts marked standard: their name isn't edited here. */
-const isBoughtPart = (row: WorkOrderTableRow) => row.vendor !== "" || isStandardRow(row);
-
-export const MANUFACTURING_METHODS = ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased'];
-export const PRIORITIES = ['High', 'Medium', 'Low', 'Untracked', 'Finished'];
 
 /**
  * Colour of each status / method / priority value (classes styled in
- * DarkMode.css and LightMode.css). Values not listed stay uncoloured.
+ * css/table.css). Values not listed stay uncoloured.
  */
 const VALUE_COLOURS: Record<string, string> = {
     'In Planning': 'status-bg-orange',
@@ -41,8 +41,8 @@ const VALUE_COLOURS: Record<string, string> = {
 const valueColour = (value: unknown) => VALUE_COLOURS[String(value ?? '')];
 
 // Avatar and name come first: the table freezes the first two columns.
-const WorkOrderColumns: ColumnConfig[] = [
-    { key: "avatar", label: "Avatar", type: "image", isDisabled: isBoughtPart },
+const WorkOrderColumns: ColumnConfig<WorkOrderTableRow>[] = [
+    { key: "avatar", label: "Avatar", type: "image", isDisabled: isPurchasedPart },
     // Name, catalogue number and quantity come from the BOM: not changed here.
     { key: "name", label: "Name", type: "string", isDisabled: () => true },
     // Shown by the "Show size" checkbox (WorkOrderDetailsPage); saved by Publish BOM.
@@ -83,44 +83,8 @@ const WorkOrderColumns: ColumnConfig[] = [
     { key: "links", label: "Links", type: "string", mergeKey: (row: WorkOrderTableRow) => row.cncGroupID },
     
     // Actions / Links at the end
-    {
-        key: "onshapeURL",
-        label: "CAD Link",
-        type: "button",
-        buttonText: "Open CAD",
-        isDisabled: (row: WorkOrderTableRow) => !row.onshapeURL && !(row as any).onshapeID?.documentID,
-        onButtonClick: (row: WorkOrderTableRow) => {
-            let url = row.onshapeURL;
-            if (!url && (row as any).onshapeID) {
-                const { documentID, wvmType = "w", wvmID, elementID, partID } = (row as any).onshapeID;
-                url = `https://cad.onshape.com/documents/${documentID}/${wvmType}/${wvmID}/e/${elementID}?partId=${partID}`;
-            }
-            openExternal(url);
-        },
-    },
-    {
-        key: "exportSTL",
-        label: "Export STL",
-        type: "button",
-        buttonText: "Download",
-        // Files are saved in Google Drive on publish; no Onshape fallback.
-        isDisabled: (row: WorkOrderTableRow) => !row.exportSTL,
-        onButtonClick: (row: WorkOrderTableRow) => {
-            if (!row.exportSTL) return;
-            downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportSTL}`, `${row.name || "part"}.stl`);
-        },
-    },
-    {
-        key: "exportParasolid",
-        label: "Export Parasolid",
-        type: "button",
-        buttonText: "Download",
-        isDisabled: (row: WorkOrderTableRow) => !row.exportParasolid,
-        onButtonClick: (row: WorkOrderTableRow) => {
-            if (!row.exportParasolid) return;
-            downloadFile(`${import.meta.env.VITE_CLIENT_URL}/api/drive/file/id/${row.exportParasolid}`, `${row.name || "part"}.x_t`);
-        },
-    },
+    cadLinkColumn<WorkOrderTableRow>({ label: "CAD Link", buttonText: "Open CAD", url: (row) => row.onshapeURL || undefined }),
+    ...fileDownloadColumns<WorkOrderTableRow>(),
 ];
 
 export default WorkOrderColumns;

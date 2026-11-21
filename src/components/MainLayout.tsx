@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Appbar } from "./Appbar";
 import { Sidebar } from "./Sidebar";
 import { useThemeSync } from "../util/misc/useThemeSync";
-import '../css/DarkMode.css';
-import '../css/LightMode.css';
+import '../css/table.css';
 
 export default function MainLayout() {
     const [isDrawerOpen, setDrawerOpen] = useState<boolean>(false);
@@ -24,7 +23,10 @@ export default function MainLayout() {
                 <Sidebar isOpen={isDrawerOpen} onClose={() => setDrawerOpen(false)} />
             )}
             <main className="flex-1 p-6 items-center justify-center w-full">
-                <Outlet />
+                {/* Pages load on first visit (App.tsx): the bar and sidebar stay meanwhile. */}
+                <Suspense fallback={<div className="p-8 text-center text-sm opacity-60">Loading...</div>}>
+                    <Outlet />
+                </Suspense>
             </main>
         </div>
     );

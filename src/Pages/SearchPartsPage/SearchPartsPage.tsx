@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { AuthenticatedImage, fetchFromApi, type ApiError } from "../../util/ApiService";
+import { fetchFromApi, type ApiError } from "../../util/ApiService";
+import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import type { BomModel, PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";
@@ -7,6 +8,8 @@ import { useNavigate } from "react-router-dom";
 import PartPortal from "./PartPortal";
 import { recordImageSrc } from "../../util/recordImage";
 import { isMadeRecord, splitStandard } from "../../util/standardItems";
+import ErrorBanner, { ApiErrorText } from "../../components/ErrorBanner";
+import { useThemeClasses } from "../../util/misc/useThemeClasses";
 
 /** A search result: a part, or a sub-assembly (an assembly some other assembly uses). */
 type SearchItem =
@@ -36,10 +39,12 @@ function subAssembliesOf(boms: BomModel[], parts: PartModel[]): BomModel[] {
  */
 export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const { isLight } = useThemeSync();
+    const theme = useThemeClasses();
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
     const [items, setItems] = useState<SearchItem[]>([]);
-    const [isOpen, setOpen] = useState<PartModel | null>(null);
+    /** The part shown in Part Portal (null: closed). */
+    const [openPart, setOpenPart] = useState<PartModel | null>(null);
     // Without these, a slow or failed load showed "Nothing found", as if the database were empty.
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<ApiError | null>(null);
@@ -102,31 +107,26 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     }, [searchQuery, items]);
 
     // Theme Styles Mapping
-    const pageBg = isLight ? "bg-zinc-50 text-zinc-900" : "bg-zinc-950 text-zinc-100";
     const cardBg = isLight ? "bg-white border-zinc-200 hover:border-zinc-300" : "bg-zinc-900 border-zinc-800 hover:border-zinc-700";
-    const imageBg = isLight ? "bg-zinc-100 border-zinc-200" : "bg-zinc-950 border-zinc-800";
-    const inputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400" : "bg-zinc-900 border-zinc-800 text-zinc-100 placeholder-zinc-500";
-    const textHeading = isLight ? "text-zinc-900" : "text-white";
-    const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
-    const textSubdued = isLight ? "text-zinc-600" : "text-zinc-600";
-    const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
+    // Written out in full: Tailwind only generates classes it finds as literal text.
+    const textSubdued = "text-zinc-600"; // the same in both themes
 
     return (
-        <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${pageBg}`}>
+        <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
             {/* Header & Search Bar */}
             <div className="max-w-6xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h1 className={`text-2xl font-bold tracking-tight ${textHeading}`}>{standard ? "Standard Parts" : "Parts Catalog"}</h1>
-                        <p className={`text-xs ${textMuted}`}>
+                        <h1 className={`text-2xl font-bold tracking-tight ${theme.textHeading}`}>{standard ? "Standard Parts" : "Parts Catalog"}</h1>
+                        <p className={`text-xs ${theme.textMuted}`}>
                             {standard
                                 ? "Bought items saved by Publish BOM (Standard Content, vendor parts, items marked standard). Search by name, catalog number, or description."
                                 : "Search parts and sub-assemblies by name, catalog number, or description. Standard parts are on the Standard Parts page."}
                         </p>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className={`text-xs ${textMuted} font-mono`}>
-                            Results: <span className={`${textValue} font-bold`}>{filteredItems.length}</span>
+                        <div className={`text-xs ${theme.textMuted} font-mono`}>
+                            Results: <span className={`${theme.textValue} font-bold`}>{filteredItems.length}</span>
                         </div>
                         
                     </div>
@@ -134,7 +134,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
 
                 {/* Search Input Box */}
                 <div className="relative">
-                    <div className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${textMuted}`}>
+                    <div className={`absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none ${theme.textMuted}`}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
@@ -144,12 +144,12 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search by name, catalog #, or description..."
-                        className={`w-full border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-md ${inputBg}`}
+                        className={`w-full border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-md ${theme.input}`}
                     />
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery("")}
-                            className={`absolute inset-y-0 right-0 pr-3.5 flex items-center ${textMuted} hover:${textHeading} text-xs font-semibold`}
+                            className={`absolute inset-y-0 right-0 pr-3.5 flex items-center ${theme.textMuted} ${theme.hoverHeading} text-xs font-semibold`}
                         >
                             Clear
                         </button>
@@ -161,17 +161,15 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
             <div className="max-w-6xl mx-auto">
                 {loading ? (
                     <div className={`${cardBg} border rounded-xl p-12 text-center`}>
-                        <p className={`${textMuted} text-sm font-medium`}>Loading {standard ? "standard parts" : "parts"}...</p>
+                        <p className={`${theme.textMuted} text-sm font-medium`}>Loading {standard ? "standard parts" : "parts"}...</p>
                     </div>
                 ) : error ? (
-                    <div className="p-4 bg-red-900/50 border border-red-500 rounded-xl text-red-200">
-                        <p className="font-semibold">Error loading parts</p>
-                        <p>{error.message}</p>
-                        {error.statusCode && <p className="text-sm">HTTP Status Code: {error.statusCode}</p>}
-                    </div>
+                    <ErrorBanner title="Error loading parts" className="p-4 rounded-xl">
+                        <ApiErrorText error={error} />
+                    </ErrorBanner>
                 ) : items.length === 0 ? (
                     <div className={`${cardBg} border rounded-xl p-12 text-center`}>
-                        <p className={`${textMuted} text-sm font-medium`}>
+                        <p className={`${theme.textMuted} text-sm font-medium`}>
                             {standard ? "No standard parts have been published yet." : "No parts have been published yet."}
                         </p>
                     </div>
@@ -185,11 +183,11 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                             return (
                                 <div
                                     key={`${item.kind}:${part.id}`}
-                                    onClick={() => (item.kind === "part" ? setOpen(item.record) : navigate(`/bom/${part.id}`))}
+                                    onClick={() => (item.kind === "part" ? setOpenPart(item.record) : navigate(`/bom/${part.id}`))}
                                     className={`${cardBg} border rounded-xl p-4 shadow-md transition-all cursor-pointer flex gap-4 items-start group`}
                                 >
                                     {/* Thumbnail */}
-                                    <div className={`w-16 h-16 shrink-0 ${imageBg} border rounded-lg overflow-hidden flex items-center justify-center`}>
+                                    <div className={`w-16 h-16 shrink-0 ${theme.imageBox} border rounded-lg overflow-hidden flex items-center justify-center`}>
                                         {imageSrc ? (
                                             <AuthenticatedImage
                                                 src={imageSrc}
@@ -204,7 +202,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                                     {/* Part Metadata */}
                                     <div className="flex-1 min-w-0 space-y-1">
                                         <div className="flex items-center justify-between gap-2">
-                                            <h3 className={`text-sm font-semibold ${textHeading} truncate group-hover:text-blue-500 transition-colors`}>
+                                            <h3 className={`text-sm font-semibold ${theme.textHeading} truncate group-hover:text-blue-500 transition-colors`}>
                                                 {part.name || part.id}
                                             </h3>
                                             {isSub && (
@@ -214,12 +212,12 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                                             )}
                                         </div>
 
-                                        <p className={`text-xs font-mono ${textMuted}`}>
-                                            Cat #: <span className={textValue}>{part.catalogNumber || "N/A"}</span>
+                                        <p className={`text-xs font-mono ${theme.textMuted}`}>
+                                            Cat #: <span className={theme.textValue}>{part.catalogNumber || "N/A"}</span>
                                         </p>
 
                                         {part.description && (
-                                            <p className={`text-xs ${textMuted} line-clamp-2 italic`}>
+                                            <p className={`text-xs ${theme.textMuted} line-clamp-2 italic`}>
                                                 {part.description}
                                             </p>
                                         )}
@@ -230,18 +228,24 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                     </div>
                 ) : (
                     <div className={`${cardBg} border rounded-xl p-12 text-center space-y-2`}>
-                        <p className={`${textMuted} text-sm font-medium`}>Nothing found matching "{searchQuery}"</p>
+                        <p className={`${theme.textMuted} text-sm font-medium`}>Nothing found matching "{searchQuery}"</p>
                         <p className={`${textSubdued} text-xs`}>Try searching with a different term or clearing filters.</p>
                     </div>
                 )}
             </div>
-            {isOpen && createPortal(
+            {openPart && createPortal(
                 <div
-                    onClick={() => setOpen(null)}
+                    onClick={() => setOpenPart(null)}
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
                 >
                     <div onClick={(e) => e.stopPropagation()}>
-                        <PartPortal part={isOpen}/>
+                        <PartPortal
+                            key={openPart.id}
+                            part={openPart}
+                            onSaved={(saved) => setItems((list) => list.map((item) =>
+                                item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item
+                            ))}
+                        />
                     </div>
                 </div>,
                 document.body

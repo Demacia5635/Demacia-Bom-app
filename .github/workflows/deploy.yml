@@ -9,6 +9,12 @@ name: Deploy website to GitHub Pages
 on:
   push:
     branches: [MASTER]
+    # Pushes that only change the server (deployed by Render), docs, update logs
+    # or release notes (publish/) don't change the website: no redeploy.
+    paths-ignore:
+      - 'server/**'
+      - '**/*.md'
+      - 'publish/**'
   workflow_dispatch:
 
 permissions:
