@@ -27,6 +27,7 @@
 - **The browser tab says "Demacia BOM"** instead of "bom-app". (W18, `d0a157e`)
 - A BOM page asks the server for its assembly once instead of twice, and a work order's header picture can't show the previous work order's when you switch quickly. (P6, `25bcd78`)
 - **Creating a work order is faster:** each assembly in the tree is loaded once and in parallel, instead of twice and one at a time. (P5, `08fe219`)
+- **Work orders open and are created with far fewer requests:** the BOM page, the work-order page and work-order creation now load an assembly the same way, one request per level instead of one per sub-assembly. The quantities and lists are unchanged. A sub-assembly missing from the database now says so plainly instead of showing the server's "404" text. (R2, `346e921`)
 - **A work order's header shows the assembly's catalog number** instead of always "N/A". (T1, `08475c7`)
 - **New work orders get a long random ID** (and so a longer address, /workOrder/<id>), so two people creating one at the same moment can't collide. Existing work orders keep their IDs and addresses. (W17, `c5de334`)
 - Each page of the site loads the first time you open it, so the first page appears faster; "Loading..." shows briefly the first time. **After a new version is deployed, a tab that was already open reloads itself** when it next changes page, instead of breaking. (P11, `79f2ce7`)
