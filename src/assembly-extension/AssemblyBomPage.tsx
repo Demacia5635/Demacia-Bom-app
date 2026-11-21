@@ -24,7 +24,7 @@ import { getElementMicroversions, getPartBoundingBox, getPartStudioMassPropertie
 import { combineCopies, studioKey, studioOf, studiosToCheck, type CombinedItem, type PartStudioRef } from "./sameParts";
 import { recombineRows, splitCopyRows } from "./copyRows";
 import { formatPartSize } from "../util/partSize";
-import { nextThemePreference, THEME_LABELS, usePanelThemeSetting } from "../extension/panel/theme";
+import { usePanelThemeSetting } from "../extension/panel/theme";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
 import { parseOnshapeBomTable, type OnshapeBomTable, type OptionalBomField, type ParsedOnshapeBomRow } from "./OnshapeBom";
@@ -1100,8 +1100,8 @@ export default function AssemblyBomPage() {
   // Problems are read through a ref, so the columns are only rebuilt when the
   // default engineer changes, not on every edit.
   /** "Show size": the Size column, filled from Onshape (remembered in this browser). */
-  /** Light / dark / auto (theme.ts), set by the header's theme button. */
-  const themeSetting = usePanelThemeSetting();
+  /** Light / dark (theme.ts), switched by the header's theme button like the website's. */
+  const theme = usePanelThemeSetting();
   const [showSize, setShowSize] = useState(() => readToggle("showSize"));
   useEffect(() => writeToggle("showSize", showSize), [showSize]);
 
@@ -1969,15 +1969,18 @@ export default function AssemblyBomPage() {
           </div>
           
           <div className="flex items-center gap-4">
-            {themeSetting && (
+            {theme && (
+              // Same as the website's switch (components/Appbar.tsx).
               <button
                 type="button"
-                className="bom-toolbar-btn"
-                onClick={() => themeSetting[1](nextThemePreference(themeSetting[0]))}
-                title={`Theme: ${THEME_LABELS[themeSetting[0]].name}. Click for ${THEME_LABELS[nextThemePreference(themeSetting[0])].name}.`}
-                aria-label={`Theme: ${THEME_LABELS[themeSetting[0]].name}`}
+                onClick={theme.toggle}
+                aria-label="Toggle Theme"
+                title={theme.isLight ? "Switch to dark mode" : "Switch to light mode"}
+                className={`p-1.5 rounded-md text-sm transition-colors ${
+                  theme.isLight ? "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100" : "text-gray-300 hover:text-white hover:bg-gray-800"
+                }`}
               >
-                {THEME_LABELS[themeSetting[0]].icon}
+                {theme.isLight ? "🌙" : "☀️"}
               </button>
             )}
             <button

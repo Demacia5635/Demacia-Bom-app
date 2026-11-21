@@ -32,40 +32,45 @@ export function applyTheme(pref: ThemePreference): void {
   document.documentElement.style.colorScheme = light ? "light" : "dark";
 }
 
-/** The saved preference and a setter; applies it, and follows the browser while on "auto". */
-export function usePanelTheme(): [ThemePreference, (pref: ThemePreference) => void] {
+/**
+ * The panel's theme, like the website's switch (components/Appbar.tsx): one
+ * button flips between light and dark. Until it's first used the panel is on
+ * "auto" and follows the browser; after that the choice is remembered.
+ */
+export interface PanelTheme {
+  /** Whether light mode is showing now. */
+  isLight: boolean;
+  /** Switches to the other theme and remembers it. */
+  toggle: () => void;
+}
+
+export function usePanelTheme(): PanelTheme {
   const [pref, setPref] = useState<ThemePreference>(readThemePreference);
+  const [light, setLight] = useState(() => isLight(pref));
   useEffect(() => {
-    applyTheme(pref);
+    const show = () => {
+      applyTheme(pref);
+      setLight(isLight(pref));
+    };
+    show();
     try {
-      localStorage.setItem(STORAGE_KEY, pref);
+      if (pref === "auto") localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, pref);
     } catch {
       // Not remembered; it still applies until the panel closes.
     }
     if (pref !== "auto") return;
     const media = window.matchMedia(LIGHT_QUERY);
-    const follow = () => applyTheme("auto");
-    media.addEventListener("change", follow);
-    return () => media.removeEventListener("change", follow);
+    media.addEventListener("change", show);
+    return () => media.removeEventListener("change", show);
   }, [pref]);
-  return [pref, setPref];
+  return { isLight: light, toggle: () => setPref(light ? "dark" : "light") };
 }
 
-/** Next preference for the theme button: auto -> light -> dark -> auto. */
-export function nextThemePreference(pref: ThemePreference): ThemePreference {
-  return pref === "auto" ? "light" : pref === "light" ? "dark" : "auto";
-}
+/** The panel's theme, shared from PanelApp (null outside the panel). */
+export const PanelThemeContext = createContext<PanelTheme | null>(null);
 
-/** The panel's theme setting, shared from PanelApp (null outside the panel). */
-export const PanelThemeContext = createContext<[ThemePreference, (pref: ThemePreference) => void] | null>(null);
-
-export const THEME_LABELS: Record<ThemePreference, { icon: string; name: string }> = {
-  auto: { icon: "◐", name: "Auto (follows the browser)" },
-  light: { icon: "☀", name: "Light" },
-  dark: { icon: "☾", name: "Dark" },
-};
-
-/** Current setting and setter, or null when not inside the panel. */
-export function usePanelThemeSetting() {
+/** The panel's theme, or null when not inside the panel. */
+export function usePanelThemeSetting(): PanelTheme | null {
   return useContext(PanelThemeContext);
 }
