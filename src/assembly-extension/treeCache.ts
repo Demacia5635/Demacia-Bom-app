@@ -168,8 +168,8 @@ if (typeof addEventListener === "function") {
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 days ago". */
-export function describeAge(savedAt: number): string {
-  const minutes = Math.round((Date.now() - savedAt) / 60000);
+export function describeAge(savedAt: number, now: number = Date.now()): string {
+  const minutes = Math.round((now - savedAt) / 60000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);

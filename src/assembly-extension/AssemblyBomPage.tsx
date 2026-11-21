@@ -138,6 +138,8 @@ export default function AssemblyBomPage() {
   const [loadProgress, setLoadProgress] = useState<{ done: number; total: number; current: string } | null>(null);
   /** When the rows on screen come from the saved copy: when it was saved. */
   const [cachedAt, setCachedAt] = useState<number | null>(null);
+  /** When the tree on screen was read from Onshape (for "Loaded 5 min ago"). */
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
   /** When the tree on screen was loaded from Onshape (kept when edits update the saved copy). Set by every load. */
   const treeSavedAtRef = useRef<number>(0);
   /** The tree on screen, for handlePublish when it isn't handed a freshly loaded one. */
@@ -208,6 +210,7 @@ export default function AssemblyBomPage() {
           cached.rootBom ? ({ ...cached.rootBom, headers: [], items: [] } as OnshapeBomTable) : null
         );
         setCachedAt(cached.savedAt);
+        setLoadedAt(cached.savedAt);
         setTelemetryAssembly(assemblyNameOf(cached.rootBom) || cached.rootBomDB?.name || "", rootKey.documentID, rootKey.elementID);
         treeSavedAtRef.current = cached.savedAt;
         setLoading(false);
@@ -278,6 +281,7 @@ export default function AssemblyBomPage() {
       setRows(freshRows);
       setCachedAt(null);
       treeSavedAtRef.current = Date.now();
+      setLoadedAt(treeSavedAtRef.current);
       writeTreeCache(cacheKey, {
         rows: freshRows,
         rootBomDB: dbBom,
@@ -992,6 +996,7 @@ export default function AssemblyBomPage() {
           description={rootOnshapeBom?.description || rootBomDB?.description}
           rootIsPublished={rootIsPublished}
           websiteUrl={rootBomDB?.id ? bomPageUrl(rootBomDB.id) : null}
+          loadedAt={loading ? null : loadedAt}
           topProblem={topProblem}
           topNumber={topAssembly.number}
           theme={theme}
@@ -1074,8 +1079,12 @@ export default function AssemblyBomPage() {
             </div>
           )}
           {!loading && !publishing && cachedAt !== null && (
-            <div className="assembly-bom-refreshing mb-2 text-xs text-zinc-500">
-              Saved copy from {describeAge(cachedAt)}. Press Refresh BOM to reload from Onshape.
+            <div
+              className="assembly-bom-saved-copy mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400"
+              role="status"
+            >
+              <strong>Saved copy from {describeAge(cachedAt)}.</strong> Onshape may have changed since. Press Refresh BOM to
+              reload it (needed before publishing).
             </div>
           )}
           <SameNumberNotice groups={sameNumberGroups} onCombine={combineGroups} />

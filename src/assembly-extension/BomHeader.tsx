@@ -1,5 +1,7 @@
 import type { usePanelThemeSetting } from "../extension/panel/theme";
 import { openExternal } from "../util/openExternal";
+import { describeAge } from "./treeCache";
+import { useNow } from "./useNow";
 
 /**
  * The top of the panel: the assembly's name, description and status notes,
@@ -10,6 +12,7 @@ export default function BomHeader({
   description,
   rootIsPublished,
   websiteUrl,
+  loadedAt,
   topProblem,
   topNumber,
   theme,
@@ -26,6 +29,8 @@ export default function BomHeader({
   rootIsPublished: boolean;
   /** The assembly's page on the website, once it is saved there. */
   websiteUrl: string | null;
+  /** When the tree on screen was read from Onshape; null while loading. */
+  loadedAt: number | null;
   /** Why the top assembly's catalog number would stop a work order, if it would. */
   topProblem: string | undefined;
   topNumber: string;
@@ -39,12 +44,18 @@ export default function BomHeader({
   onRefresh: () => void;
   onPublish: () => void;
 }) {
+  const now = useNow(30_000);
   return (
     <div className="assembly-bom-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
       <div>
         <h1 className="assembly-bom-title text-2xl font-bold">{displayName}</h1>
         {description && (
           <p className="assembly-bom-subtitle text-zinc-500 text-sm mt-1">{description}</p>
+        )}
+        {loadedAt !== null && (
+          <p className="assembly-bom-loaded-at text-xs text-zinc-500 mt-1" title={new Date(loadedAt).toLocaleString()}>
+            Loaded from Onshape {describeAge(loadedAt, now)}
+          </p>
         )}
         {!rootIsPublished && (
           <p className="assembly-bom-unpublished-hint text-xs text-blue-500 mt-1 italic">
