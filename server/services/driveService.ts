@@ -156,8 +156,13 @@ export class GoogleDriveService {
     return this.mapFile(res.data);
   }
 
+  /**
+   * Moves the file to Drive's trash rather than deleting it for good, so a
+   * wrong publish can be undone from Drive. Drive empties its trash itself
+   * after 30 days.
+   */
   async deleteFile(fileId: string): Promise<void> {
-    await this.drive.files.delete({ fileId });
+    await this.drive.files.update({ fileId, requestBody: { trashed: true } });
     this.teamFileCache.delete(fileId);
   }
 
