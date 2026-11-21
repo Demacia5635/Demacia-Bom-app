@@ -1,10 +1,11 @@
 # Website: next version
 
-**Unreleased.** `fe511b9` and `745a04b` are live on the website since 2026-11-21 15:48.
+**Unreleased.** `fe511b9` and `745a04b` are live on the website since 2026-11-21 15:48. `d2024bf` is committed but not pushed yet.
 
 ## Changes
 
-- **No visible change.** The shared table gained three options that only the extension uses (extension, next version): a right-click menu on rows (`fe511b9`), a small label over a picture's corner, and a different-looking open button per row (`745a04b`). Without them the tables render exactly as before. The website's BOM and work-order pages keep their own right-click menus, and the column Move Left / Move Right menu is unchanged.
+- **No visible change.** The shared table gained two options that only the extension uses: a small label over a picture's corner, and a different-looking open button per row (`745a04b`). Without them the tables render exactly as before.
+- A right-click menu option added in `fe511b9` was removed again in `d2024bf`, since the extension no longer uses it. The table's right-click behaviour is back to what it was. The website's BOM and work-order pages keep their own right-click menus, and the column Move Left / Move Right menu is unchanged.
 
 ## Not tested yet
 
