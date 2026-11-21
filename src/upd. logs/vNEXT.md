@@ -13,6 +13,7 @@
 - The "Create work order" form can't be closed by clicking outside it while it's creating. (W6, `e9642b7`)
 - If "Show Part Data" can't load a part, you're told, instead of nothing happening. (W7, `afca27b`)
 - An empty BOMs list says "No BOMs published yet" instead of showing a blank table. (W8, `30b9651`)
+- If the work-order list fails to load, you see the real error, not a misleading second one. (W9, `6f9ecc0`)
 - **Clicking a part's picture on a work order opens the image viewer again after the Avatar column has been moved,** and on rows of a merged CNC job. (B5, `22fe2fb`)
 - **A failed save on a work order no longer loses your change.** It's sent again with your next edit of that part, as on the BOM page. The "Couldn't save" banner stays as it was. (B6, `9d827b1`)
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)
@@ -46,6 +47,10 @@
 
 - Old work orders made before extension 3.2.0 keep the saved status and links of hidden copies of a part hidden; re-enter them on the combined row (B22, the user's choice).
 - Restricting who can open the statistics page (/tele) waits for the sign-in project.
+
+## Known problems
+
+- On a work order, "Show Part Data" on a bought sub-assembly that has no part record says it "isn't saved in the database yet".
 
 ## Not tested yet
 
