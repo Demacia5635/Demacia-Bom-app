@@ -36,7 +36,7 @@ export default function BomWorkOrders({ bomId }: { bomId: string }) {
 
   if (!workOrders) return null;
   return (
-    <section aria-label="Work orders for this assembly" className={`mb-4 rounded-xl border px-4 py-3 text-sm ${theme.card}`}>
+    <section aria-label="Work orders for this assembly" className={`print:hidden mb-4 rounded-xl border px-4 py-3 text-sm ${theme.card}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 className={`text-xs font-semibold uppercase tracking-wide ${theme.textLabel}`}>
           Work orders for this assembly ({workOrders.length})

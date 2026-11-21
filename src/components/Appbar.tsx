@@ -21,7 +21,7 @@ export const Appbar: React.FC<{ onOpenDrawer: () => void, title?: string, isSide
     const versionColor = isLight ? "text-zinc-500" : "text-gray-400";
 
     return (
-        <header className={`h-12 border-b px-4 flex items-center justify-between sticky top-0 z-35 transition-colors duration-200 ${headerBg}`}>
+        <header className={`print:hidden h-12 border-b px-4 flex items-center justify-between sticky top-0 z-35 transition-colors duration-200 ${headerBg}`}>
             <div className="w-10 flex items-center">
                 {isSidebar && (
                     <button

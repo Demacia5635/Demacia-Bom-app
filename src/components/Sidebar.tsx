@@ -48,7 +48,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
     const iconColor = isLight ? "text-blue-600" : "text-indigo-400";
 
     return (
-        <div>
+        <div className="print:hidden">
             <div
                 onClick={onClose}
                 className={`fixed inset-0 bg-black/70 z-40 transition-opacity duration-300 

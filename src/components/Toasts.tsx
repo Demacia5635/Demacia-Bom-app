@@ -12,7 +12,7 @@ export default function Toasts() {
   const toasts = useSyncExternalStore(subscribeToasts, currentToasts);
   if (toasts.length === 0) return null;
   return (
-    <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-[1000000] flex flex-col items-stretch sm:items-end gap-2 pointer-events-none">
+    <div className="print:hidden fixed bottom-4 right-4 left-4 sm:left-auto z-[1000000] flex flex-col items-stretch sm:items-end gap-2 pointer-events-none">
       {toasts.map((t) => (
         <button
           key={t.id}

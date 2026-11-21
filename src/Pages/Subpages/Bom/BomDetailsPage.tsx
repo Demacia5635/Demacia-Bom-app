@@ -383,7 +383,7 @@ export default function BomDetailsPage() {
         </ErrorBanner>
       )}
 
-      <div className="flex items-center gap-3 mb-3">
+      <div className="print:hidden flex items-center gap-3 mb-3">
         <span className={`text-sm ${theme.textMuted}`}>View:</span>
         <div className={`inline-flex rounded-lg border overflow-hidden ${isLight ? "border-zinc-300" : "border-zinc-700"}`} role="group" aria-label="BOM view">
           {BOM_VIEWS.map((v) => (

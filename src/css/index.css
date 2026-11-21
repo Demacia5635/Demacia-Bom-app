@@ -16,3 +16,21 @@ body.light-theme-active {
   outline: 2px solid #3b82f6 !important;
   outline-offset: 2px !important;
 }
+
+/* Printing a page (QW27; made for BOM pages): no top bar, sidebar, toolbar,
+   buttons or menus; the table on the full width, black on white, its header
+   row repeated on every page. Website only. */
+@media print {
+  @page { margin: 10mm; }
+  *, *::before, *::after { background-color: transparent !important; box-shadow: none !important; }
+  body { color: #000 !important; }
+  main { padding: 0 !important; }
+  button, .table-hscroll, .context-menu { display: none !important; }
+  .table-wrapper, .table-wrapper-sticky { max-height: none !important; overflow: visible !important; }
+  .custom-table { width: 100% !important; table-layout: auto !important; }
+  .custom-table thead { display: table-header-group; }
+  .custom-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .table-th, .table-td { position: static !important; color: #000 !important; border: 0.5pt solid #888 !important; }
+  .cell-input, .cell-select { color: #000 !important; border: none !important; appearance: none; -webkit-appearance: none; }
+  a { color: inherit !important; text-decoration: none !important; }
+}

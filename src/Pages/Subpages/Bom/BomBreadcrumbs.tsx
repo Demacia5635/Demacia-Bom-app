@@ -43,7 +43,7 @@ export default function BomBreadcrumbs({ trail, current }: { trail: string[]; cu
 
   const crumb = `inline-flex items-center gap-1.5 hover:text-blue-500 ${theme.textMuted}`;
   return (
-    <nav aria-label="Breadcrumb" className="mb-3 text-sm">
+    <nav aria-label="Breadcrumb" className="print:hidden mb-3 text-sm">
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <li><Link to="/home" className={crumb}>BOMs</Link></li>
         {trail.map((id, i) => {

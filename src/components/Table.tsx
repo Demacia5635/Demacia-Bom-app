@@ -424,7 +424,7 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
             {/* Synced Bottom Horizontal Scrollbar */}
             <div
                 ref={bottomScrollRef}
-                className="overflow-x-auto sticky bottom-0 z-20 bg-zinc-900/40 backdrop-blur-sm border-t border-zinc-800/60"
+                className="table-hscroll overflow-x-auto sticky bottom-0 z-20 bg-zinc-900/40 backdrop-blur-sm border-t border-zinc-800/60"
                 style={{ height: '14px', marginTop: '2px' }}
             >
                 <div style={{ width: `${tableWidth}px`, height: '1px' }} />

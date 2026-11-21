@@ -37,7 +37,7 @@ export default function BomUsedIn({ bomId }: { bomId: string }) {
 
   if (!parents) return null;
   return (
-    <section aria-label="Used in" className={`mb-4 rounded-xl border px-4 py-3 text-sm ${theme.card}`}>
+    <section aria-label="Used in" className={`print:hidden mb-4 rounded-xl border px-4 py-3 text-sm ${theme.card}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 className={`text-xs font-semibold uppercase tracking-wide ${theme.textLabel}`}>Used in ({parents.length})</h2>
         {parents.length === 0 && <span className={`text-xs ${theme.textMuted}`}>No other assembly uses this one.</span>}
