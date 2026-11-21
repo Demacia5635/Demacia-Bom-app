@@ -51,6 +51,7 @@ import BomToolbar from "./BomToolbar";
 import BomHeader from "./BomHeader";
 import { bomPageUrl } from "./websiteLinks";
 import { useServerStatus } from "./useServerStatus";
+import { useOnshapeChangeWatch } from "./useOnshapeChangeWatch";
 import ShortcutsHelp from "./ShortcutsHelp";
 import { isTyping, SEARCH_INPUT_ID } from "./shortcuts";
 import {
@@ -188,6 +189,13 @@ export default function AssemblyBomPage() {
       : null;
   }, [documentId, workspaceId, versionId, elementId]);
 
+  /** "Onshape changed since loaded": watched while a tree from Onshape is on screen and idle. */
+  const { changed: onshapeChanged, restart: restartChangeWatch } = useOnshapeChangeWatch({
+    rootKey,
+    rows,
+    active: !loading && !publishing && cachedAt === null && rows.length > 0,
+  });
+
   /**
    * Loads the assembly tree from Onshape + the database and returns it (null
    * on failure). With `preferCache`, a saved copy is shown instead when there
@@ -218,6 +226,7 @@ export default function AssemblyBomPage() {
         );
         setCachedAt(cached.savedAt);
         setLoadedAt(cached.savedAt);
+        restartChangeWatch();
         setTelemetryAssembly(assemblyNameOf(cached.rootBom) || cached.rootBomDB?.name || "", rootKey.documentID, rootKey.elementID);
         treeSavedAtRef.current = cached.savedAt;
         setLoading(false);
@@ -289,6 +298,7 @@ export default function AssemblyBomPage() {
       setCachedAt(null);
       treeSavedAtRef.current = Date.now();
       setLoadedAt(treeSavedAtRef.current);
+      restartChangeWatch(); // these models are the new starting point
       writeTreeCache(cacheKey, {
         rows: freshRows,
         rootBomDB: dbBom,
@@ -305,7 +315,7 @@ export default function AssemblyBomPage() {
       if (!stale()) setLoading(false);
     }
     });
-  }, [rootKey, context.server]);
+  }, [rootKey, context.server, restartChangeWatch]);
 
   // Opening an assembly: show its saved copy if there is one; otherwise load it.
   useEffect(() => {
@@ -861,6 +871,7 @@ export default function AssemblyBomPage() {
 
         setRootBomDB(savedRoot);
         setRootIsPublished(true);
+        restartChangeWatch(); // the publish wrote the edits to Onshape: not someone else's change
         currentTreeRef.current = { ...currentTreeRef.current, rootBomDB: savedRoot };
         writeTreeCache(
           treeCacheKey(rootKey),
@@ -893,7 +904,7 @@ export default function AssemblyBomPage() {
         setPublishProgress(null);
       }
     }),
-    [rootKey, client, context.server]
+    [rootKey, client, context.server, restartChangeWatch]
   );
 
   /**
@@ -1041,6 +1052,7 @@ export default function AssemblyBomPage() {
           rootIsPublished={rootIsPublished}
           websiteUrl={rootBomDB?.id ? bomPageUrl(rootBomDB.id) : null}
           loadedAt={loading ? null : loadedAt}
+          onshapeChanged={onshapeChanged && !loading}
           serverStatus={serverStatus}
           onCheckServer={checkServer}
           topProblem={topProblem}

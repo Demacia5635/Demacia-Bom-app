@@ -16,6 +16,7 @@ export default function BomHeader({
   rootIsPublished,
   websiteUrl,
   loadedAt,
+  onshapeChanged,
   serverStatus,
   onCheckServer,
   topProblem,
@@ -37,6 +38,8 @@ export default function BomHeader({
   websiteUrl: string | null;
   /** When the tree on screen was read from Onshape; null while loading. */
   loadedAt: number | null;
+  /** The assembly changed in Onshape since it was loaded. */
+  onshapeChanged: boolean;
   serverStatus: ServerStatus;
   onCheckServer: () => void;
   /** Why the top assembly's catalog number would stop a work order, if it would. */
@@ -67,6 +70,20 @@ export default function BomHeader({
         {loadedAt !== null && (
           <p className="assembly-bom-loaded-at text-xs text-zinc-500 mt-1" title={new Date(loadedAt).toLocaleString()}>
             Loaded from Onshape {describeAge(loadedAt, now)}
+          </p>
+        )}
+        {onshapeChanged && (
+          <p className="assembly-bom-onshape-changed text-xs mt-1 text-amber-400" role="status">
+            ⟳ Onshape changed since this was loaded.{" "}
+            <button
+              type="button"
+              className="underline hover:no-underline"
+              onClick={onRefresh}
+              disabled={busy}
+              title={`Reload from Onshape (${SHORTCUTS.refresh})`}
+            >
+              Refresh BOM
+            </button>
           </p>
         )}
         {!rootIsPublished && (
