@@ -23,11 +23,24 @@ export interface ApiError {
   statusCode?: number;
 }
 
+/**
+ * What fetchFromApi throws: a real Error (stack trace, `instanceof`) with the
+ * ApiError shape callers read (`message`, `statusCode`).
+ */
+export class ApiRequestError extends Error implements ApiError {
+  statusCode?: number;
+  constructor(message: string, statusCode?: number) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.statusCode = statusCode;
+  }
+}
+
 export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
 
   if (!secret) {
-    throw { message: "VITE_CLIENT_SECRET is missing from environment variables." };
+    throw new ApiRequestError("VITE_CLIENT_SECRET is missing from environment variables.");
   }
 
   const cleanEndpoint = endpoint.startsWith("/api") ? endpoint.replace("/api", "") : endpoint;
@@ -54,29 +67,27 @@ export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {
       } catch (e) {
         // If it fails to parse and looks like HTML, the API endpoint is missing
         if (text.trim().startsWith("<")) {
-          throw {
-            message: `Server returned HTML instead of JSON. The endpoint '${endpoint}' might not exist on the backend.`,
-            statusCode: response.status || 404,
-          } as ApiError;
+          throw new ApiRequestError(
+            `Server returned HTML instead of JSON. The endpoint '${endpoint}' might not exist on the backend.`,
+            response.status || 404,
+          );
         }
-        throw {
-          message: "Failed to parse API response as JSON.",
-          statusCode: response.status || 500,
-        } as ApiError;
+        throw new ApiRequestError("Failed to parse API response as JSON.", response.status || 500);
       }
     }
 
     if (!response.ok) {
-      throw {
-        message: parsedData?.message || `Failed request to ${endpoint}: ${response.statusText}`,
-        statusCode: response.status,
-      } as ApiError;
+      throw new ApiRequestError(
+        parsedData?.message || `Failed request to ${endpoint}: ${response.statusText}`,
+        response.status,
+      );
     }
 
     return parsedData as T;
   } catch (err: any) {
-    if (err.statusCode) throw err;
-    throw { message: err.message || "Network error occurred." } as ApiError;
+    // Our own errors, and a cancelled request (AbortController), go out as they are.
+    if (err instanceof ApiRequestError || err?.name === "AbortError") throw err;
+    throw new ApiRequestError(err?.message || "Network error occurred.");
   }
 }
 

@@ -1,4 +1,4 @@
-import type { ApiError } from "./ApiService";
+import { ApiRequestError } from "./ApiService";
 import type { BomModel } from "./Models";
 
 /**
@@ -29,7 +29,7 @@ export async function collectBomParts(
     bought?: Map<string, BomModel>,
 ): Promise<[string, number][]> {
     if (path.includes(targetBomId)) {
-        throw { message: `Assembly ${targetBomId} contains itself (via ${path.join(" > ")}). Fix the BOM and publish it again.` } as ApiError;
+        throw new ApiRequestError(`Assembly ${targetBomId} contains itself (via ${path.join(" > ")}). Fix the BOM and publish it again.`);
     }
     const currentBom = await fetchBom(targetBomId);
     if (path.length > 0 && isBoughtAssembly(currentBom)) {
