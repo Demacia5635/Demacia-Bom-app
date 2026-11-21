@@ -1,6 +1,6 @@
 # Server: next version
 
-**Unreleased.** Committed on `MASTER` (`5a7d06e`), not pushed yet.
+**Unreleased.** `5a7d06e` was pushed on 2026-11-21 15:48. Render must still be redeployed by hand.
 
 ## Before you deploy
 

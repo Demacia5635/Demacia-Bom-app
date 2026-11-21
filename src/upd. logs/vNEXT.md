@@ -1,6 +1,6 @@
 # Website: next version
 
-**Unreleased.** Committed on `MASTER` (`fe511b9`, `745a04b`), not pushed yet.
+**Unreleased.** `fe511b9` and `745a04b` are live on the website since 2026-11-21 15:48.
 
 ## Changes
 
