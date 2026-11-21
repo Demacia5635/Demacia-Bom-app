@@ -76,6 +76,8 @@ export function WorkOrdersPage() {
     const cardBg = isLight ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800";
     const inputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 placeholder-zinc-400" : "bg-zinc-900 border-zinc-800 text-zinc-100 placeholder-zinc-500";
     const textHeading = isLight ? "text-zinc-900" : "text-white";
+    // Written out in full: Tailwind only generates classes it finds as literal text.
+    const hoverHeading = isLight ? "hover:text-zinc-900" : "hover:text-white";
     const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
     const textSubdued = isLight ? "text-zinc-600" : "text-zinc-600";
     const textValue = isLight ? "text-zinc-800" : "text-zinc-200";
@@ -112,7 +114,7 @@ export function WorkOrdersPage() {
                     {searchQuery && (
                         <button
                             onClick={() => setSearchQuery("")}
-                            className={`absolute inset-y-0 right-0 pr-3.5 flex items-center ${textMuted} hover:${textHeading} text-xs font-semibold`}
+                            className={`absolute inset-y-0 right-0 pr-3.5 flex items-center ${textMuted} ${hoverHeading} text-xs font-semibold`}
                         >
                             Clear
                         </button>
