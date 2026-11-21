@@ -35,6 +35,7 @@ import { describePublishError, lowerFirst } from "./publishErrors";
 import { assemblyKeyId, bomIdOf, itemKey, keyOf, keyString, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
 import ProgressBar from "./ProgressBar";
+import BomToolbar from "./BomToolbar";
 import {
   catalogNumberInName,
   changedFields,
@@ -1660,91 +1661,26 @@ export default function AssemblyBomPage() {
             </div>
           )}
           <SameNumberNotice groups={sameNumberGroups} onCombine={combineGroups} />
-          <div className="assembly-bom-toolbar mb-2 flex flex-wrap items-center gap-2">
-            <div className="bom-search">
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setSearch("");
-                }}
-                placeholder="Search name, catalog #, description..."
-                aria-label="Search the BOM"
-              />
-            </div>
-            {problemCount > 0 ? (
-              <button
-                type="button"
-                className={`bom-toolbar-btn bom-problems-btn ${problemsOnly ? "bom-problems-btn-active" : ""}`}
-                onClick={() => setProblemsOnly((v) => !v)}
-                aria-pressed={problemsOnly}
-                title={
-                  problemsOnly
-                    ? "Showing only parts that would stop a work order. Click to show everything."
-                    : "Items with values that would stop a work order (catalog number that fits its assembly and is unique, material, engineer). " +
-                      "Marked in red; hover a cell for details. Click to show only those parts."
-                }
-              >
-                ⚠ {problemCount} problem{problemCount === 1 ? "" : "s"}
-              </button>
-            ) : (
-              rows.length > 0 && (
-                <span className="bom-toolbar-note" title="Every made item has a valid, unique catalog number that fits its assembly, and every made part a material and an engineer">
-                  ✓ Ready for a work order
-                </span>
-              )
-            )}
-            {subtreeLoads > 0 && (
-              <span className="bom-toolbar-note">Loading the parts of the assembly you unmarked…</span>
-            )}
-            {searchFilter && (
-              <span className="bom-toolbar-note">
-                {searchMatchCount} match{searchMatchCount === 1 ? "" : "es"}
-              </span>
-            )}
-            <button
-              type="button"
-              className="bom-toolbar-btn"
-              onClick={() => setAllExpanded(true)}
-              disabled={!!searchFilter}
-              title={searchFilter ? "Clear the search first" : "Show every sub-assembly's contents"}
-            >
-              Expand all
-            </button>
-            <button
-              type="button"
-              className="bom-toolbar-btn"
-              onClick={() => setAllExpanded(false)}
-              disabled={!!searchFilter}
-              title={searchFilter ? "Clear the search first" : "Show only the top level"}
-            >
-              Collapse all
-            </button>
-            <label className="bom-toolbar-toggle" title="Onshape Standard Content (screws, nuts...) and parts marked as standard parts">
-              <input
-                type="checkbox"
-                checked={hideStandardParts}
-                onChange={(e) => setHideStandardParts(e.target.checked)}
-              />
-              Hide standard parts ({standardPartCount})
-            </label>
-            <label className="bom-toolbar-toggle" title="Sub-assemblies marked as standard parts (motors...)">
-              <input
-                type="checkbox"
-                checked={hideStandardAssemblies}
-                onChange={(e) => setHideStandardAssemblies(e.target.checked)}
-              />
-              Hide standard assemblies ({standardAssemblyCount})
-            </label>
-            <label
-              className="bom-toolbar-toggle"
-              title="Each made part's size in Onshape (bounding box, longest side first), e.g. a spacer's length. Read from Onshape while this is on."
-            >
-              <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
-              Show size
-            </label>
-          </div>
+          <BomToolbar
+            search={search}
+            setSearch={setSearch}
+            searching={!!searchFilter}
+            searchMatchCount={searchMatchCount}
+            problemCount={problemCount}
+            problemsOnly={problemsOnly}
+            onToggleProblemsOnly={() => setProblemsOnly((v) => !v)}
+            hasRows={rows.length > 0}
+            subtreeLoads={subtreeLoads}
+            setAllExpanded={setAllExpanded}
+            hideStandardParts={hideStandardParts}
+            setHideStandardParts={setHideStandardParts}
+            standardPartCount={standardPartCount}
+            hideStandardAssemblies={hideStandardAssemblies}
+            setHideStandardAssemblies={setHideStandardAssemblies}
+            standardAssemblyCount={standardAssemblyCount}
+            showSize={showSize}
+            setShowSize={setShowSize}
+          />
           <Table
             data={rows}
             columnsData={columns}
