@@ -7,7 +7,7 @@
  * shared import would become an `import` statement the browser rejects.
  */
 
-// Keep in sync with background.ts.
+// Keep in sync with messages.ts (this script can't import it).
 const OPEN_PANEL_MESSAGE = "demacia-bom:openPanel";
 const BUTTON_ID = "demacia-bom-open";
 const HINT_ID = "demacia-bom-hint";

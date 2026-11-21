@@ -8,19 +8,9 @@
  * edits, a publish still running). Each Onshape tab can have its own panel.
  * If the tab itself navigates away from Onshape, its panel is closed.
  */
+import { isOnshapeUrl, OPEN_PANEL_MESSAGE, PANEL_PORT_PREFIX } from "./messages";
 
-// Keep in sync with content.ts (content scripts can't import shared modules).
-const OPEN_PANEL_MESSAGE = "demacia-bom:openPanel";
 const PANEL_PATH = "panel.html";
-
-/**
- * The extension only has host permission for *.onshape.com, so Chrome only
- * reveals the URL of Onshape tabs: any other page (another site, a new tab,
- * chrome:// pages) has no `url` here, which is exactly "not Onshape".
- */
-function isOnshapeUrl(url: string | undefined): boolean {
-  return !!url && /^https:\/\/([^/]+\.)?onshape\.com\//.test(url);
-}
 
 // No window-wide panel: only tabs it's opened for get one. (The manifest's
 // default_path would otherwise show the same panel on every tab.) Runs each
@@ -47,7 +37,6 @@ function openPanelForTab(tabId: number): void {
 // can check it synchronously (sidePanel.open must be called before any await).
 // The panel pings the port, which keeps this worker alive while a panel is
 // open; if the worker is restarted anyway, the panels reconnect.
-const PANEL_PORT_PREFIX = "demacia-bom:panel:";
 const tabsWithOpenPanel = new Set<number>();
 /**
  * Tabs this worker enabled a panel for (open or since closed by the user).

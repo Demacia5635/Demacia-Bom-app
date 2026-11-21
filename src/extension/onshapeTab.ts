@@ -4,6 +4,7 @@
  * context that the old Onshape Application Extension received.
  */
 import { useEffect, useState } from "react";
+import { PANEL_PORT_PREFIX } from "./messages";
 
 export type WvmType = "w" | "v" | "m";
 
@@ -110,8 +111,6 @@ export function reportPanelOpen(): void {
   });
 }
 
-// Keep in sync with background.ts.
-const PANEL_PORT_PREFIX = "demacia-bom:panel:";
 /** Under Chrome's 30 s idle limit for the service worker. */
 const KEEP_ALIVE_MS = 20_000;
 

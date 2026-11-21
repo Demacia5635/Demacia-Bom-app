@@ -16,8 +16,8 @@
  *    the sidebar menu.
  */
 
-// Keep in sync with content.ts (content scripts can't import shared modules).
-const OPEN_PANEL_MESSAGE = "demacia-bom:openPanel";
+import { isOnshapeUrl, OPEN_PANEL_MESSAGE } from "./messages";
+
 const PANEL_PATH = "panel.html";
 
 /** The part of Firefox's sidebarAction API used here (not in @types/chrome). */
@@ -28,10 +28,6 @@ interface SidebarAction {
 }
 const sidebarAction = (globalThis as unknown as { browser: { sidebarAction: SidebarAction } }).browser
   .sidebarAction;
-
-function isOnshapeUrl(url: string | undefined): boolean {
-  return !!url && /^https:\/\/([^/]+\.)?onshape\.com\//.test(url);
-}
 
 /**
  * Assigns this tab its own panel and opens the sidebar, or closes it if it's
