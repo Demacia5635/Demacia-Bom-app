@@ -88,7 +88,9 @@ export default function WorkOrderDetailsPage() {
 
     const [rows, setRows] = useState<WorkOrderTableRow[]>([]);
     const [error, setError] = useState<ApiError | null>(null);
-    const [loading, setLoading] = useState<boolean>(false);
+    // True from the start: the parts load right after the work order, so the
+    // table never flashes empty first.
+    const [loading, setLoading] = useState<boolean>(true);
     const [workOrderData, setWorkOrderData] = useState<WorkorderModel | null>(null);
     const [assemblyThumbnailUrl] = useState<string>(""); // image now comes from the BOM record
 
@@ -151,15 +153,22 @@ export default function WorkOrderDetailsPage() {
         setWorkOrderData(null);
         setRows([]);
         setError(null);
+        setLoading(true);
 
         async function getWOData() {
             try {
                 const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
-                if (!cancelled) setWorkOrderData(data);
+                if (cancelled) return;
+                setWorkOrderData(data);
+                // No assembly: no parts to load (the page says so).
+                if (!data?.bomID) setLoading(false);
 
                 // The assembly image comes from the BOM record (WorkOrderDataUI).
             } catch (err: any) {
-                if (!cancelled) setError(err);
+                if (!cancelled) {
+                    setError(err);
+                    setLoading(false);
+                }
             }
         }
         getWOData();
@@ -679,6 +688,8 @@ export default function WorkOrderDetailsPage() {
 
             {loading ? (
                 <div className={`p-8 text-center ${loadingText}`}>Fetching Work Order parts...</div>
+            ) : workOrderData && !workOrderData.bomID ? (
+                <div className={`p-8 text-center ${loadingText}`}>This work order isn&apos;t linked to an assembly, so it has no parts to show.</div>
             ) : (
                 <>
                 {rows.length > 0 && (
