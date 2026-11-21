@@ -27,14 +27,15 @@ const BomColumns: ColumnConfig[] = [
     buttonText: "Open Onshape",
     // Standard Content lives in Onshape's library, not in your documents: no link.
     // Items marked standard are bought, so no link either (as in the extension).
-    isDisabled: (row: BomTableRow) => !!row.isStandardContent || !!row.markedStandard || (!row.onshapeURL && !row.documentID),
+    // Without a saved URL, the link needs the document, workspace/version and element IDs.
+    isDisabled: (row: BomTableRow) => !!row.isStandardContent || !!row.markedStandard || (!row.onshapeURL && !(row.documentID && row.wvmID && row.elementID)),
     onButtonClick: (row: BomTableRow) => {
       if (row.isStandardContent || row.markedStandard) return;
       let url = row.onshapeURL;
-      if (!url && row.documentID && row.elementID) {
+      if (!url && row.documentID && row.wvmID && row.elementID) {
         url = `https://cad.onshape.com/documents/${row.documentID}/${row.wvmType || "w"}/${row.wvmID}/e/${row.elementID}`;
       }
-      openExternal(url);
+      if (url) openExternal(url);
     },
   },
   // Export STL Action (Disabled and blocked for sub-assemblies)
