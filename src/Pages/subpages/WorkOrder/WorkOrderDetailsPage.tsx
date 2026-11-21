@@ -18,6 +18,7 @@ import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
 import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, toCncGroups, type CncGroup } from "./cncGroups";
 import ImageLightbox from "../../../components/ImageLightbox";
+import RecordDialog from "../../../components/RecordDialog";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -98,7 +99,6 @@ export default function WorkOrderDetailsPage() {
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
     // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
     const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
-    const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
     const [contextMenu, setContextMenu] = useState<{
         x: number;
         y: number;
@@ -616,7 +616,6 @@ export default function WorkOrderDetailsPage() {
         try {
             const partData = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(partId)}`);
             setSelectedPart(partData);
-            setIsPartPortalOpen(true);
         } catch (err: any) {
             if (err?.statusCode === 404) {
                 // A bought sub-assembly is listed by its BOM id (collectBomParts) and
@@ -889,33 +888,15 @@ export default function WorkOrderDetailsPage() {
             )}
 
             {selectedSubBom && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                    <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                        <button
-                            type="button"
-                            onClick={() => setSelectedSubBom(null)}
-                            className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
-                        >
-                            ✕ Close
-                        </button>
-                        <SubAssemblySummary bom={selectedSubBom} />
-                    </div>
-                </div>
+              <RecordDialog onClose={() => setSelectedSubBom(null)}>
+                <SubAssemblySummary bom={selectedSubBom} />
+              </RecordDialog>
             )}
 
-            {isPartPortalOpen && selectedPart && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-                    <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                        <button
-                            type="button"
-                            onClick={() => setIsPartPortalOpen(false)}
-                            className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
-                        >
-                            ✕ Close
-                        </button>
-                        <PartPortal key={selectedPart.id} part={selectedPart} onSaved={handlePartSaved} />
-                    </div>
-                </div>
+            {selectedPart && (
+              <RecordDialog onClose={() => setSelectedPart(null)}>
+                <PartPortal key={selectedPart.id} part={selectedPart} onSaved={handlePartSaved} />
+              </RecordDialog>
             )}
 
             <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />

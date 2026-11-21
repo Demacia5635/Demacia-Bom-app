@@ -14,6 +14,7 @@ import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
 import ImageLightbox from "../../../components/ImageLightbox";
+import RecordDialog from "../../../components/RecordDialog";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -148,7 +149,6 @@ export default function BomDetailsPage() {
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
 
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
-  const [isPartPortalOpen, setIsPartPortalOpen] = useState<boolean>(false);
   /** "Show Part Data" of a made sub-assembly (only a BOM record): read-only summary. */
   const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -338,7 +338,6 @@ export default function BomDetailsPage() {
     try {
       const partData = await fetchFromApi<PartModel>(`/db/part/id/${encodeURIComponent(partId)}`);
       setSelectedPart(partData);
-      setIsPartPortalOpen(true);
     } catch (err: any) {
       if (err?.statusCode === 404 && subBomId) {
         try {
@@ -460,34 +459,16 @@ export default function BomDetailsPage() {
         </div>
       )}
 
-      {isPartPortalOpen && selectedPart && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => setIsPartPortalOpen(false)}
-              className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
-            >
-              ✕ Close
-            </button>
-            <PartPortal key={selectedPart.id} part={selectedPart} onSaved={handlePartSaved} />
-          </div>
-        </div>
+      {selectedPart && (
+        <RecordDialog onClose={() => setSelectedPart(null)}>
+          <PartPortal key={selectedPart.id} part={selectedPart} onSaved={handlePartSaved} />
+        </RecordDialog>
       )}
 
       {selectedSubBom && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => setSelectedSubBom(null)}
-              className="absolute top-4 right-4 z-10 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
-            >
-              ✕ Close
-            </button>
-            <SubAssemblySummary bom={selectedSubBom} />
-          </div>
-        </div>
+        <RecordDialog onClose={() => setSelectedSubBom(null)}>
+          <SubAssemblySummary bom={selectedSubBom} />
+        </RecordDialog>
       )}
 
       <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
