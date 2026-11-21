@@ -1,6 +1,6 @@
 # Server: next version
 
-**Unreleased.** On branch `fix/serv` (`bc677c7`–`243ec4d`), not on `MASTER` yet.
+**Unreleased.** On branch `fix/serv` (`bc677c7`–`3db7bad`), not on `MASTER` yet.
 
 ## Before you deploy
 
@@ -15,6 +15,7 @@
 - The list routes (`/db/part/all`, `/db/bom/all`, `/db/workOrder/all`) accept optional `?limit=`, `?after=` and `?q=` for paging and search. Without them they work exactly as before. (QS7, `68f042b`)
 - `GET /db/workOrder/all?bomID=<id>` lists only the work orders of that assembly (for the website's "Work orders for this assembly"). (`988b200`)
 - **`GET /db/workOrder/summary` returns every work order with its progress** (made parts, finished parts, a count per status), worked out from each assembly's current BOM in a few batched queries. The website's work-order list uses it for its progress bars. (`9f62581`, `243ec4d`)
+- `GET /db/bom/usedIn/:id` lists the assemblies that contain a sub-assembly (for the website's "Used in"). (`3db7bad`)
 - `server/API.md` documents every route; `server/.env.example` lists every setting; `npm run server` starts the server locally (after `npm --prefix server install` once). (QS16, QS18: `b74f15f`, `ba4e927`, `e6e89ea`)
 
 ## Changes
