@@ -3,7 +3,7 @@ import { cadLinkColumn, fileDownloadColumns } from "../partColumns";
 import type BomTableRow from "./BomTableRow";
 import { isReadOnlyBomRow } from "./BomTableRow";
 
-const BomColumns: ColumnConfig[] = [
+const BomColumns: ColumnConfig<BomTableRow>[] = [
   { key: "avatar", label: "Avatar", type: "image", isDisabled: isReadOnlyBomRow },
   { key: "name", label: "Name", type: "string", isDisabled: isReadOnlyBomRow },
   // Shown by the "Show size" checkbox (BomDetailsPage); saved by Publish BOM.

@@ -362,7 +362,7 @@ export default function WorkOrderDetailsPage() {
                         data={displayRows}
                         columnsData={showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE}
                         newRowFunction={undefined}
-                        setData={(newData) => handleTableDataChange(newData as WorkOrderTableRow[])}
+                        setData={handleTableDataChange}
                         // Like Excel's freeze panes: header row + avatar and name stay visible.
                         stickyHeader
                         frozenColumns={2}

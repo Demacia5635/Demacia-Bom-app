@@ -41,7 +41,7 @@ const VALUE_COLOURS: Record<string, string> = {
 const valueColour = (value: unknown) => VALUE_COLOURS[String(value ?? '')];
 
 // Avatar and name come first: the table freezes the first two columns.
-const WorkOrderColumns: ColumnConfig[] = [
+const WorkOrderColumns: ColumnConfig<WorkOrderTableRow>[] = [
     { key: "avatar", label: "Avatar", type: "image", isDisabled: isPurchasedPart },
     // Name, catalogue number and quantity come from the BOM: not changed here.
     { key: "name", label: "Name", type: "string", isDisabled: () => true },

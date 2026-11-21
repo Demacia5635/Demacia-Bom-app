@@ -3,7 +3,7 @@
  * opens a row in Onshape, and the STL / Parasolid downloads (files saved in
  * Google Drive on publish; no Onshape fallback).
  */
-import type { ColumnConfig } from "../../components/Table";
+import type { ColumnConfig, RowData } from "../../components/Table";
 import { downloadDriveFile } from "../../util/ApiService";
 import { openExternal } from "../../util/openExternal";
 
@@ -14,7 +14,7 @@ interface FileRow {
 }
 
 /** A button opening the row's Onshape page; disabled when `url` gives none. */
-export function cadLinkColumn<Row>(options: { label: string; buttonText: string; url: (row: Row) => string | undefined }): ColumnConfig {
+export function cadLinkColumn<Row extends RowData>(options: { label: string; buttonText: string; url: (row: Row) => string | undefined }): ColumnConfig<Row> {
   return {
     key: "onshapeURL",
     label: options.label,
@@ -29,8 +29,8 @@ export function cadLinkColumn<Row>(options: { label: string; buttonText: string;
 }
 
 /** "Export STL" and "Export Parasolid" downloads; `blocked` rows (e.g. sub-assemblies) never download. */
-export function fileDownloadColumns<Row extends FileRow>(blocked: (row: Row) => boolean = () => false): ColumnConfig[] {
-  const column = (key: "exportSTL" | "exportParasolid", label: string, extension: string): ColumnConfig => ({
+export function fileDownloadColumns<Row extends RowData & FileRow>(blocked: (row: Row) => boolean = () => false): ColumnConfig<Row>[] {
+  const column = (key: "exportSTL" | "exportParasolid", label: string, extension: string): ColumnConfig<Row> => ({
     key,
     label,
     type: "button",

@@ -1,12 +1,12 @@
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
 import { AuthenticatedImage } from "../AuthenticatedImage";
-import type { ColumnConfig } from "../Table";
+import type { CellValue, ColumnConfig, RowData } from "../Table";
 import DraftInput from "./DraftInput";
 import type { RenderRow } from "./visibleRows";
 
-interface TableCellProps {
-    row: RenderRow;
-    col: ColumnConfig;
+interface TableCellProps<T extends RowData> {
+    row: RenderRow<T>;
+    col: ColumnConfig<T>;
     rowIndex: number;
     colIndex: number;
     /** Rows this cell spans (merged cells, mergeKey). */
@@ -18,9 +18,9 @@ interface TableCellProps {
     className: string;
     style: CSSProperties | undefined;
     onToggleExpand: (rowId: string, e: MouseEvent) => void;
-    onCellChange: (rowId: string, col: ColumnConfig, value: any) => void;
+    onCellChange: (rowId: string, col: ColumnConfig<T>, value: CellValue) => void;
     /** A number cell's edit ended; false rejects the text. */
-    onNumberCommit: (rowId: string, col: ColumnConfig, text: string) => boolean;
+    onNumberCommit: (rowId: string, col: ColumnConfig<T>, text: string) => boolean;
     onCellKeyDown: (e: KeyboardEvent, rowIndex: number, colIndex: number) => void;
     onShowProblem: (cell: HTMLElement, text: string) => void;
     onHideProblem: () => void;
@@ -31,12 +31,13 @@ interface TableCellProps {
  * the column's editor by type (select, button, image, checkbox, number or
  * text). Problem cells show their tooltip on hover / focus.
  */
-export default function TableCell({
+export default function TableCell<T extends RowData>({
     row, col, rowIndex, colIndex, span, isRowParent, filtering, className, style,
     onToggleExpand, onCellChange, onNumberCommit, onCellKeyDown, onShowProblem, onHideProblem,
-}: TableCellProps) {
+}: TableCellProps<T>) {
     const isCellDisabled = col.isDisabled ? col.isDisabled(row) : false;
-    const displayValue: string | number = row[col.key] as string | number;
+    const value = (row as unknown as Record<string, unknown>)[col.key];
+    const displayValue = value as string | number;
     const cellProblem = col.problem?.(row);
 
     return (
@@ -95,7 +96,7 @@ export default function TableCell({
                     (() => (
                         <div className="w-8 h-8 rounded overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center shrink-0 my-1">
                             <AuthenticatedImage
-                                src={row[col.key]}
+                                src={value as string}
                                 alt={col.label || "Image"}
                                 className="w-full h-full object-cover" />
                         </div>
@@ -104,7 +105,7 @@ export default function TableCell({
                 ) : col.type === 'boolean' ? (
                     <input
                         type="checkbox"
-                        checked={!!row[col.key]}
+                        checked={!!value}
                         onChange={(e) => onCellChange(row.id, col, e.target.checked)}
                         className="cell-checkbox"
                         disabled={isCellDisabled}

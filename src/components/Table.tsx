@@ -8,6 +8,9 @@ import { useStickyFit } from "./table/useStickyFit";
 import { useSyncedHScroll } from "./table/useSyncedHScroll";
 import { filterMatches, groupChildren, mergedCellSpans, renderKeys, visibleRows } from "./table/visibleRows";
 
+/** What a cell edit writes into its row. */
+export type CellValue = string | number | boolean;
+
 export interface RowData {
     id: string;
     parentId: string | null;
@@ -24,39 +27,43 @@ interface ContextMenuState {
 export type SortDirection = 'asc' | 'desc';
 
 export interface SortConfig {
-    key: any;
+    key: string;
     direction: SortDirection;
 }
 
-export interface ColumnConfig {
-    key: any;
+/**
+ * One column of a Table. `T` is the row type (pages pass theirs; left out,
+ * rows are untyped, as the extension's columns are for now).
+ */
+export interface ColumnConfig<T extends RowData = any> {
+    key: string;
     label: string;
     type: 'string' | 'number' | 'select' | 'boolean' | 'button' | 'image';
     buttonText?: string;
-    onButtonClick?: (row: RowData & any) => void;
+    onButtonClick?: (row: T) => void;
     options?: string[];
-    isDisabled?: (row: RowData & any) => boolean;
+    isDisabled?: (row: T) => boolean;
     /** Highlights the cell (class "cell-modified"), e.g. for an edit not saved yet. */
-    isModified?: (row: RowData & any) => boolean;
+    isModified?: (row: T) => boolean;
     /** Extra class for a select cell from its value (e.g. a status colour). */
-    valueClass?: (value: any) => string | undefined;
+    valueClass?: (value: string | number) => string | undefined;
     /** A problem with the cell's value: marks the cell (class "cell-problem") and shows the text on hover or focus. */
-    problem?: (row: RowData & any) => string | undefined;
+    problem?: (row: T) => string | undefined;
     /** Grey hint shown in an empty text cell (e.g. the value used if it stays empty). */
-    placeholder?: (row: RowData & any) => string | undefined;
+    placeholder?: (row: T) => string | undefined;
     /**
      * Merged cells, like Excel: consecutive shown rows with the same non-empty
      * key show this column as one cell spanning them (the first row's value).
      * An edit there changes only the first row; the page applies it to the rest.
      */
-    mergeKey?: (row: RowData & any) => string | undefined;
+    mergeKey?: (row: T) => string | undefined;
 }
 
-interface TableParam {
-    data: (RowData & any)[],
-    columnsData: ColumnConfig[],
-    newRowFunction: ((id: string, parentId: string | null) => RowData) | undefined,
-    setData: (newData: RowData[]) => void,
+interface TableParam<T extends RowData> {
+    data: T[],
+    columnsData: ColumnConfig<T>[],
+    newRowFunction: ((id: string, parentId: string | null) => T) | undefined,
+    setData: (newData: T[]) => void,
     minLastColWidth?: number;
     defaultColWidth?: number;
     removeTopRow?: boolean;
@@ -69,12 +76,12 @@ interface TableParam {
      * Shows only rows this returns true for, plus the parents leading to them
      * (opened, whatever their expand state). Undefined shows everything.
      */
-    rowFilter?: (row: RowData & any) => boolean;
+    rowFilter?: (row: T) => boolean;
     /** Rows this returns true for are left out (with anything under them); expanding works as usual. */
-    hideRow?: (row: RowData & any) => boolean;
+    hideRow?: (row: T) => boolean;
 }
 
-export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }) => {
+export function Table<T extends RowData>({ data, columnsData, newRowFunction, setData, minLastColWidth = 120, defaultColWidth = 120, removeTopRow = false, initialSort, stickyHeader = false, frozenColumns = 0, rowFilter, hideRow }: TableParam<T>) {
 
     const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0, columnIndex: -1 });
 
@@ -205,14 +212,9 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
     const frozenStyle = (idx: number): React.CSSProperties | undefined =>
         idx < frozenCount ? { left: frozenLeft[idx] } : undefined;
 
-    const handleCellChange = (rowId: string, col: ColumnConfig, rawValue: any) => {
+    const handleCellChange = (rowId: string, col: ColumnConfig<T>, rawValue: CellValue) => {
         setData(
-            data.map(row => {
-                if (row.id !== rowId) return row;
-                const updatedRow = { ...row };
-                (updatedRow as any)[col.key] = rawValue;
-                return updatedRow;
-            }));
+            data.map(row => (row.id === rowId ? { ...row, [col.key]: rawValue } : row)));
     };
 
     /**
@@ -221,7 +223,7 @@ export const Table: React.FC<TableParam> = ({ data, columnsData, newRowFunction,
      * is rejected and the cell goes back to its value, instead of being saved
      * as 0 or cut short ("1,5", "12g", "1e3").
      */
-    const handleNumberBlur = (rowId: string, col: ColumnConfig, rawValue: string | number): boolean => {
+    const handleNumberBlur = (rowId: string, col: ColumnConfig<T>, rawValue: string | number): boolean => {
         const strVal = String(rawValue).trim();
         if (strVal === '' || strVal === '.') {
             handleCellChange(rowId, col, '0');

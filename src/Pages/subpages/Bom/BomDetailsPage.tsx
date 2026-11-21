@@ -376,7 +376,7 @@ export default function BomDetailsPage() {
           <Table
             data={rows}
             columnsData={showSize ? BomColumns : COLUMNS_WITHOUT_SIZE}
-            setData={(newData) => handleTableDataChange(newData as BomTableRow[])}
+            setData={handleTableDataChange}
             newRowFunction={undefined}
             initialSort={{ key: "catalogNumber", direction: "asc" }}
             // Like Excel's freeze panes: header row + avatar and name stay visible.

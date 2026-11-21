@@ -6,10 +6,11 @@
  */
 import type { ColumnConfig, RowData, SortConfig } from "../Table";
 
-type Row = RowData & any;
-
 /** A shown row. `open`: its children are shown (expanded, or opened by the row filter). */
-export type RenderRow = Row & { level: number; open: boolean };
+export type RenderRow<T extends RowData = RowData> = T & { level: number; open: boolean };
+
+/** A row's value in a column (rows are typed per page; columns name fields by key). */
+const valueOf = (row: RowData, key: string): unknown => (row as unknown as Record<string, unknown>)[key];
 
 export interface FilterSets {
   matches: Set<string>;
@@ -17,14 +18,14 @@ export interface FilterSets {
 }
 
 /** Sorts rows under one parent by the sort column; empty values last, in either direction. */
-export function sortSiblings(rows: Row[], sortConfig: SortConfig | null): Row[] {
+export function sortSiblings<T extends RowData>(rows: T[], sortConfig: SortConfig | null): T[] {
   if (!sortConfig) return rows;
   const { key, direction } = sortConfig;
   const dir = direction === 'asc' ? 1 : -1;
 
   return [...rows].sort((a, b) => {
-    const aVal = a[key];
-    const bVal = b[key];
+    const aVal = valueOf(a, key);
+    const bVal = valueOf(b, key);
 
     if (aVal === bVal) return 0;
     if (aVal === null || aVal === undefined) return 1;
@@ -48,8 +49,8 @@ export function sortSiblings(rows: Row[], sortConfig: SortConfig | null): Row[] 
  * Children of each row, built once per data change. Looking them up by
  * scanning every row for every row made large tables slow (n x n work).
  */
-export function groupChildren(data: Row[]): Map<string | null, Row[]> {
-  const map = new Map<string | null, Row[]>();
+export function groupChildren<T extends RowData>(data: T[]): Map<string | null, T[]> {
+  const map = new Map<string | null, T[]>();
   for (const row of data) {
     const list = map.get(row.parentId);
     if (list) list.push(row);
@@ -63,7 +64,7 @@ export function groupChildren(data: Row[]): Map<string | null, Row[]> {
  * An id can sit under several parents (the BOM extension lists a shared
  * sub-assembly under each parent that uses it), so follow every parent.
  */
-export function filterMatches(data: Row[], rowFilter: (row: Row) => boolean): FilterSets {
+export function filterMatches<T extends RowData>(data: T[], rowFilter: (row: T) => boolean): FilterSets {
   const parentsOf = new Map<string, (string | null)[]>();
   for (const row of data) {
     const list = parentsOf.get(row.id);
@@ -88,13 +89,13 @@ export function filterMatches(data: Row[], rowFilter: (row: Row) => boolean): Fi
 }
 
 /** The rows shown, in order, each with its level and whether its children show. */
-export function visibleRows(
-  childrenByParent: Map<string | null, Row[]>,
+export function visibleRows<T extends RowData>(
+  childrenByParent: Map<string | null, T[]>,
   sortConfig: SortConfig | null,
   filterSets: FilterSets | null,
-  hideRow: ((row: Row) => boolean) | undefined
-): RenderRow[] {
-  const result: RenderRow[] = [];
+  hideRow: ((row: T) => boolean) | undefined
+): RenderRow<T>[] {
+  const result: RenderRow<T>[] = [];
   const addChildren = (parentId: string | null, level: number) => {
     const children = sortSiblings(childrenByParent.get(parentId) ?? [], sortConfig);
     for (const child of children) {
@@ -114,7 +115,7 @@ export function visibleRows(
  * (1 = normal, 0 = covered by the merged cell above). Only rows that end up
  * next to each other merge (a sort or filter can split a group).
  */
-export function mergedCellSpans(columns: ColumnConfig[], renderedRows: Row[]): Map<string, number[]> {
+export function mergedCellSpans<T extends RowData>(columns: ColumnConfig<T>[], renderedRows: T[]): Map<string, number[]> {
   const spans = new Map<string, number[]>();
   for (const col of columns) {
     if (!col.mergeKey) continue;
@@ -141,8 +142,8 @@ export function mergedCellSpans(columns: ColumnConfig[], renderedRows: Row[]): M
  * plus a counter for repeats under the same parent. The row id itself
  * (data-row-id, edits) is unchanged.
  */
-export function renderKeys(visibleData: RenderRow[]): Map<RenderRow, string> {
-  const keys = new Map<RenderRow, string>();
+export function renderKeys<T extends RowData>(visibleData: RenderRow<T>[]): Map<RenderRow<T>, string> {
+  const keys = new Map<RenderRow<T>, string>();
   const seen = new Map<string, number>();
   for (const row of visibleData) {
     const base = `${row.parentId ?? ''}>${row.id}`;
