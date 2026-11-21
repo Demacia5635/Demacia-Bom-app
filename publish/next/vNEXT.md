@@ -40,6 +40,7 @@
 - **Onshape pages can no longer tell that the extension is installed.** The BOM button's logo is drawn inside the button instead of loaded from a file Onshape could check for. The button looks the same. (S8, `d6bd874`)
 - **Refresh BOM and opening sub-assemblies download much less from Onshape on deep assemblies:** each sub-assembly's BOM is fetched one level at a time instead of with everything below it. Refresh also makes one database request fewer per saved parent assembly. (P3, `82bccad`; X2, `03912a7`)
 - Code cleanup with no change in behaviour: dead code and outdated comments removed, header button styles simplified. (X2, R12: `03912a7`, `12ae6b9`)
+- **The panel's main file was split into smaller ones** (row rules, work-order checks, request handling, model versions, tree loading, publishing, "Show size", progress bar, toolbar, header): from about 2,250 lines to well under 1,200. No change in behaviour. (R1: `c7bf917` … `4466a97`)
 - Code cleanup with no change in behaviour: lint warnings fixed, Onshape keys and record IDs built in one place, and panel message names shared between scripts. (C11, X6, R9: `a82046c`, `9a5ba42`, `80fb718`, `2cf3577`, `eb5e301`, `2c30552`, `b9b4c79`)
 - If a Refresh BOM fails halfway, the header keeps describing the BOM still shown. (E6, `52892d5`)
 - Assembly names no longer start with a stray space, and record IDs no longer end in "_undefined" when Onshape gives no BOM id. (E2, E3: `516348a`, `dac3361`)
@@ -52,5 +53,6 @@
 
 - P3: compare the number of rows of a real assembly after Refresh BOM with the previous version once; sub-assemblies are now recognised a different way.
 - The checklist fixes haven't been run in the real extension, and no failure was forced to see the messages. The Firefox fixes need Firefox. On Chrome, check that the icon and BOM button still open and close the panel, also after it has been open for over a minute.
+- The R1 split of the panel's code: one full load, edit and Publish BOM in the real panel, to make sure nothing changed.
 - Not run in the real panel in Onshape or against the live database: the notice, Combine, the red catalog-number problems, and the Publish dialog's database check (the full parts list may be slow to load). The grouping and combining rules, the dialog and the notice passed scripted checks.
 - Light mode hasn't been opened in Chrome or Firefox at all, so some parts of the panel may still be dark.
