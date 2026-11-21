@@ -3,10 +3,10 @@ import mongoose from "mongoose";
 const subPartSchema = new mongoose.Schema(
   {
     partID: { type: String, required: true },
-    quantityTotal: { type: Number, default: 1 },
-    // Nothing is made yet when a part enters a work order (also when it's
-    // added later by the per-part route, which doesn't send this field).
-    quantityMade: { type: Number, default: 0 },
+    // No defaults: the website takes the quantity from the BOM and no longer
+    // stores either field. Kept in the schema for records that have them.
+    quantityTotal: { type: Number },
+    quantityMade: { type: Number },
     statusCode: { type: mongoose.Schema.Types.Mixed, default: "In Planning" },
     Priority: { type: String, default: "Medium" },
     manufacturingMethod: { type: String, default: "Manual" },
