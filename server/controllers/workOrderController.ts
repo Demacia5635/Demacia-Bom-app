@@ -130,16 +130,16 @@ export async function updateWorkOrderPart(
   try {
     const id = req.params.id;
     const partID = typeof req.body?.partID === "string" ? req.body.partID : "";
-    if (!partID) return res.status(400).json({ message: "partID is required" });
+    if (!partID) return res.status(400).json({ message: "partID is required", fields: ["partID"] });
 
     const given: unknown = req.body?.changes;
     if (typeof given !== "object" || given === null || Array.isArray(given))
-      return res.status(400).json({ message: "changes must be an object of field: value" });
+      return res.status(400).json({ message: "changes must be an object of field: value", fields: ["changes"] });
     const changes: Record<string, unknown> = {};
     for (const field of EDITABLE_PART_FIELDS) {
       if (Object.hasOwn(given, field)) changes[field] = (given as Record<string, unknown>)[field];
     }
-    if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No editable fields in changes" });
+    if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No editable fields in changes", fields: ["changes"] });
 
     const now = new Date();
     const set = Object.fromEntries(Object.entries(changes).map(([k, v]) => [`parts.$.${k}`, v]));
@@ -215,20 +215,20 @@ export async function updateCncGroup(
     const id = req.params.id;
     const body = req.body ?? {};
     if (body.groupID !== undefined && (typeof body.groupID !== "string" || !GROUP_ID.test(body.groupID)))
-      return res.status(400).json({ message: "groupID must be 1-64 letters, digits, - or _" });
+      return res.status(400).json({ message: "groupID must be 1-64 letters, digits, - or _", fields: ["groupID"] });
     const keepParts = body.partIDs === undefined && body.groupID !== undefined;
     if (!keepParts && (!Array.isArray(body.partIDs) || !body.partIDs.every((p) => typeof p === "string" && p !== "")))
-      return res.status(400).json({ message: "partIDs must be a list of part IDs" });
+      return res.status(400).json({ message: "partIDs must be a list of part IDs", fields: ["partIDs"] });
     if (!keepParts && ((body.partIDs as string[]).length > MAX_GROUP_PARTS || (body.partIDs as string[]).some((p) => p.length > MAX_PART_ID_LENGTH)))
-      return res.status(400).json({ message: `partIDs may list up to ${MAX_GROUP_PARTS} parts, each up to ${MAX_PART_ID_LENGTH} characters` });
+      return res.status(400).json({ message: `partIDs may list up to ${MAX_GROUP_PARTS} parts, each up to ${MAX_PART_ID_LENGTH} characters`, fields: ["partIDs"] });
     if (body.links !== undefined && typeof body.links !== "string")
-      return res.status(400).json({ message: "links must be text" });
+      return res.status(400).json({ message: "links must be text", fields: ["links"] });
     if (typeof body.links === "string" && body.links.length > MAX_LINKS_LENGTH)
-      return res.status(400).json({ message: `links may be up to ${MAX_LINKS_LENGTH} characters` });
+      return res.status(400).json({ message: `links may be up to ${MAX_LINKS_LENGTH} characters`, fields: ["links"] });
     const partIDs = keepParts ? [] : [...new Set(body.partIDs as string[])];
     const groupID = (body.groupID as string | undefined) ?? randomUUID();
     if (body.groupID === undefined && partIDs.length < 2)
-      return res.status(400).json({ message: "A new group needs at least 2 parts" });
+      return res.status(400).json({ message: "A new group needs at least 2 parts", fields: ["partIDs"] });
     const links = body.links as string | undefined;
     const now = new Date();
 

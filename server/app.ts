@@ -21,6 +21,39 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 morgan.token("id", (req, res) => (res as Response).locals.requestId);
 
+/** Error codes by HTTP status, for the `code` field of error replies. */
+const ERROR_CODES: Record<number, string> = {
+    400: "BAD_REQUEST",
+    401: "UNAUTHORIZED",
+    403: "FORBIDDEN",
+    404: "NOT_FOUND",
+    405: "METHOD_NOT_ALLOWED",
+    409: "CONFLICT",
+    413: "TOO_LARGE",
+    415: "UNSUPPORTED_TYPE",
+    500: "INTERNAL",
+    503: "UNAVAILABLE",
+};
+
+// One error shape everywhere: { message, code, requestId, fields? }. Routes
+// answer errors with { message } (plus fields where they know them); the
+// rest is filled in here, so no route can forget it.
+app.use((req: Request, res: Response, next: NextFunction) => {
+    const json = res.json.bind(res);
+    res.json = (body?: unknown) => {
+        if (res.statusCode >= 400 && body && typeof body === "object" && !Array.isArray(body)
+            && typeof (body as { message?: unknown }).message === "string") {
+            body = {
+                code: ERROR_CODES[res.statusCode] ?? (res.statusCode >= 500 ? "INTERNAL" : "BAD_REQUEST"),
+                ...body,
+                requestId: res.locals.requestId,
+            };
+        }
+        return json(body);
+    };
+    next();
+});
+
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) {
@@ -91,14 +124,20 @@ const errorHandler: ErrorRequestHandler = (
     if (res.headersSent) return next(err);
 
     // Bad input the client can fix (e.g. a wrong field type): say what's wrong.
-    if (err.name === "ValidationError" || err.name === "CastError") {
-        return res.status(400).json({ message: err.message, requestId });
+    // fields: which input fields were wrong.
+    if (err.name === "ValidationError") {
+        const fields = Object.keys((err as { errors?: Record<string, unknown> }).errors ?? {});
+        return res.status(400).json({ message: err.message, ...(fields.length ? { fields } : {}) });
+    }
+    if (err.name === "CastError") {
+        const path = (err as { path?: string }).path;
+        return res.status(400).json({ message: err.message, ...(path ? { fields: [path] } : {}) });
     }
 
     // Duplicate key (a record with this id was created at the same moment):
     // a conflict the client can retry, not an internal failure.
     if ((err as { code?: number }).code === 11000) {
-        return res.status(409).json({ message: "A record with this id was just created by another request. Try again.", requestId });
+        return res.status(409).json({ message: "A record with this id was just created by another request. Try again." });
     }
 
     // Errors with a 4xx status (e.g. malformed JSON from express.json) describe
@@ -108,7 +147,6 @@ const errorHandler: ErrorRequestHandler = (
     const status = err.status && err.status >= 400 && err.status < 500 ? err.status : 500;
     res.status(status).json({
         message: status < 500 ? err.message : "Internal server error",
-        requestId,
     });
 }
 app.use(errorHandler);
