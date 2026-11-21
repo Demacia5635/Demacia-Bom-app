@@ -15,6 +15,7 @@ import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
 import ImageLightbox from "../../../components/ImageLightbox";
 import RecordDialog from "../../../components/RecordDialog";
+import { useRowContextMenu } from "../../../components/useRowContextMenu";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -151,11 +152,7 @@ export default function BomDetailsPage() {
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
   /** "Show Part Data" of a made sub-assembly (only a BOM record): read-only summary. */
   const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    row: BomTableRow;
-  } | null>(null);
+  const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<BomTableRow>();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
   const [tree, setTree] = useState<BomTree | null>(null);
   const [view, setView] = useState<BomView>(savedView);
@@ -173,12 +170,6 @@ export default function BomDetailsPage() {
   // and isn't changed in place).
   const partEditsRef = useRef<Map<string, Partial<PartModel>>>(new Map());
 
-
-  useEffect(() => {
-    const handleClickOutside = () => setContextMenu(null);
-    window.addEventListener("click", handleClickOutside);
-    return () => window.removeEventListener("click", handleClickOutside);
-  }, []);
 
   // The whole assembly tree, loaded once per BOM (another BOM is a new page:
   // App.tsx keys it by id); each view builds its rows from it.
@@ -309,26 +300,10 @@ export default function BomDetailsPage() {
     }
   };
 
-  const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    const rowEl = target.closest(".table-tr, tr");
-    if (!rowEl) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const row = rowOfElement(rowEl);
-    if (row) {
-      setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
-        row,
-      });
-    }
-  };
+  const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => openContextMenu(e, rowOfElement);
 
   const handleShowPartData = async (row: BomTableRow) => {
-    setContextMenu(null);
+    closeContextMenu();
     // A sub-assembly marked standard (a motor...) is also saved as a part with
     // its BOM id; one the team makes has only its BOM record.
     const subBomId = row.isSubAssembly ? row.subBomId : undefined;
@@ -358,7 +333,7 @@ export default function BomDetailsPage() {
   };
 
   const handleGoToSubBom = (row: BomTableRow) => {
-    setContextMenu(null);
+    closeContextMenu();
     const subBomId = row.subBomId;
     if (subBomId) {
       navigate(`/bom/${subBomId}`);

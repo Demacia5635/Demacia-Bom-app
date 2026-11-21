@@ -19,6 +19,7 @@ import { readShowSize, writeShowSize } from "../../../util/partSize";
 import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, toCncGroups, type CncGroup } from "./cncGroups";
 import ImageLightbox from "../../../components/ImageLightbox";
 import RecordDialog from "../../../components/RecordDialog";
+import { useRowContextMenu } from "../../../components/useRowContextMenu";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -99,11 +100,7 @@ export default function WorkOrderDetailsPage() {
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
     // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
     const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
-    const [contextMenu, setContextMenu] = useState<{
-        x: number;
-        y: number;
-        row: WorkOrderTableRow;
-    } | null>(null);
+    const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<WorkOrderTableRow>();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
     const rowPartMapRef = useRef<Map<string, string>>(new Map());
@@ -141,11 +138,6 @@ export default function WorkOrderDetailsPage() {
         return typeof code === 'string' && code.trim() !== '' ? code : 'In Planning';
     };
 
-    useEffect(() => {
-        const handleClickOutside = () => setContextMenu(null);
-        window.addEventListener("click", handleClickOutside);
-        return () => window.removeEventListener("click", handleClickOutside);
-    }, []);
 
     // Dropdown colours come from WorkOrderColumns (valueClass), set on every render.
 
@@ -579,37 +571,10 @@ export default function WorkOrderDetailsPage() {
         }
     };
 
-    const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => {
-        const target = e.target as HTMLElement;
-        let rowEl = target.closest(".table-tr, tr");
-        if (!rowEl) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        // A merged Links cell (a CNC job) belongs to the first row of its group:
-        // take the row at the height clicked instead, so the menu is for that part.
-        const mergedCell = target.closest("td[rowspan]");
-        if (mergedCell && rowEl.contains(mergedCell)) {
-            let tr: Element | null = rowEl;
-            for (let i = 0; tr && i < (mergedCell as HTMLTableCellElement).rowSpan; i++, tr = tr.nextElementSibling) {
-                const box = tr.getBoundingClientRect();
-                if (e.clientY >= box.top && e.clientY < box.bottom) { rowEl = tr; break; }
-            }
-        }
-
-        const row = rowFromElement(rowEl);
-        if (row) {
-            setContextMenu({
-                x: e.clientX,
-                y: e.clientY,
-                row,
-            });
-        }
-    };
+    const handleTableContextMenuCapture = (e: MouseEvent<HTMLDivElement>) => openContextMenu(e, rowFromElement);
 
     const handleShowPartData = async (row: WorkOrderTableRow) => {
-        setContextMenu(null);
+        closeContextMenu();
         const partId = rowPartMapRef.current.get(row.id) || row.partID;
         if (!partId) return;
 
@@ -861,7 +826,7 @@ export default function WorkOrderDetailsPage() {
                                             type="button"
                                             onClick={() => {
                                                 setMergeSelection((list) => toggleIn(list, partID));
-                                                setContextMenu(null);
+                                                closeContextMenu();
                                             }}
                                         >
                                             {selected ? "Unselect for CNC merge" : "Select for CNC merge"}
@@ -871,7 +836,7 @@ export default function WorkOrderDetailsPage() {
                                                 type="button"
                                                 disabled={groupSaving}
                                                 onClick={() => {
-                                                    setContextMenu(null);
+                                                    closeContextMenu();
                                                     void removeFromGroup(contextMenu.row);
                                                 }}
                                             >
