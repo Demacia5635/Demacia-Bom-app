@@ -64,6 +64,7 @@ import {
 } from "./requestPool";
 import { computeImageVersions, computeModelVersions, partFilesVersion, type ModelVersions } from "./modelVersions";
 import { isSavedSizeStale, needsSize, readPartSize, SIZE_CONCURRENCY } from "./partSize";
+import { usePersistentToggle } from "./usePersistentToggle";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
   if (context.workspaceId) return { wvmType: "w", wvmID: context.workspaceId };
@@ -148,23 +149,6 @@ const REFRESH_CONCURRENCY = 6;
  * problems and retried by the next Publish BOM.
  */
 const PUBLISH_CONCURRENCY = 5;
-
-/** Panel view options remembered in this browser (false when storage is unavailable). */
-const TOGGLE_STORAGE_PREFIX = "demacia-bom:";
-function readToggle(name: string): boolean {
-  try {
-    return localStorage.getItem(TOGGLE_STORAGE_PREFIX + name) === "1";
-  } catch {
-    return false;
-  }
-}
-function writeToggle(name: string, on: boolean) {
-  try {
-    localStorage.setItem(TOGGLE_STORAGE_PREFIX + name, on ? "1" : "0");
-  } catch {
-    // Not remembered; it still works for this session.
-  }
-}
 
 /** What a walk of the assembly tree (expandTree) works with. */
 interface ExpandContext {
@@ -659,8 +643,7 @@ export default function AssemblyBomPage() {
   /** Light / dark (theme.ts), switched by the header's theme button like the website's. */
   const theme = usePanelThemeSetting();
   /** "Show size": the Size column, filled from Onshape (remembered in this browser). */
-  const [showSize, setShowSize] = useState(() => readToggle("showSize"));
-  useEffect(() => writeToggle("showSize", showSize), [showSize]);
+  const [showSize, setShowSize] = usePersistentToggle("showSize");
 
   // Rebuilt when the problems change (after edits): cheap, the table only
   // re-reads its column list.
@@ -914,10 +897,8 @@ export default function AssemblyBomPage() {
   }, [publishOpen, rows, rootIsPublished]);
 
   /** "Hide standard parts" / "Hide standard assemblies" (remembered in this browser). */
-  const [hideStandardParts, setHideStandardParts] = useState(() => readToggle("hideStandardParts"));
-  const [hideStandardAssemblies, setHideStandardAssemblies] = useState(() => readToggle("hideStandardAssemblies"));
-  useEffect(() => writeToggle("hideStandardParts", hideStandardParts), [hideStandardParts]);
-  useEffect(() => writeToggle("hideStandardAssemblies", hideStandardAssemblies), [hideStandardAssemblies]);
+  const [hideStandardParts, setHideStandardParts] = usePersistentToggle("hideStandardParts");
+  const [hideStandardAssemblies, setHideStandardAssemblies] = usePersistentToggle("hideStandardAssemblies");
   const hideRow = useMemo(() => {
     if (!hideStandardParts && !hideStandardAssemblies) return undefined;
     return (row: AssemblyBomRow) =>
