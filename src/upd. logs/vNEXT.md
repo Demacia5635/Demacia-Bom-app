@@ -2,6 +2,10 @@
 
 **Unreleased.** The commits below are on branch `fix/web`, not on `MASTER` yet. They go in with the next version once the branch is merged.
 
+## New
+
+- **The top bar shows the running version** next to the title, e.g. "Bom App v3.0.0", in small grey text. It comes from `package.json` when the site is built, so set `package.json` to the new version before deploying. (`d89c9df`)
+
 ## Fixes (from the code-review checklist)
 
 - **Part Portal's Download STL and Download Parasolid buttons work.** They always failed before. A button is greyed out when that file doesn't exist, and a failed download shows a message instead of doing nothing. (B1, `5c12c17`)
@@ -19,6 +23,7 @@
 - The sidebar's buttons can't be reached with the Tab key while it's closed. (W12, `ee0bb64`)
 - A file download can no longer be cancelled by the browser right after it starts. (W15, `028af0c`)
 - A download that gets an unexpected answer from the server shows an error instead of saving an empty or broken file. (W16, `78daf59`)
+- Internal fixes with no visible change: a failed image-cache write is handled, and lint warnings cleaned up. (T5, C11: `4e49c78`)
 - **Clicking a part's picture on a work order opens the image viewer again after the Avatar column has been moved,** and on rows of a merged CNC job. (B5, `22fe2fb`)
 - **A failed save on a work order no longer loses your change.** It's sent again with your next edit of that part, as on the BOM page. The "Couldn't save" banner stays as it was. (B6, `9d827b1`)
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)

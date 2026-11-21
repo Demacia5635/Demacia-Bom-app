@@ -40,6 +40,7 @@
 - **Onshape pages can no longer tell that the extension is installed.** The BOM button's logo is drawn inside the button instead of loaded from a file Onshape could check for. The button looks the same. (S8, `d6bd874`)
 - **Refresh BOM and opening sub-assemblies download much less from Onshape on deep assemblies:** each sub-assembly's BOM is fetched one level at a time instead of with everything below it. Refresh also makes one database request fewer per saved parent assembly. (P3, `82bccad`; X2, `03912a7`)
 - Code cleanup with no change in behaviour: dead code and outdated comments removed, header button styles simplified. (X2, R12: `03912a7`, `12ae6b9`)
+- Lint warnings in the panel code fixed, with no change in behaviour. (C11: `a82046c`, `9a5ba42`)
 - If a Refresh BOM fails halfway, the header keeps describing the BOM still shown. (E6, `52892d5`)
 - Assembly names no longer start with a stray space, and record IDs no longer end in "_undefined" when Onshape gives no BOM id. (E2, E3: `516348a`, `dac3361`)
 
