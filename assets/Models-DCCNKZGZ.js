@@ -1,0 +1,1 @@
+function e(e){return!!(e?.isStandardContent||e?.markedStandard||e?.vendor&&e.vendor.trim()!==``)}export{e as t};

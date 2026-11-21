@@ -4,11 +4,21 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/Demacia-Bom-app/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>bom-app</title>
-    <script type="module" crossorigin src="/Demacia-Bom-app/assets/index-ua9vB4oc.js"></script>
-    <link rel="stylesheet" crossorigin href="/Demacia-Bom-app/assets/index-B8q3BHmI.css">
+    <title>Demacia BOM</title>
+    <script type="module" crossorigin src="/Demacia-Bom-app/assets/index-B5pJXGSf.js"></script>
+    <link rel="stylesheet" crossorigin href="/Demacia-Bom-app/assets/index-COEqZZ0q.css">
   </head>
   <body>
+    <!-- The saved theme before anything is drawn, so light-theme users see no dark
+         flash while the app loads (util/misc/useThemeSync.ts keeps it in step). -->
+    <script>
+      try {
+        var light = localStorage.getItem("theme-preference") === "light";
+        document.body.className = light ? "light-theme-active" : "dark-theme-active";
+      } catch (e) {
+        document.body.className = "dark-theme-active";
+      }
+    </script>
     <div id="root"></div>
   </body>
 </html>
