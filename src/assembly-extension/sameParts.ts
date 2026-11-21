@@ -14,15 +14,26 @@
  *
  * Not caught: a mirrored copy has the same volume, area and moments as the
  * original, so a left/right pair with the same name and material is
- * combined.
+ * combined. For this and any other wrong guess, a copy can be marked "not
+ * the same part" in the panel (saved as keepSeparate): marked parts are only
+ * combined with other marked parts, never with unmarked ones.
  */
 import type { PartMassBody } from "../extension/onshapeDirect";
 import type { ParsedOnshapeBomRow } from "./OnshapeBom";
 
-/** A BOM item, possibly standing for several copies: the other copies' part IDs. */
+/** A BOM item, possibly standing for several copies. */
 export interface CombinedItem {
   item: ParsedOnshapeBomRow;
+  /** The other copies' part IDs (empty when it stands for one part). */
   copyPartIDs: string[];
+  /** Every copy as Onshape lists it, the shown one included (empty when it stands for one part). */
+  copies: ParsedOnshapeBomRow[];
+  /**
+   * Same for every part of this Part Studio with this shape, marked "not the
+   * same part" or not ("" when the part has no copies at all): lets the panel
+   * move a copy between the marked and unmarked rows without reloading.
+   */
+  shapeGroup: string;
 }
 
 export interface PartStudioRef {
@@ -33,7 +44,7 @@ export interface PartStudioRef {
   configuration: string;
 }
 
-const studioOf = (item: ParsedOnshapeBomRow): PartStudioRef => ({
+export const studioOf = (item: ParsedOnshapeBomRow): PartStudioRef => ({
   documentID: item.itemSource.documentId,
   wvmType: item.itemSource.wvmType,
   wvmID: item.itemSource.wvmId,
@@ -99,7 +110,7 @@ function sameIdentity(a: ParsedOnshapeBomRow, b: ParsedOnshapeBomRow): boolean {
 }
 
 /** Which copy the combined row shows: a named one, then a numbered one, then the lowest part ID (stable across loads). */
-function pickShown(group: ParsedOnshapeBomRow[]): ParsedOnshapeBomRow {
+export function pickShown(group: ParsedOnshapeBomRow[]): ParsedOnshapeBomRow {
   const rank = (i: ParsedOnshapeBomRow) => (DEFAULT_NAME.test(i.name.trim()) ? 2 : 0) + (i.partNumber.trim() ? 0 : 1);
   return [...group].sort(
     (a, b) => rank(a) - rank(b) || (a.itemSource.partId! < b.itemSource.partId! ? -1 : 1)
@@ -114,34 +125,48 @@ function pickShown(group: ParsedOnshapeBomRow[]): ParsedOnshapeBomRow {
  */
 export function combineCopies(
   items: ParsedOnshapeBomRow[],
-  bodies: ReadonlyMap<string, Record<string, PartMassBody>>
+  bodies: ReadonlyMap<string, Record<string, PartMassBody>>,
+  /** Part IDs marked "not the same part": combined only with each other. */
+  keptSeparate: ReadonlySet<string> = new Set()
 ): CombinedItem[] {
-  const groups: ParsedOnshapeBomRow[][] = [];
-  const groupOf = new Map<ParsedOnshapeBomRow, ParsedOnshapeBomRow[]>();
-  for (const item of items) {
-    if (!isCandidate(item)) continue;
-    const studio = studioKey(studioOf(item));
-    const body = bodies.get(studio)?.[item.itemSource.partId!];
-    if (!body) continue;
-    const group = groups.find((g) => {
-      const first = g[0];
-      return (
-        studioKey(studioOf(first)) === studio &&
-        first.itemSource.partId !== item.itemSource.partId &&
-        sameIdentity(first, item) &&
-        sameShape(bodies.get(studio)![first.itemSource.partId!], body)
-      );
-    });
-    if (group) group.push(item);
-    else groups.push([item]);
-    groupOf.set(item, group ?? groups[groups.length - 1]);
-  }
+  const isKept = (i: ParsedOnshapeBomRow) => keptSeparate.has(i.itemSource.partId!);
+  /** Groups of copies; with `split`, marked and unmarked parts go in different groups. */
+  const groupItems = (split: boolean) => {
+    const groups: ParsedOnshapeBomRow[][] = [];
+    const groupOf = new Map<ParsedOnshapeBomRow, ParsedOnshapeBomRow[]>();
+    for (const item of items) {
+      if (!isCandidate(item)) continue;
+      const studio = studioKey(studioOf(item));
+      const body = bodies.get(studio)?.[item.itemSource.partId!];
+      if (!body) continue;
+      const group = groups.find((g) => {
+        const first = g[0];
+        return (
+          studioKey(studioOf(first)) === studio &&
+          first.itemSource.partId !== item.itemSource.partId &&
+          (!split || isKept(first) === isKept(item)) &&
+          sameIdentity(first, item) &&
+          sameShape(bodies.get(studio)![first.itemSource.partId!], body)
+        );
+      });
+      if (group) group.push(item);
+      else groups.push([item]);
+      groupOf.set(item, group ?? groups[groups.length - 1]);
+    }
+    return groupOf;
+  };
+  const groupOf = groupItems(true);
+  const shapeOf = groupItems(false);
+  const shapeGroup = (item: ParsedOnshapeBomRow) => {
+    const g = shapeOf.get(item);
+    return g && g.length > 1 ? `${studioKey(studioOf(g[0]))}/${g[0].itemSource.partId}` : "";
+  };
 
   const out: CombinedItem[] = [];
   for (const item of items) {
     const group = groupOf.get(item);
     if (!group || group.length < 2) {
-      out.push({ item, copyPartIDs: [] });
+      out.push({ item, copyPartIDs: [], copies: [], shapeGroup: shapeGroup(item) });
       continue;
     }
     if (group[0] !== item) continue; // listed with the first copy
@@ -149,6 +174,8 @@ export function combineCopies(
     out.push({
       item: { ...shown, quantity: group.reduce((sum, i) => sum + (i.quantity || 1), 0) },
       copyPartIDs: group.filter((i) => i !== shown).map((i) => i.itemSource.partId!),
+      copies: group,
+      shapeGroup: shapeGroup(item),
     });
   }
   return out;

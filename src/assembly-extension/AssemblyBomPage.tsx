@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Table from "../components/Table";
+import Table, { type RowMenuItem } from "../components/Table";
 import { fetchFromApi, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import { useOnshapeClient, useOnshapeContext } from "../extension/onshapeHostShim";
@@ -21,7 +21,8 @@ import {
   getPartsByIds
 } from "./BomApi";
 import { getElementMicroversions, getPartBoundingBox, getPartStudioMassProperties, onshapeJson, type PartMassBody } from "../extension/onshapeDirect";
-import { combineCopies, studioKey, studiosToCheck, type CombinedItem, type PartStudioRef } from "./sameParts";
+import { combineCopies, studioKey, studioOf, studiosToCheck, type CombinedItem, type PartStudioRef } from "./sameParts";
+import { recombineRows, splitCopyRows } from "./copyRows";
 import { formatPartSize } from "../util/partSize";
 import { beginImageVersionCheck, cancelImageVersionCheck, setImageVersions } from "../extension/imageCache";
 import type AssemblyBomRow from "./AssemblyBomRow";
@@ -62,13 +63,14 @@ const EDITABLE_FIELDS = [
   "wantStl",
   "wantParasolid",
   "markedStandard",
+  "keepSeparate",
 ];
 
 /** Edited cells that are also written back to Onshape (the rest live only in the database). */
-const DATABASE_ONLY_FIELDS = new Set(["material", "wantStl", "wantParasolid", "markedStandard"]);
+const DATABASE_ONLY_FIELDS = new Set(["material", "wantStl", "wantParasolid", "markedStandard", "keepSeparate"]);
 
 /** Checkbox cells: compared as true/false. */
-const BOOLEAN_FIELDS = new Set(["wantStl", "wantParasolid", "markedStandard"]);
+const BOOLEAN_FIELDS = new Set(["wantStl", "wantParasolid", "markedStandard", "keepSeparate"]);
 
 /**
  * Which files a material calls for: 3D-printing plastics -> STL; aluminum and
@@ -334,16 +336,46 @@ const itemKey = (item: ParsedOnshapeBomRow): OnshapeKey => ({
  * Studio combined into one item (util in sameParts.ts). A Part Studio whose
  * mass properties can't be read is left as Onshape lists it.
  */
-async function combineCopiesIn(items: ParsedOnshapeBomRow[], src: TreeSources): Promise<CombinedItem[]> {
+async function combineCopiesIn(
+  items: ParsedOnshapeBomRow[],
+  src: TreeSources
+): Promise<{ combined: CombinedItem[]; keptSeparate: ReadonlySet<string> }> {
+  const studios = studiosToCheck(items);
   const bodies = new Map<string, Record<string, PartMassBody>>();
-  await Promise.all(
-    studiosToCheck(items).map(async (studio) => {
+  // Parts marked "not the same part" (their own record says so, or the record
+  // of the marked row they were combined into) - read before combining.
+  const keptSeparate = new Set<string>();
+  const checked = new Set(studios.map(studioKey));
+  await Promise.all([
+    ...studios.map(async (studio) => {
       const b = await src.partStudioMass(studio).catch(() => null);
       if (b) bodies.set(studioKey(studio), b);
-    })
-  );
-  return combineCopies(items, bodies);
+    }),
+    ...items
+      .filter((i) => !i.isSubassembly && i.itemSource.partId && checked.has(studioKey(studioOf(i))))
+      .map(async (i) => {
+        const record = await src.dbPart(itemKey(i), i.itemSource.partId!).catch(() => null);
+        if (record?.keepSeparate) {
+          for (const id of [i.itemSource.partId!, ...(record.copyPartIDs ?? [])]) keptSeparate.add(id);
+        }
+      }),
+  ]);
+  return { combined: combineCopies(items, bodies, keptSeparate), keptSeparate };
 }
+
+/** A row's "not the same part" mark as saved (not an edit): it was read from the database. */
+function withSavedKeepSeparate(row: AssemblyBomRow): AssemblyBomRow {
+  const tracked = {
+    ...row,
+    keepSeparate: true,
+    baseline: { ...(row.baseline ?? {}), keepSeparate: 1 },
+    loaded: { ...(row.loaded ?? {}), keepSeparate: 1 },
+  };
+  return { ...tracked, modified: changedFields(tracked, tracked.baseline) };
+}
+
+/** Recomputes a row's list of unpublished edits (after copies moved between rows). */
+const retrackRow = (row: AssemblyBomRow): AssemblyBomRow => ({ ...row, modified: changedFields(row, row.baseline ?? row.loaded) });
 
 /**
  * Starts every request the tree walk will need, in parallel: each
@@ -786,6 +818,7 @@ export default function AssemblyBomPage() {
             wantStl: files.wantStl,
             wantParasolid: files.wantParasolid,
             markedStandard,
+            keepSeparate: dbPart.keepSeparate ? 1 : 0,
           } as unknown as FieldValues)
         : null;
 
@@ -831,6 +864,7 @@ export default function AssemblyBomPage() {
         configuration: parsedItem.itemSource.configuration || "",
         isStandardContent: !!parsedItem.itemSource.isStandardContent,
         markedStandard,
+        keepSeparate: !!dbPart?.keepSeparate,
       }, savedValues));
     },
     [context.server]
@@ -850,7 +884,8 @@ export default function AssemblyBomPage() {
       const parsedItems = node.onshapeBom ? parseOnshapeBomTable(node.onshapeBom) : [];
       const childParentId = isRoot ? null : node.row.id;
 
-      for (const { item, copyPartIDs } of await combineCopiesIn(parsedItems, ctx.src)) {
+      const { combined, keptSeparate } = await combineCopiesIn(parsedItems, ctx.src);
+      for (const { item, copies, shapeGroup } of combined) {
         ctx.onItem?.(item.name);
         if (item.isSubassembly) {
           const subKey = itemKey(item);
@@ -864,8 +899,21 @@ export default function AssemblyBomPage() {
           ctx.visited.add(subKeyId);
           if (!subNode.row.markedStandard) await expandTree(subNode, false, ctx, new Set([...ancestors, subKeyId]));
         } else {
-          const row = await resolvePartRow(item, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src);
-          ctx.out.push(copyPartIDs.length > 0 ? { ...row, copyPartIDs } : row);
+          let row = await resolvePartRow(item, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src);
+          if (keptSeparate.has(item.itemSource.partId || "")) row = withSavedKeepSeparate(row);
+          if (copies.length > 0) {
+            // Copies modeled separately in one Part Studio: one row, each copy shown under it.
+            const members = await Promise.all(
+              copies.map((c) => resolvePartRow(c, childParentId, ctx.rootBomDB, ctx.getParentBom, ctx.src))
+            );
+            const keep = !!row.keepSeparate;
+            row = {
+              ...row,
+              copies: members.map((m) => (keptSeparate.has(m.entityID) ? withSavedKeepSeparate(m) : { ...m, keepSeparate: keep })),
+              copyPartIDs: members.filter((m) => m.entityID !== row.entityID).map((m) => m.entityID),
+            };
+          }
+          ctx.out.push(shapeGroup ? { ...row, copyGroup: shapeGroup } : row);
         }
       }
     },
@@ -1132,7 +1180,9 @@ export default function AssemblyBomPage() {
    * database here.
    */
   const handleTableEdit = useCallback(
-    (newData: AssemblyBomRow[]) => {
+    (tableData: AssemblyBomRow[]) => {
+      // The copies shown under a combined row are display-only (tableRows).
+      const newData = tableData.filter((r) => !r.copyOf);
       const previousById = new Map(rows.map((r) => [r.id, r]));
       let blocked = false;
 
@@ -1221,6 +1271,67 @@ export default function AssemblyBomPage() {
     [rows, client, loading, publishing, subtreeLoads, saveRows, loadSubtree]
   );
 
+  /**
+   * "Not the same part": the copy check combined a part that isn't a copy
+   * (e.g. a mirrored one). Saved on Publish BOM like any edit (copyRows.ts).
+   */
+  const splitCopy = useCallback(
+    (combinedId: string, partID: string) => saveRows(splitCopyRows(rows, combinedId, partID, retrackRow)),
+    [rows, saveRows]
+  );
+
+  /** Undoes "Not the same part" (copyRows.ts). */
+  const recombineCopies = useCallback(
+    (rowId: string) => {
+      const { rows: next, later } = recombineRows(rows, rowId, retrackRow);
+      saveRows(next);
+      if (later) client.showMessageBubble("Marked as the same part again. It's combined with its copies after Publish BOM and Refresh BOM.");
+    },
+    [rows, saveRows, client]
+  );
+
+  /** The table's rows: every row, plus the copies under each combined row (once per combined part). */
+  const tableRows = useMemo(() => {
+    const out: AssemblyBomRow[] = [];
+    const listed = new Set<string>();
+    for (const row of rows) {
+      out.push(row);
+      if (!row.copies?.length || listed.has(row.id)) continue;
+      listed.add(row.id);
+      for (const copy of row.copies) {
+        out.push({ ...copy, id: `copy:${row.id}:${copy.entityID}`, parentId: row.id, copyOf: row.id, isExpanded: false, modified: [], copies: undefined });
+      }
+    }
+    return out;
+  }, [rows]);
+
+  /** Right-click menu: fixing a wrong guess of the copy check. */
+  const rowMenu = useCallback(
+    (row: AssemblyBomRow): RowMenuItem[] | undefined => {
+      const busy = loading || publishing || subtreeLoads > 0;
+      const wait = busy ? "Wait until the refresh, publish or loading has finished" : undefined;
+      if (row.copyOf && !row.keepSeparate) {
+        return [{
+          label: "Not the same part: list it separately",
+          title: wait ?? "This part was combined with others of the same shape by mistake (e.g. it's mirrored). Saved on Publish BOM.",
+          disabled: busy,
+          onClick: () => splitCopy(row.copyOf!, row.entityID),
+        }];
+      }
+      const target = row.copyOf ? rows.find((r) => r.id === row.copyOf) : row;
+      if (target && !target.isAssembly && target.keepSeparate) {
+        return [{
+          label: "Same part after all: combine with its copies",
+          title: wait ?? "Undo \"Not the same part\". Saved on Publish BOM.",
+          disabled: busy,
+          onClick: () => recombineCopies(target.id),
+        }];
+      }
+      return undefined;
+    },
+    [rows, loading, publishing, subtreeLoads, splitCopy, recombineCopies]
+  );
+
   /** Search box: rows whose name, catalog number or description contain the text. */
   const [search, setSearch] = useState("");
   /** "N problems" button: show only parts that would stop a work order. */
@@ -1281,7 +1392,9 @@ export default function AssemblyBomPage() {
 
   /** Expand all / Collapse all (kept in the saved copy like any other expand). */
   const setAllExpanded = useCallback(
-    (expanded: boolean) => handleTableEdit(rows.map((r) => (r.isExpanded === expanded ? r : { ...r, isExpanded: expanded }))),
+    // Expand all opens sub-assemblies only (not the copies under a combined part row).
+    (expanded: boolean) =>
+      handleTableEdit(rows.map((r) => (r.isExpanded === expanded || (expanded && !r.isAssembly) ? r : { ...r, isExpanded: expanded }))),
     [rows, handleTableEdit]
   );
 
@@ -1616,10 +1729,18 @@ export default function AssemblyBomPage() {
               // Work orders treat these as purchased (no catalog number needed).
               isStandardContent: standard,
               markedStandard: !!row.markedStandard,
+              // Copies modeled separately: which ones this record stands for, and "not the same part".
+              keepSeparate: !!row.keepSeparate,
+              copyPartIDs: row.copyPartIDs ?? [],
               wantStl,
               wantParasolid,
               filesModelVersion: saved.filesModelVersion ?? "",
             });
+            // A server from before keepSeparate drops it silently: the mark would be gone after a refresh.
+            if (row.keepSeparate && savedPart && savedPart.keepSeparate !== true) {
+              unsavedEdits.add(row.id);
+              problems.push(`"Not the same part" on "${row.name}" wasn't saved: the server needs updating (redeploy it on Render), then publish again.`);
+            }
             rowUpdates.set(row.id, {
               saved,
               dbUpdatedAt: stampOf(savedPart?.updatedAt),
@@ -2026,7 +2147,8 @@ export default function AssemblyBomPage() {
             </label>
           </div>
           <Table
-            data={rows}
+            data={tableRows}
+            rowMenu={rowMenu}
             columnsData={columns}
             setData={(newData) => handleTableEdit(newData as AssemblyBomRow[])}
             newRowFunction={undefined}
