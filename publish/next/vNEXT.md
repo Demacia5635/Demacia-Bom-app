@@ -49,6 +49,16 @@
 
 - The automatic shape-based combining from `ef4a751`, **Not the same part** from `b91e47c`, and the list of copies and "×N copies" label on a combined row (all pushed, never in a built extension). The modeler fixes a wrong name or catalog number in Onshape instead. (`1039c40`, `3178eb4`, `b92855e`)
 
+## Check after merging (in a real Chrome panel)
+
+1. The BOM button and the toolbar icon open and close the panel, also after it has been open for over a minute.
+2. Open an assembly: the saved copy shows, and Publish BOM is blocked with the "saved copy" message.
+3. Refresh BOM: the row count matches the previous version. Edit a cell and press Refresh BOM: the in-panel "Discard unpublished edits?" dialog appears.
+4. Publish BOM with an edit: progress, success, and the row is no longer marked as edited.
+5. Tick "Show size", then untick it while sizes are still loading.
+6. The logo on the in-page BOM button looks right.
+7. Firefox only: the BOM button's note to use the toolbar icon, and the sidebar following the active tab.
+
 ## Not tested yet
 
 - P3: compare the number of rows of a real assembly after Refresh BOM with the previous version once; sub-assemblies are now recognised a different way.
