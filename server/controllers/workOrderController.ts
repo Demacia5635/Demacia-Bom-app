@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
-import { cleanUpdateBody, upsertByID } from "./upsert";
+import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
+import { makeListAll } from "./listAll";
 
 interface SubPartBody {
   partID: string;
@@ -31,20 +32,13 @@ interface WorkOrderBody {
   workOrderCreated?: Date;
 }
 
-export async function getAllWorkOrders(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    // Oldest first. IDs are UUIDs now, so they don't follow creation order;
-    // older documents without createdAt come first (they're the oldest).
-    const workOrders = await WorkOrder.find().sort({ createdAt: 1, id: 1 });
-    return res.status(200).json(workOrders);
-  } catch (err) {
-    return next(err);
-  }
-}
+/**
+ * GET /all: every work order, oldest first (IDs are UUIDs now, so they don't
+ * follow creation order; older documents without createdAt come first), or
+ * one page of them (see makeListAll). ?bomID= keeps only the work orders
+ * of that assembly.
+ */
+export const getAllWorkOrders = makeListAll(WorkOrder, { createdAt: 1, id: 1 }, ["name", "description", "workOrderOwner", "id"], ["bomID"]);
 
 export async function getWorkOrderByID(
   req: Request<{ id: string }>,
@@ -92,7 +86,7 @@ export async function upsertWorkOrderByID(
     // cncGroups are written only by POST /id/:id/cncGroup, so a save sent with
     // an older copy can't undo someone's merge.
     const { parts, cncGroups: _ignored, ...fields } = cleanUpdateBody(req.body);
-    const update: Record<string, unknown> = { $set: { ...fields, id: id } };
+    const update: Record<string, unknown> = { $set: { ...fields, ...updatedByOf(req), id: id } };
     if (parts !== undefined) update.$setOnInsert = { parts: uniqueParts(parts) };
 
     const { doc: workOrder, created } = await upsertByID(WorkOrder, id, update);
@@ -130,22 +124,23 @@ export async function updateWorkOrderPart(
   try {
     const id = req.params.id;
     const partID = typeof req.body?.partID === "string" ? req.body.partID : "";
-    if (!partID) return res.status(400).json({ message: "partID is required" });
+    if (!partID) return res.status(400).json({ message: "partID is required", fields: ["partID"] });
 
     const given: unknown = req.body?.changes;
     if (typeof given !== "object" || given === null || Array.isArray(given))
-      return res.status(400).json({ message: "changes must be an object of field: value" });
+      return res.status(400).json({ message: "changes must be an object of field: value", fields: ["changes"] });
     const changes: Record<string, unknown> = {};
     for (const field of EDITABLE_PART_FIELDS) {
       if (Object.hasOwn(given, field)) changes[field] = (given as Record<string, unknown>)[field];
     }
-    if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No editable fields in changes" });
+    if (Object.keys(changes).length === 0) return res.status(400).json({ message: "No editable fields in changes", fields: ["changes"] });
 
     const now = new Date();
-    const set = Object.fromEntries(Object.entries(changes).map(([k, v]) => [`parts.$.${k}`, v]));
+    const by = updatedByOf(req);
+    const set = Object.fromEntries(Object.entries({ ...changes, ...by }).map(([k, v]) => [`parts.$.${k}`, v]));
     let result = await WorkOrder.findOneAndUpdate(
       { id, "parts.partID": partID },
-      { $set: { ...set, "parts.$.updatedAt": now } },
+      { $set: { ...set, ...by, "parts.$.updatedAt": now } },
       { returnDocument: "after", runValidators: true },
     );
 
@@ -153,7 +148,7 @@ export async function updateWorkOrderPart(
       // The part isn't in the work order yet (or the work order doesn't exist).
       result = await WorkOrder.findOneAndUpdate(
         { id, "parts.partID": { $ne: partID } },
-        { $push: { parts: { partID, ...changes, createdAt: now, updatedAt: now } } },
+        { $push: { parts: { partID, ...changes, ...by, createdAt: now, updatedAt: now } }, $set: by },
         { returnDocument: "after", runValidators: true },
       );
       if (!result) {
@@ -215,22 +210,23 @@ export async function updateCncGroup(
     const id = req.params.id;
     const body = req.body ?? {};
     if (body.groupID !== undefined && (typeof body.groupID !== "string" || !GROUP_ID.test(body.groupID)))
-      return res.status(400).json({ message: "groupID must be 1-64 letters, digits, - or _" });
+      return res.status(400).json({ message: "groupID must be 1-64 letters, digits, - or _", fields: ["groupID"] });
     const keepParts = body.partIDs === undefined && body.groupID !== undefined;
     if (!keepParts && (!Array.isArray(body.partIDs) || !body.partIDs.every((p) => typeof p === "string" && p !== "")))
-      return res.status(400).json({ message: "partIDs must be a list of part IDs" });
+      return res.status(400).json({ message: "partIDs must be a list of part IDs", fields: ["partIDs"] });
     if (!keepParts && ((body.partIDs as string[]).length > MAX_GROUP_PARTS || (body.partIDs as string[]).some((p) => p.length > MAX_PART_ID_LENGTH)))
-      return res.status(400).json({ message: `partIDs may list up to ${MAX_GROUP_PARTS} parts, each up to ${MAX_PART_ID_LENGTH} characters` });
+      return res.status(400).json({ message: `partIDs may list up to ${MAX_GROUP_PARTS} parts, each up to ${MAX_PART_ID_LENGTH} characters`, fields: ["partIDs"] });
     if (body.links !== undefined && typeof body.links !== "string")
-      return res.status(400).json({ message: "links must be text" });
+      return res.status(400).json({ message: "links must be text", fields: ["links"] });
     if (typeof body.links === "string" && body.links.length > MAX_LINKS_LENGTH)
-      return res.status(400).json({ message: `links may be up to ${MAX_LINKS_LENGTH} characters` });
+      return res.status(400).json({ message: `links may be up to ${MAX_LINKS_LENGTH} characters`, fields: ["links"] });
     const partIDs = keepParts ? [] : [...new Set(body.partIDs as string[])];
     const groupID = (body.groupID as string | undefined) ?? randomUUID();
     if (body.groupID === undefined && partIDs.length < 2)
-      return res.status(400).json({ message: "A new group needs at least 2 parts" });
+      return res.status(400).json({ message: "A new group needs at least 2 parts", fields: ["partIDs"] });
     const links = body.links as string | undefined;
     const now = new Date();
+    const { updatedBy } = updatedByOf(req);
 
     // $literal: IDs and links are values, never field paths or operators.
     const groups = { $ifNull: ["$cncGroups", []] };
@@ -273,6 +269,8 @@ export async function updateCncGroup(
       {
         $set: {
           ...(partIDs.length > 0 ? addParts : {}),
+          ...(updatedBy ? { updatedBy: { $literal: updatedBy } } : {}),
+          updatedAt: now,
           cncGroups: {
             $filter: {
               input: {

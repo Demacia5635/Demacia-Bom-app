@@ -62,7 +62,7 @@ npm install
 npm run dev        # tsx watch, listens on http://localhost:5050
 ```
 
-Create `server/.env`:
+Create `server/.env` (copy `server/.env.example`, which lists every setting):
 
 ```env
 PORT=5050
@@ -72,7 +72,7 @@ MONGODB_URI=mongodb+srv://...
 CLIENT_SECRET=some-long-random-string
 
 # Extra browser origins allowed to call the API, comma-separated.
-# localhost:5173 and localhost:5050 are always allowed.
+# localhost:5173 and localhost:5050 are allowed unless NODE_ENV=production.
 ALLOWED_ORIGINS=https://demacia5635.github.io,chrome-extension://ijejpoheiljnajdnanepbkhiegidelkl
 
 # Google Drive (OAuth2 refresh token with Drive scope)
@@ -147,25 +147,11 @@ The zips go to `publish/<version>/` as `demacia-bom-extension-<browser>-<version
 | `npm run package:extension` | Build and zip the extension |
 | `cd server && npm run dev` | Server with auto-reload |
 | `cd server && npm start` | Server without reload |
+| `npm run server` | The same, from the repository root (run `npm --prefix server install` once first) |
 
 ## API
 
-Every `/api` route needs the `x-client-secret` header and an allowed origin, except `GET /api` (health check) and `GET /api/drive/file/id/:fileID` (so images load in `<img>` tags).
-
-| Route | Methods | Purpose |
-|---|---|---|
-| `/api` | GET | Health check |
-| `/api/db` | GET | Is MongoDB connected |
-| `/api/db/part/all`, `/ids`, `/id/:id` | GET, POST, DELETE | Parts |
-| `/api/db/part/d/:documentID/.../p/:partID` | GET, DELETE | A part by its Onshape identity |
-| `/api/db/bom/all`, `/ids`, `/id/:id` | GET, POST, DELETE | BOMs (assemblies) |
-| `/api/db/bom/d/:documentID/.../e/:elementID/b/:bomID` | GET, POST, DELETE | A BOM by its Onshape identity |
-| `/api/db/workOrder/all`, `/id/:id`, `/id/:id/part` | GET, POST, DELETE | Work orders and their per-part progress |
-| `/api/enum/productionType/*`, `/api/enum/status/*` | GET | Production types and statuses (`server/db/enum.ts`) |
-| `/api/drive/file/id/:fileID` | GET, DELETE | Read or delete a Drive file |
-| `/api/drive/file/name/:fileName/mime/:mimeType` | POST | Upload a file (raw body, up to 50 MB); the folder is chosen by file type |
-| `/api/drive/folder/id/:folderID` | GET | List a Drive folder |
-| `/api/telemetry/events` | GET, POST | The extension's record of Onshape calls, shown on the website's unlisted `/tele` page |
+Every route, with its body and replies, is in [server/API.md](server/API.md). In short: every `/api` route needs the `x-client-secret` header and an allowed origin, except `GET /api` (health check) and `GET /api/drive/file/id/:fileID` (so images load in `<img>` tags).
 
 ## Repository layout
 

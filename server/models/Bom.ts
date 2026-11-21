@@ -32,6 +32,8 @@ const subAseemblySchema = new mongoose.Schema(
 const bomSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, unique: true, index: true },
+    // Who saved it last (X-Updated-By): a convenience, not an audit trail.
+    updatedBy: { type: String },
 
     name: { type: String },
     catalogNumber: { type: String },
@@ -63,6 +65,9 @@ const bomSchema = new mongoose.Schema(
   // No _id: false here: a top-level document needs its _id for .save()/create().
   { timestamps: true },
 );
+
+// GET /usedIn/:id finds the BOMs that list a given sub-assembly.
+bomSchema.index({ "subAssemblies.bomID": 1 });
 
 const Bom = mongoose.model("Bom", bomSchema);
 

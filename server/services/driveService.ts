@@ -4,6 +4,10 @@ import type { Auth } from "googleapis";
 import { Readable } from "stream";
 import { google as googleConfig } from "../config";
 
+/** Longest wait for one Drive request; uploads (up to 20 MB) get longer. */
+const DRIVE_TIMEOUT_MS = 30_000;
+const DRIVE_UPLOAD_TIMEOUT_MS = 120_000;
+
 const IMAGE_FOLDER_ID = googleConfig.imageFolderId;
 const STL_FOLDER_ID = googleConfig.stlFolderId;
 const PARASOLID_FOLDER_ID = googleConfig.parasolidFolderId;
@@ -60,7 +64,8 @@ export class GoogleDriveService {
   private drive: drive_v3.Drive;
 
   constructor(oauth2Client: Auth.OAuth2Client) {
-    this.drive = google.drive({ version: "v3", auth: oauth2Client });
+    // Without a timeout a stuck Drive request would hang the save that waits on it.
+    this.drive = google.drive({ version: "v3", auth: oauth2Client, timeout: DRIVE_TIMEOUT_MS });
   }
 
   /** fileId -> whether it's directly inside one of the team folders. */
@@ -146,13 +151,18 @@ export class GoogleDriveService {
       },
       fields:
         "id, name, mimeType, size, createdTime, modifiedTime, webViewLink, webContentLink, parents",
-    });
+    }, { timeout: DRIVE_UPLOAD_TIMEOUT_MS });
 
     return this.mapFile(res.data);
   }
 
+  /**
+   * Moves the file to Drive's trash rather than deleting it for good, so a
+   * wrong publish can be undone from Drive. Drive empties its trash itself
+   * after 30 days.
+   */
   async deleteFile(fileId: string): Promise<void> {
-    await this.drive.files.delete({ fileId });
+    await this.drive.files.update({ fileId, requestBody: { trashed: true } });
     this.teamFileCache.delete(fileId);
   }
 

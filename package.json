@@ -14,7 +14,8 @@
     "watch:extension": "vite build --config vite.extension.config.ts --watch --mode development",
     "lint": "oxlint",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "npm --prefix server start"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

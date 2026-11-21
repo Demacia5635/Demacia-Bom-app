@@ -2,8 +2,21 @@
 // server/.env first (dotenv), so every value below is ready whichever module
 // is imported first.
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
 
 export const PORT = process.env.PORT || 5050;
+
+/** The server's version: the root package.json's (server versions follow it). */
+export const SERVER_VERSION: string = (() => {
+    try {
+        return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version ?? 'unknown';
+    } catch {
+        return 'unknown';
+    }
+})();
+
+/** When this server process started (shown by GET /api). */
+export const STARTED_AT = new Date().toISOString();
 
 export const MONGODB_URI = process.env.MONGODB_URI;
 

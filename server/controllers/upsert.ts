@@ -1,10 +1,11 @@
 /**
  * Shared helpers for the POST /id/:id upsert routes (parts, BOMs, work orders).
  */
+import type { Request } from "express";
 import type { Model } from "mongoose";
 
 /** Fields the server owns: never taken from a request body. */
-const SERVER_OWNED = new Set(["_id", "__v", "id", "createdAt", "updatedAt"]);
+const SERVER_OWNED = new Set(["_id", "__v", "id", "createdAt", "updatedAt", "updatedBy"]);
 
 /**
  * The request body as plain field values for a `$set`. Mongoose already drops
@@ -22,6 +23,26 @@ export function cleanUpdateBody(body: unknown): Record<string, unknown> {
         clean[key] = value;
     }
     return clean;
+}
+
+/**
+ * Who made this change, from the X-Updated-By header: the Onshape user name
+ * (extension) or "website", URL-encoded (encodeURIComponent), since header
+ * values can't carry Hebrew. { updatedBy } to spread into a $set, or {} when
+ * the header is missing (the saved value stays). The header isn't checked
+ * against anything, so this is a convenience, not an audit trail.
+ */
+export function updatedByOf(req: Request): { updatedBy?: string } {
+    const raw = req.get("X-Updated-By");
+    if (!raw) return {};
+    let decoded = raw;
+    try {
+        decoded = decodeURIComponent(raw);
+    } catch {
+        // Not URL-encoded: use it as sent.
+    }
+    const value = decoded.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 100);
+    return value ? { updatedBy: value } : {};
 }
 
 /** MongoDB's duplicate-key error. */
