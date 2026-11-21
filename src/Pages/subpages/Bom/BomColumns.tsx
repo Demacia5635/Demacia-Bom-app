@@ -1,6 +1,5 @@
 import type { ColumnConfig } from "../../../components/Table";
-import { downloadDriveFile } from "../../../util/ApiService";
-import { openExternal } from "../../../util/openExternal";
+import { cadLinkColumn, fileDownloadColumns } from "../partColumns";
 import type BomTableRow from "./BomTableRow";
 import { isReadOnlyBomRow } from "./BomTableRow";
 
@@ -19,50 +18,23 @@ const BomColumns: ColumnConfig[] = [
   { key: "price", label: "Price", type: "number", isDisabled: isReadOnlyBomRow },
   { key: "comments", label: "Comments", type: "string", isDisabled: isReadOnlyBomRow },
   
-  // External Link Action (Sub-assemblies can open their Onshape document URL if available)
-  {
-    key: "onshapeURL",
+  // Standard Content lives in Onshape's library, not in your documents, and items
+  // marked standard are bought: no link (as in the extension). Without a saved
+  // URL, the link needs the document, workspace/version and element IDs.
+  cadLinkColumn<BomTableRow>({
     label: "Links",
-    type: "button",
     buttonText: "Open Onshape",
-    // Standard Content lives in Onshape's library, not in your documents: no link.
-    // Items marked standard are bought, so no link either (as in the extension).
-    // Without a saved URL, the link needs the document, workspace/version and element IDs.
-    isDisabled: (row: BomTableRow) => !!row.isStandardContent || !!row.markedStandard || (!row.onshapeURL && !(row.documentID && row.wvmID && row.elementID)),
-    onButtonClick: (row: BomTableRow) => {
-      if (row.isStandardContent || row.markedStandard) return;
-      let url = row.onshapeURL;
-      if (!url && row.documentID && row.wvmID && row.elementID) {
-        url = `https://cad.onshape.com/documents/${row.documentID}/${row.wvmType || "w"}/${row.wvmID}/e/${row.elementID}`;
+    url: (row) => {
+      if (row.isStandardContent || row.markedStandard) return undefined;
+      if (row.onshapeURL) return row.onshapeURL;
+      if (row.documentID && row.wvmID && row.elementID) {
+        return `https://cad.onshape.com/documents/${row.documentID}/${row.wvmType || "w"}/${row.wvmID}/e/${row.elementID}`;
       }
-      if (url) openExternal(url);
+      return undefined;
     },
-  },
-  // Export STL Action (Disabled and blocked for sub-assemblies)
-  {
-    key: "exportSTL",
-    label: "Export STL",
-    type: "button",
-    buttonText: "Download",
-    // Files are saved in Google Drive on publish; no Onshape fallback.
-    isDisabled: (row: BomTableRow) => row.isSubAssembly || !row.exportSTL,
-    onButtonClick: (row: BomTableRow) => {
-      if (row.isSubAssembly || !row.exportSTL) return; // Hard block for sub-assemblies
-      void downloadDriveFile(row.exportSTL, `${row.name || "part"}.stl`);
-    },
-  },
-  // Export Parasolid Action (Disabled and blocked for sub-assemblies)
-  {
-    key: "exportParasolid",
-    label: "Export Parasolid",
-    type: "button",
-    buttonText: "Download",
-    isDisabled: (row: BomTableRow) => row.isSubAssembly || !row.exportParasolid,
-    onButtonClick: (row: BomTableRow) => {
-      if (row.isSubAssembly || !row.exportParasolid) return; // Hard block for sub-assemblies
-      void downloadDriveFile(row.exportParasolid, `${row.name || "part"}.x_t`);
-    },
-  },
+  }),
+  // Sub-assemblies have no files of their own.
+  ...fileDownloadColumns<BomTableRow>((row) => !!row.isSubAssembly),
 ];
 
 export default BomColumns;

@@ -1,6 +1,5 @@
 import type { ColumnConfig } from "../../../components/Table";
-import { downloadDriveFile } from "../../../util/ApiService";
-import { openExternal } from "../../../util/openExternal";
+import { cadLinkColumn, fileDownloadColumns } from "../partColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import { isPurchasedPart } from "../../../util/Models";
 import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
@@ -84,39 +83,8 @@ const WorkOrderColumns: ColumnConfig[] = [
     { key: "links", label: "Links", type: "string", mergeKey: (row: WorkOrderTableRow) => row.cncGroupID },
     
     // Actions / Links at the end
-    {
-        key: "onshapeURL",
-        label: "CAD Link",
-        type: "button",
-        buttonText: "Open CAD",
-        isDisabled: (row: WorkOrderTableRow) => !row.onshapeURL,
-        onButtonClick: (row: WorkOrderTableRow) => {
-            if (row.onshapeURL) openExternal(row.onshapeURL);
-        },
-    },
-    {
-        key: "exportSTL",
-        label: "Export STL",
-        type: "button",
-        buttonText: "Download",
-        // Files are saved in Google Drive on publish; no Onshape fallback.
-        isDisabled: (row: WorkOrderTableRow) => !row.exportSTL,
-        onButtonClick: (row: WorkOrderTableRow) => {
-            if (!row.exportSTL) return;
-            void downloadDriveFile(row.exportSTL, `${row.name || "part"}.stl`);
-        },
-    },
-    {
-        key: "exportParasolid",
-        label: "Export Parasolid",
-        type: "button",
-        buttonText: "Download",
-        isDisabled: (row: WorkOrderTableRow) => !row.exportParasolid,
-        onButtonClick: (row: WorkOrderTableRow) => {
-            if (!row.exportParasolid) return;
-            void downloadDriveFile(row.exportParasolid, `${row.name || "part"}.x_t`);
-        },
-    },
+    cadLinkColumn<WorkOrderTableRow>({ label: "CAD Link", buttonText: "Open CAD", url: (row) => row.onshapeURL || undefined }),
+    ...fileDownloadColumns<WorkOrderTableRow>(),
 ];
 
 export default WorkOrderColumns;
