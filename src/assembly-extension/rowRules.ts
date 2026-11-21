@@ -21,6 +21,28 @@ export const EDITABLE_FIELDS = [
   "markedStandard",
 ];
 
+/** The table's column name for each editable cell (for lists of changes). */
+export const FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  description: "Description",
+  catalogNumber: "Catalog No.",
+  revision: "Revision",
+  engineer: "Engineer",
+  material: "Material",
+  price: "Price",
+  comments: "Comments",
+  wantStl: "STL",
+  wantParasolid: "Parasolid",
+  markedStandard: "Standard part",
+};
+
+/** An edited cell's value as shown in a list of changes. */
+export function describeFieldValue(field: string, value: unknown): string {
+  if (BOOLEAN_FIELDS.has(field)) return value ? "yes" : "no";
+  const text = String(value ?? "").trim();
+  return text === "" ? "(empty)" : text;
+}
+
 /** Edited cells that are also written back to Onshape (the rest live only in the database). */
 export const DATABASE_ONLY_FIELDS = new Set(["material", "wantStl", "wantParasolid", "markedStandard"]);
 

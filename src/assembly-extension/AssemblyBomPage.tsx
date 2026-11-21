@@ -23,7 +23,13 @@ import type AssemblyBomRow from "./AssemblyBomRow";
 import type { OnshapeBomTable } from "./OnshapeBom";
 import buildAssemblyBomColumns from "./AssemblyBomColumns";
 import { childrenByParent, distinctRows, linkArrays, publishPhases, ROOT_PARENT } from "./publishPlan";
-import PublishBomModal, { type PublishBomFormValues, type PublishCheck, type PublishPreview, type PublishProgress } from "./PublishBomModel";
+import PublishBomModal, {
+  type PublishBomFormValues,
+  type PublishChange,
+  type PublishCheck,
+  type PublishPreview,
+  type PublishProgress,
+} from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
@@ -60,6 +66,8 @@ import {
   changedFields,
   EDITABLE_FIELDS,
   editableValues,
+  describeFieldValue,
+  FIELD_LABELS,
   fileRuleForMaterial,
   isExternalRow,
   isHiddenByStandardToggle,
@@ -604,6 +612,25 @@ export default function AssemblyBomPage() {
     }
     return preview;
   }, [publishOpen, rows, rootIsPublished]);
+
+  /** Every edited cell of the items Publish will save, for the dialog's "Changes" list. */
+  const publishChanges = useMemo((): PublishChange[] => {
+    if (!publishOpen) return [];
+    const list: PublishChange[] = [];
+    for (const r of distinctRows(rows)) {
+      const was = (r.baseline ?? r.loaded ?? {}) as Record<string, unknown>;
+      const now = r as unknown as Record<string, unknown>;
+      for (const field of r.modified ?? []) {
+        list.push({
+          item: String(r.name ?? ""),
+          field: FIELD_LABELS[field] ?? field,
+          from: describeFieldValue(field, was[field]),
+          to: describeFieldValue(field, now[field]),
+        });
+      }
+    }
+    return list;
+  }, [publishOpen, rows]);
 
   /** "Hide standard parts" / "Hide standard assemblies" (remembered in this browser). */
   const [hideStandardParts, setHideStandardParts] = usePersistentToggle("hideStandardParts");
@@ -1210,6 +1237,7 @@ export default function AssemblyBomPage() {
             checks={publishChecks}
             checking={savedRecords === null}
             error={publishError}
+            changes={publishChanges}
             // A saved copy may be days old: Onshape can have changed since, so
             // it must be refreshed before it is published.
             blockedReason={

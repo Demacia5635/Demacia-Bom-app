@@ -26,6 +26,17 @@ export interface PublishProgress {
   secondsLeft?: number;
 }
 
+/** One edited cell, as listed under "Changes" (old value -> new value). */
+export interface PublishChange {
+  item: string;
+  field: string;
+  from: string;
+  to: string;
+}
+
+/** Changes listed before the rest are summed up as "+N more". */
+const CHANGES_SHOWN = 50;
+
 /** What a publish of the tree on screen will do, shown before it starts. */
 export interface PublishPreview {
   /** The assembly plus each sub-assembly and distinct part. */
@@ -72,6 +83,8 @@ interface PublishBomModalProps {
   submitting?: boolean;
   /** Why the last publish failed; shown above the buttons until the next try. */
   error?: string | null;
+  /** Every edited cell, listed under a collapsible "Changes (N)". */
+  changes?: PublishChange[];
   /** Why Publish can't run right now (e.g. a saved copy); shown, and Publish is disabled. */
   blockedReason?: string | null;
 }
@@ -89,6 +102,7 @@ export default function PublishBomModal({
   checking = false,
   error = null,
   blockedReason = null,
+  changes = [],
 }: PublishBomModalProps) {
   const [name, setName] = useState(initialValues.name ?? "");
   const [description, setDescription] = useState(initialValues.description ?? "");
@@ -189,6 +203,23 @@ export default function PublishBomModal({
               disabled={submitting}
             />
           </label>
+
+          {!submitting && changes.length > 0 && (
+            <details className="publish-progress publish-changes">
+              <summary className="cursor-pointer">
+                <strong>Changes ({changes.length})</strong>: what Publish will write, old value → new value
+              </summary>
+              <ul className="mt-1 space-y-0.5 max-h-48 overflow-y-auto">
+                {changes.slice(0, CHANGES_SHOWN).map((c, i) => (
+                  <li key={i} className="break-words">
+                    <span className="font-semibold">{c.item}</span> · {c.field}:{" "}
+                    <span className="line-through opacity-70">{c.from}</span> → {c.to}
+                  </li>
+                ))}
+                {changes.length > CHANGES_SHOWN && <li className="opacity-70">+{changes.length - CHANGES_SHOWN} more</li>}
+              </ul>
+            </details>
+          )}
 
           {!submitting && preview && (
             <div className="publish-progress publish-preview" aria-label="What this publish will do">
