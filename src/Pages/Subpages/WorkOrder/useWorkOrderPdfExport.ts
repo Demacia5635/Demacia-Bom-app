@@ -46,6 +46,7 @@ export function useWorkOrderPdfExport({ rowFromElement, title, assemblyName, fil
           name: r.name,
           catalogNumber: r.catalogNumber,
           quantity: r.quantityTotal,
+          size: r.size,
           imageSrc: r.avatar,
         })),
         onProgress: (loaded, total) => setPdfProgress({ loaded, total }),
