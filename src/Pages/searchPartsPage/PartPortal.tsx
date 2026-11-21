@@ -117,7 +117,6 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const subInputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 focus:ring-blue-600/50" : "bg-zinc-900 border-zinc-800 text-zinc-100 focus:ring-blue-500/50";
     const textAreaColor = isLight ? "text-zinc-800" : "text-zinc-200";
     const commentsColor = isLight ? "text-zinc-700 italic" : "text-zinc-300 italic";
-    const secondaryBtnClass = isLight ? "bg-zinc-200 hover:bg-zinc-300 text-zinc-800" : "bg-zinc-800 hover:bg-zinc-700 text-zinc-200";
 
     return (
         <div className={`w-full max-w-4xl border rounded-2xl p-6 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto transition-colors duration-200 ${containerBg}`}>
@@ -356,20 +355,8 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
                 </div>
 
                 {/* Footer Actions */}
-                <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t ${headerBorder}`}>
-                    <div className="flex items-center gap-3">
-                        {formData.onshapeURL && (
-                            <a
-                                href={formData.onshapeURL}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${secondaryBtnClass}`}
-                            >
-                                Open CAD Link ↗
-                            </a>
-                        )}
-                    </div>
-
+                {/* Onshape opens from its card, next to the STL / Parasolid downloads. */}
+                <div className={`flex flex-col sm:flex-row items-center justify-end gap-4 pt-3 border-t ${headerBorder}`}>
                     {/* The note is on the wrapper: a disabled button gets no hover in some browsers. */}
                     <div
                         className="flex items-center gap-3 w-full sm:w-auto"
