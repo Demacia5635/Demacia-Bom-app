@@ -58,7 +58,8 @@ export default function HomeScreen() {
         </div>
       )}
 
-      <BomTable boms={boms} />
+      {/* After a failed load the error says why; an empty table would only add "no BOMs". */}
+      {!error && <BomTable boms={boms} />}
     </div>
   );
 }

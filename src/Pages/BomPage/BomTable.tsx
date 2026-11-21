@@ -206,6 +206,13 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
           </tr>
         </thead>
         <tbody>
+          {rootBoms.length === 0 && (
+            <tr>
+              <td colSpan={3} className={`py-8 text-center text-sm ${textMuted}`}>
+                No BOMs published yet. Publish one from the BOM extension in Onshape.
+              </td>
+            </tr>
+          )}
           {rootBoms.map((bom) => (
             <BomRow
               key={bom.id}
