@@ -1,12 +1,12 @@
-# Extension v3.2.0
+# Extension: next version
 
 **Not built yet.** Commits `ef4a751` (pushed 2026-11-21 14:50) and `b91e47c`, `f477d57`, `16e3963`, `7be21f1` and `3821d89` (not pushed yet). Replaces [v3.0.0](../3.0.0/v3.0.0.md).
 
-Set `package.json` to `3.2.0` before building the zip. (`ef4a751` was first logged as 3.1.0. That version was never built, so it's part of 3.2.0.)
+(`ef4a751` was first logged as 3.1.0. That version was never built, so it's part of the next version.)
 
 ## Before handing it out
 
-- **Redeploy the server on Render** (server v3.2.0). Until then, "Not the same part" isn't saved. Publish BOM says the server needs updating instead of quietly forgetting it.
+- **Redeploy the server on Render** (server, next version). Until then, "Not the same part" isn't saved. Publish BOM says the server needs updating instead of quietly forgetting it.
 
 ## Changes
 

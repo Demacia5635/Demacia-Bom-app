@@ -1,10 +1,10 @@
-# Server v3.2.0
+# Server: next version
 
 **Unreleased.** Committed on `MASTER` (`5a7d06e`), not pushed yet.
 
 ## Before you deploy
 
-- **Redeploy on Render before handing out extension 3.2.0.** Until then, both new fields are dropped without an error. The extension notices this after Publish BOM and says the server needs updating.
+- **Redeploy on Render before handing out the next extension.** Until then, both new fields are dropped without an error. The extension notices this after Publish BOM and says the server needs updating.
 
 ## Changes
 
