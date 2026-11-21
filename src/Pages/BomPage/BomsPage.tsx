@@ -8,7 +8,7 @@ import ErrorBanner, { ApiErrorText } from "../../components/ErrorBanner";
 
 export type BomSummary = Omit<BomModel, 'description' | 'comments' | 'onshapeURL' | 'onshapeID' | 'parts' | 'subAssemblies' | 'createdAt'>;
 
-export default function HomeScreen() {
+export default function BomsPage() {
   const { isLight } = useThemeSync();
 
   const [boms, setBoms] = useState<BomSummary[]>([]);

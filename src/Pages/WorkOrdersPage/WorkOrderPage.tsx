@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
 import WorkOrderTable from "./WorkOrderTable";
-import type { WorkorderRow } from "../../util/Models";
+import type { WorkOrderRow } from "../../util/Models";
 import { fetchBomsByIds } from "../../util/records";
 import { recordImageSrc } from "../../util/recordImage";
 import ErrorBanner from "../../components/ErrorBanner";
@@ -11,7 +11,7 @@ import ErrorBanner from "../../components/ErrorBanner";
 export function WorkOrdersPage() {
     const { isLight } = useThemeSync();
     const [searchQuery, setSearchQuery] = useState("");
-    const [workOrders, setWorkOrders] = useState<WorkorderRow[]>([]);
+    const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -19,10 +19,10 @@ export function WorkOrdersPage() {
         async function getWorkOrders() {
             setLoading(true);
             try {
-                const response = await fetchFromApi<WorkorderRow[]>(`/db/workOrder/all`);
+                const response = await fetchFromApi<WorkOrderRow[]>(`/db/workOrder/all`);
                 // Oldest first, by when each was made. The server sorts by id, which was
                 // the creation time until new ids became random (crypto.randomUUID).
-                const createdTime = (wo: WorkorderRow) =>
+                const createdTime = (wo: WorkOrderRow) =>
                     Date.parse(String(wo.createdAt ?? "")) || Number(wo.id) || 0;
                 const list = [...(response || [])].sort((a, b) => createdTime(a) - createdTime(b));
                 setWorkOrders(list);
@@ -42,7 +42,7 @@ export function WorkOrdersPage() {
                             catalogNumber: wo.catalogNumber || bom.catalogNumber,
                             // The assembly's current picture; the work order's own only as a fallback.
                             ...(bomImage ? { avatarID: bomImage, driveFileId: undefined, thumbnailURL: undefined } : {}),
-                        } as WorkorderRow;
+                        } as WorkOrderRow;
                     }));
                 }
             } catch (err: any) {

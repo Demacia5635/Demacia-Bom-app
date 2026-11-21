@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { type BomModel } from "../../../util/Models";
 import { createPortal } from "react-dom";
-import { WorkOrderForm } from "./CreatingWO";
+import { WorkOrderForm } from "./WorkOrderForm";
 import { recordImageSrc } from "../../../util/recordImage";
 import RecordHeaderCard from "../../../components/RecordHeaderCard";
 

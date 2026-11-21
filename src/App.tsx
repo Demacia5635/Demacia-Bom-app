@@ -4,7 +4,7 @@ import MainLayout from './components/MainLayout';
 
 // Each page is loaded when first opened (MainLayout shows "Loading..." meanwhile),
 // so opening one page doesn't download the others, /tele included.
-const HomeScreen = lazy(() => import('./Pages/BomPage/BomsPage'));
+const BomsPage = lazy(() => import('./Pages/BomPage/BomsPage'));
 const BomDetailsPage = lazy(() => import('./Pages/subpages/Bom/BomDetailsPage'));
 const WorkOrderDetailsPage = lazy(() => import('./Pages/subpages/WorkOrder/WorkOrderDetailsPage'));
 const PartsSearchPage = lazy(() => import('./Pages/SearchPartsPage/SearchPartsPage'));
@@ -29,8 +29,8 @@ export default function App() {
     <HashRouter>
       <Routes>
         <Route element={<MainLayout />}>
-          <Route path="/" element={<HomeScreen />} />
-          <Route path="/home" element={<HomeScreen />} />
+          <Route path="/" element={<BomsPage />} />
+          <Route path="/home" element={<BomsPage />} />
           <Route path="/bom/:bomId" element={<BomRoute />} />
           <Route path="/workorders" element={<WorkOrdersPage />} />
           <Route path="/workOrder/:workOrderID" element={<WorkOrderRoute />} />

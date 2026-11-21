@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchFromApi, type ApiError } from "../../../util/ApiService";
 import { loadBomTree, workOrderLines } from "../../../util/bomTree";
-import type { PartModel, WorkorderModel } from "../../../util/Models";
+import type { PartModel, WorkOrderModel } from "../../../util/Models";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { recordImageSrc } from "../../../util/recordImage";
 import { fetchPartsByIds } from "../../../util/records";
@@ -47,7 +47,7 @@ function parseStatusToString(code: number | string | undefined): string {
  * order when it arrives. Another work order is another page (App.tsx keys
  * the page by id), so this loads once.
  */
-export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (workOrder: WorkorderModel) => void) {
+export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (workOrder: WorkOrderModel) => void) {
   const onLoadedRef = useRef(onLoaded);
   useEffect(() => {
     onLoadedRef.current = onLoaded;
@@ -58,7 +58,7 @@ export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (wor
   // True from the start: the parts load right after the work order, so the
   // table never flashes empty first.
   const [loading, setLoading] = useState<boolean>(true);
-  const [workOrderData, setWorkOrderData] = useState<WorkorderModel | null>(null);
+  const [workOrderData, setWorkOrderData] = useState<WorkOrderModel | null>(null);
   /** The part each row is for (row ids include the work order id). */
   const rowPartMapRef = useRef<Map<string, string>>(new Map());
   // The assembly's name, from the BOM loaded for the rows (work orders don't store it).
@@ -72,7 +72,7 @@ export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (wor
 
     async function getWOData() {
         try {
-            const data = await fetchFromApi<WorkorderModel>(`/db/workOrder/id/${workOrderID}`);
+            const data = await fetchFromApi<WorkOrderModel>(`/db/workOrder/id/${workOrderID}`);
             if (cancelled) return;
             setWorkOrderData(data);
             // Its CNC groups as loaded (later changes come back from the server).

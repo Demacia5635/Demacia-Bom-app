@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import type { WorkorderModel, BomModel } from "../../../util/Models";
+import type { WorkOrderModel, BomModel } from "../../../util/Models";
 import { fetchFromApi } from "../../../util/ApiService";
 import { recordImageSrc } from "../../../util/recordImage";
 import RecordHeaderCard from "../../../components/RecordHeaderCard";
 
 interface WorkOrderDataUIProps {
-    workOrder: WorkorderModel;
+    workOrder: WorkOrderModel;
 }
 
 /** The work-order page's header: the work order, with its assembly's image and catalog number. */

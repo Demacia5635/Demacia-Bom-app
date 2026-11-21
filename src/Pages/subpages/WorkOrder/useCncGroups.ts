@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchFromApi } from "../../../util/ApiService";
-import type { WorkorderModel } from "../../../util/Models";
+import type { WorkOrderModel } from "../../../util/Models";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, toCncGroups, type CncGroup } from "./cncGroups";
 
@@ -73,7 +73,7 @@ export function useCncGroups(workOrderID: string | undefined, rows: WorkOrderTab
           // Someone changed the groups meanwhile: show theirs instead of ours.
           if (err?.statusCode === 409) {
               const reloadSeq = ++cncRequestSeqRef.current;
-              fetchFromApi<WorkorderModel>(`/db/workOrder/id/${encodeURIComponent(workOrderID)}`)
+              fetchFromApi<WorkOrderModel>(`/db/workOrder/id/${encodeURIComponent(workOrderID)}`)
                   .then((wo) => showServerGroups(wo?.cncGroups, reloadSeq))
                   .catch(() => undefined);
           }

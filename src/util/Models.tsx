@@ -86,7 +86,7 @@ export function isPurchasedPart(
   return Boolean(part?.isStandardContent || part?.markedStandard || (part?.vendor && part.vendor.trim() !== ""));
 }
 
-export interface WorkorderPartModel {
+export interface WorkOrderPartModel {
   partID: string;
   /**
    * Not used: a work order follows its live BOM, so quantities come from the
@@ -114,13 +114,13 @@ export interface WorkorderPartModel {
 }
 
 /** A work order as stored (server/models/WorkOrder.ts). */
-export interface WorkorderModel {
+export interface WorkOrderModel {
   id: string;
   name?: string;
   bomID?: string;
   workOrderOwner?: string;
   description?: string;
-  parts?: WorkorderPartModel[];
+  parts?: WorkOrderPartModel[];
   /** Parts cut together in one CNC run, sharing one G-code link (WorkOrder/cncGroups.ts). */
   cncGroups?: { id: string; partIDs: string[]; links?: string }[];
   avatarID?: string;
@@ -136,7 +136,7 @@ export interface WorkorderModel {
  * client fills in from its assembly (not stored), and image fields older
  * records may still have.
  */
-export interface WorkorderRow extends WorkorderModel {
+export interface WorkOrderRow extends WorkOrderModel {
   bomName?: string;
   catalogNumber?: string;
   driveFileId?: string;

@@ -41,7 +41,8 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
     const [items, setItems] = useState<SearchItem[]>([]);
-    const [isOpen, setOpen] = useState<PartModel | null>(null);
+    /** The part shown in Part Portal (null: closed). */
+    const [openPart, setOpenPart] = useState<PartModel | null>(null);
     // Without these, a slow or failed load showed "Nothing found", as if the database were empty.
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<ApiError | null>(null);
@@ -187,7 +188,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                             return (
                                 <div
                                     key={`${item.kind}:${part.id}`}
-                                    onClick={() => (item.kind === "part" ? setOpen(item.record) : navigate(`/bom/${part.id}`))}
+                                    onClick={() => (item.kind === "part" ? setOpenPart(item.record) : navigate(`/bom/${part.id}`))}
                                     className={`${cardBg} border rounded-xl p-4 shadow-md transition-all cursor-pointer flex gap-4 items-start group`}
                                 >
                                     {/* Thumbnail */}
@@ -237,15 +238,15 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                     </div>
                 )}
             </div>
-            {isOpen && createPortal(
+            {openPart && createPortal(
                 <div
-                    onClick={() => setOpen(null)}
+                    onClick={() => setOpenPart(null)}
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
                 >
                     <div onClick={(e) => e.stopPropagation()}>
                         <PartPortal
-                            key={isOpen.id}
-                            part={isOpen}
+                            key={openPart.id}
+                            part={openPart}
                             onSaved={(saved) => setItems((list) => list.map((item) =>
                                 item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item
                             ))}

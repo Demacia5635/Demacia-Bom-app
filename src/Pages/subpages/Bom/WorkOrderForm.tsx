@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { fetchFromApi } from "../../../util/ApiService";
 import { catalogTree, loadBomTree, workOrderLines, type BomTree } from "../../../util/bomTree";
-import { isPurchasedPart, type PartModel, type WorkorderModel, type WorkorderPartModel } from "../../../util/Models";
+import { isPurchasedPart, type PartModel, type WorkOrderModel, type WorkOrderPartModel } from "../../../util/Models";
 import { checkCatalogTree } from "../../../util/catalogNumbers";
 import ErrorBanner from "../../../components/ErrorBanner";
 
@@ -81,10 +81,10 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
      * without the parts inside it. Quantities aren't stored: the page shows the
      * BOM's current totals.
      */
-    function collectWorkOrderParts(tree: BomTree): WorkorderPartModel[] {
+    function collectWorkOrderParts(tree: BomTree): WorkOrderPartModel[] {
         const { totals, bought: boughtAssemblies } = workOrderLines(tree);
 
-        const collectedParts: WorkorderPartModel[] = [];
+        const collectedParts: WorkOrderPartModel[] = [];
         for (const partID of totals.keys()) {
             // Every part listed in a BOM is in the tree (a bought sub-assembly
             // needs no record: it's purchased).
@@ -146,7 +146,7 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
             checkCatalogNumbers(tree);
             const parts = collectWorkOrderParts(tree);
 
-            const payload: WorkorderModel = {
+            const payload: WorkOrderModel = {
                 id: id,
                 name: formData.name.trim(),
                 bomID: bomId,

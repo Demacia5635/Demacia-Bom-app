@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthenticatedImage } from "../../components/AuthenticatedImage";
 import { useThemeSync } from "../../util/misc/useThemeSync";
-import type { WorkorderRow } from "../../util/Models";
+import type { WorkOrderRow } from "../../util/Models";
 import { recordImageSrc } from "../../util/recordImage";
 import ImageLightbox from "../../components/ImageLightbox";
 
-export const WorkOrderTable: React.FC<{ workOrders: WorkorderRow[] }> = ({ workOrders }) => {
+export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workOrders }) => {
     const navigate = useNavigate();
     const { isLight } = useThemeSync();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);

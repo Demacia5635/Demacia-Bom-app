@@ -5,7 +5,7 @@ import { useThemeSync } from "../../../util/misc/useThemeSync";
 import Table from "../../../components/Table";
 import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
-import type { BomModel, PartModel, WorkorderModel } from "../../../util/Models";
+import type { BomModel, PartModel, WorkOrderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
 import PartPortal from "../../../Pages/SearchPartsPage/PartPortal";
 import SubAssemblySummary from "../Bom/SubAssemblySummary";
@@ -44,7 +44,7 @@ export default function WorkOrderDetailsPage() {
 
     // The work order and its rows from the live BOM (useWorkOrderRows.ts). Its
     // CNC groups go to useCncGroups (below, as it needs the rows) once loaded.
-    const loadGroupsRef = useRef<(workOrder: WorkorderModel) => void>(() => undefined);
+    const loadGroupsRef = useRef<(workOrder: WorkOrderModel) => void>(() => undefined);
     const { workOrderData, rows, setRows, loading, error, bomName, rowPartMapRef } = useWorkOrderRows(workOrderID, (wo) =>
         loadGroupsRef.current(wo)
     );
