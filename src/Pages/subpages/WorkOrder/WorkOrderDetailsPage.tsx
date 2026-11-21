@@ -401,7 +401,11 @@ export default function WorkOrderDetailsPage() {
             return updated;
         });
 
-        setRows(processedData);
+        // Kept in their own (BOM) order: newData is in the shown order, with CNC
+        // groups pulled together, and a part that later leaves its group should
+        // go back to its place. No rows are added or removed here (no newRowFunction).
+        const processedById = new Map(processedData.map((r) => [r.id, r]));
+        setRows(rows.map((r) => processedById.get(r.id) ?? r));
 
         // Save what changed, part by part (expanding a row etc. saves nothing).
         const oldById = ownById;
