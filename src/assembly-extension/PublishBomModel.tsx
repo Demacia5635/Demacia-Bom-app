@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import ProgressBar from "./ProgressBar";
 
 export interface PublishBomFormValues {
   name: string;
@@ -226,12 +227,12 @@ export default function PublishBomModal({
                   </span>
                 )}
               </div>
-              <div className="publish-progress-track">
-                <div
-                  className="publish-progress-bar"
-                  style={{ width: `${Math.round((progress.done / Math.max(progress.total, 1)) * 100)}%` }}
-                />
-              </div>
+              <ProgressBar
+                done={progress.done}
+                total={progress.total}
+                trackClassName="publish-progress-track"
+                barClassName="publish-progress-bar"
+              />
               {progress.active.map((item, i) => (
                 <div key={i} className="publish-progress-step">
                   {item.name}: {item.step}

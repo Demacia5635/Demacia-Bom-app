@@ -34,6 +34,7 @@ import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
 import { assemblyKeyId, bomIdOf, itemKey, keyOf, keyString, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
+import ProgressBar from "./ProgressBar";
 import {
   catalogNumberInName,
   changedFields,
@@ -1602,12 +1603,11 @@ export default function AssemblyBomPage() {
             <p>{loadProgress ? "Resolving assembly tree..." : "Reading the BOM from Onshape..."}</p>
             {loadProgress && loadProgress.total > 0 && (
               <>
-                <div className="mt-3 h-1.5 w-full max-w-xs mx-auto rounded-full bg-zinc-800 overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-200"
-                    style={{ width: `${Math.min(100, Math.round((loadProgress.done / loadProgress.total) * 100))}%` }}
-                  />
-                </div>
+                <ProgressBar
+                  done={loadProgress.done}
+                  total={loadProgress.total}
+                  trackClassName="mt-3 h-1.5 w-full max-w-xs mx-auto rounded-full bg-zinc-800 overflow-hidden"
+                />
                 <p className="mt-2 text-xs">
                   {Math.min(loadProgress.done, loadProgress.total)} of {loadProgress.total} items
                 </p>
@@ -1629,14 +1629,7 @@ export default function AssemblyBomPage() {
                   </span>
                 )}
               </div>
-              {loadProgress && loadProgress.total > 0 && (
-                <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 transition-all duration-200"
-                    style={{ width: `${Math.min(100, Math.round((loadProgress.done / loadProgress.total) * 100))}%` }}
-                  />
-                </div>
-              )}
+              {loadProgress && loadProgress.total > 0 && <ProgressBar done={loadProgress.done} total={loadProgress.total} />}
             </div>
           )}
           {publishing && publishProgress && !publishOpen && (
@@ -1653,12 +1646,7 @@ export default function AssemblyBomPage() {
                   {publishProgress.done} / {publishProgress.total}
                 </span>
               </div>
-              <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 transition-all duration-200"
-                  style={{ width: `${Math.round((publishProgress.done / Math.max(publishProgress.total, 1)) * 100)}%` }}
-                />
-              </div>
+              <ProgressBar done={publishProgress.done} total={publishProgress.total} />
               {publishProgress.active.map((item, i) => (
                 <div key={i} className="mt-1 truncate text-zinc-500">
                   {item.name}: {item.step}
