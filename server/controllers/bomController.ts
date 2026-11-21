@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
 import { cleanUpdateBody, upsertByID } from './upsert';
 import { makeGetByIds } from './getByIds';
+import { makeListAll } from './listAll';
 
 interface OnshapeID {
     documentID: string;
@@ -41,18 +42,8 @@ function formID(onshapeID: OnshapeID): string {
     return `${onshapeID.documentID}_${onshapeID.wvmType}_${onshapeID.wvmID}_${onshapeID.elementID}_${onshapeID.bomID}`;
 }
 
-export async function getAllBoms(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-) {
-    try {
-        const boms = await Bom.find().sort({ id: 1 });
-        return res.status(200).json(boms);
-    } catch (err) {
-        return next(err);
-    }
-}
+/** GET /all: every BOM, or one page of them (see makeListAll). */
+export const getAllBoms = makeListAll(Bom, { id: 1 }, ["name", "catalogNumber", "projectCatalogNumber", "description", "id"]);
 
 export async function getBomByID(
     req: Request<{ id: string}>,

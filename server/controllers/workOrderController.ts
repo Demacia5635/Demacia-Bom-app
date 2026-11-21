@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
 import { cleanUpdateBody, upsertByID } from "./upsert";
+import { makeListAll } from "./listAll";
 
 interface SubPartBody {
   partID: string;
@@ -31,20 +32,12 @@ interface WorkOrderBody {
   workOrderCreated?: Date;
 }
 
-export async function getAllWorkOrders(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    // Oldest first. IDs are UUIDs now, so they don't follow creation order;
-    // older documents without createdAt come first (they're the oldest).
-    const workOrders = await WorkOrder.find().sort({ createdAt: 1, id: 1 });
-    return res.status(200).json(workOrders);
-  } catch (err) {
-    return next(err);
-  }
-}
+/**
+ * GET /all: every work order, oldest first (IDs are UUIDs now, so they don't
+ * follow creation order; older documents without createdAt come first), or
+ * one page of them (see makeListAll).
+ */
+export const getAllWorkOrders = makeListAll(WorkOrder, { createdAt: 1, id: 1 }, ["name", "description", "workOrderOwner", "id"]);
 
 export async function getWorkOrderByID(
   req: Request<{ id: string }>,
