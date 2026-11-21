@@ -7,6 +7,7 @@
  *
  * Telemetry never breaks the panel: every failure here is swallowed.
  */
+import { apiUrl } from "../util/backendHost";
 
 export type OnshapeCallKind =
   | "bom"
@@ -188,7 +189,7 @@ export async function flush(keepalive = false): Promise<void> {
   if (queue.length === 0) return;
   const batch = queue.splice(0, MAX_BATCH);
   try {
-    const res = await fetch(`${import.meta.env.VITE_CLIENT_URL}/api/telemetry/events`, {
+    const res = await fetch(apiUrl("/telemetry/events"), {
       method: "POST",
       keepalive,
       headers: {

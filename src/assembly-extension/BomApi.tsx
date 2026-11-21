@@ -4,11 +4,10 @@
  */
 
 import type { ApiError } from "../util/ApiService";
+import { apiUrl } from "../util/backendHost";
 import type { BomModel, PartModel } from "../util/Models";
 import type { OnshapeBomTable } from "./OnshapeBom";
 import * as onshapeDirect from "../extension/onshapeDirect";
-
-const BASE_URL = `${import.meta.env.VITE_CLIENT_URL}/api`;
 
 /** Standard headers for our server: content type and the client secret. */
 function getBomApiHeaders(contentType = "application/json"): Record<string, string> {
@@ -25,7 +24,7 @@ function getBomApiHeaders(contentType = "application/json"): Record<string, stri
 
 export async function postToApi<T>(endpoint: string, body: unknown): Promise<T> {
   try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const response = await fetch(apiUrl(endpoint), {
       method: "POST",
       headers: getBomApiHeaders("application/json"),
       body: JSON.stringify(body),
@@ -67,7 +66,7 @@ export async function postToApi<T>(endpoint: string, body: unknown): Promise<T> 
  */
 async function fetchJsonFromApi<T>(endpoint: string): Promise<T> {
   try {
-    const response = await fetch(`${BASE_URL}${endpoint}`, {
+    const response = await fetch(apiUrl(endpoint), {
       method: "GET",
       headers: getBomApiHeaders("application/json"),
     });
@@ -238,7 +237,7 @@ export interface DriveUploadResult {
 export async function uploadFileToDrive(blob: Blob, fileName: string): Promise<DriveUploadResult> {
   const encodedName = encodeURIComponent(fileName);
   const encodedMime = encodeURIComponent(blob.type || "application/octet-stream");
-  const url = `${BASE_URL}/drive/file/name/${encodedName}/mime/${encodedMime}`;
+  const url = apiUrl(`/drive/file/name/${encodedName}/mime/${encodedMime}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -282,7 +281,7 @@ export interface PartFilesResult {
  */
 export async function deleteDriveFile(fileId: string): Promise<boolean> {
   try {
-    const response = await fetch(`${BASE_URL}/drive/file/id/${encodeURIComponent(fileId)}`, {
+    const response = await fetch(apiUrl(`/drive/file/id/${encodeURIComponent(fileId)}`), {
       method: "DELETE",
       headers: getBomApiHeaders(""),
     });
