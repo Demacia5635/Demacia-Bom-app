@@ -172,7 +172,9 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
         onBusyChange?.(true);
 
         try {
-            const id = Date.now().toString();
+            // Random, so two work orders made at the same moment can't collide. Older
+            // work orders keep their Date.now() ids (and addresses).
+            const id = crypto.randomUUID();
             await checkCatalogNumbers(bomId);
             const parts = await collectWorkOrderParts(bomId);
 

@@ -24,7 +24,11 @@ export function WorkOrdersPage() {
             setLoading(true);
             try {
                 const response = await fetchFromApi<WorkorderSummary[]>(`/db/workOrder/all`);
-                const list = response || [];
+                // Oldest first, by when each was made. The server sorts by id, which was
+                // the creation time until new ids became random (crypto.randomUUID).
+                const createdTime = (wo: WorkorderSummary) =>
+                    Date.parse(String((wo as WorkorderModel).createdAt ?? "")) || Number(wo.id) || 0;
+                const list = [...(response || [])].sort((a, b) => createdTime(a) - createdTime(b));
                 setWorkOrders(list);
 
                 // Each work order is made from an assembly: show that assembly's
