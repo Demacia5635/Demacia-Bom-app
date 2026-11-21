@@ -19,6 +19,7 @@
 - New BOM and work-order records get a database `_id` like other records. Existing records and API replies are unchanged. (D8, `2bd9b0e`)
 - Saves report "created" or "updated" from the write itself, not from a separate check that could race. (D4, `a6ae80f`)
 - Drive files are cached by the browser only, not by shared proxies. (D9, `4b983af`)
+- The work-order list comes back in creation order, since new work-order IDs are random and no longer sort by time. (`c6ef744`)
 - **Removed:** the unused numeric work-order status list and its two routes (`/api/enum/status/...`), the unused Drive folder route, and the unused folder helpers. Nothing in the website or extension used them. (`42b0765`, `292730e`)
 - `/api/health` now answers 401 instead of 404 (it never existed). `GET /api` stays public. The health check no longer logs a line on every call. (`1ef623a`)
 - A browser pre-check ("preflight") from a website that isn't allowed now gets 403 instead of an empty 204. Allowed websites are unaffected. (`98c06b2`)

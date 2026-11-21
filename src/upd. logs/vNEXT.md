@@ -29,7 +29,7 @@
 - Each page of the site loads the first time you open it, so the first page appears faster; "Loading..." shows briefly the first time. **After a new version is deployed, a tab that was already open reloads itself** when it next changes page, instead of breaking. (P11, `79f2ce7`)
 - The PDF export always frees the memory of its pictures, even when drawing one fails. (T6, `ddbcbe8`)
 - Tables stay smoother: scrolling and clicking no longer redraw the whole table, and the bottom scrollbar's size watcher isn't rebuilt after every edit. (P2, P12: `304e5c4`, `cbd65bf`; also in the extension panel)
-- Internal fixes with no visible change: a failed image-cache write is handled, a work-order save helper no longer changes on every edit, and lint warnings cleaned up. (T5, P8, C11: `4e49c78`, `43a9031`)
+- Internal fixes with no visible change: a failed image-cache write is handled, a work-order save helper no longer changes on every edit, and lint warnings cleaned up. (T5, P7, P8, C11: `4e49c78`, `9501473`, `43a9031`)
 - **Clicking a part's picture on a work order opens the image viewer again after the Avatar column has been moved,** and on rows of a merged CNC job. (B5, `22fe2fb`)
 - **A failed save on a work order no longer loses your change.** It's sent again with your next edit of that part, as on the BOM page. The "Couldn't save" banner stays as it was. (B6, `9d827b1`)
 - **Saving in Part Portal no longer overwrites changes the extension published while the dialog was open.** Only the fields you changed are sent, and nothing is sent if you changed nothing. (B7, `1ebe56f`)
