@@ -1,17 +1,7 @@
-import { BACKEND_HOST } from "./backendHost";
+import { apiUrl, serverUrl } from "./backendHost";
 
-/**
- * The full URL of a server route, for code that calls fetch itself (or builds
- * links): `apiUrl("/telemetry/events")` → `<server>/api/telemetry/events`.
- * The path may start with or without "/" or "/api", as with fetchFromApi.
- * The server is localhost:5050 when run locally, else VITE_CLIENT_URL (or the
- * production URL when that isn't set).
- */
-export function apiUrl(path: string): string {
-  const withSlash = path.startsWith("/") ? path : `/${path}`;
-  const clean = withSlash === "/api" || withSlash.startsWith("/api/") ? withSlash.slice(4) : withSlash;
-  return `${BACKEND_HOST}/api${clean}`;
-}
+// apiUrl lives with BACKEND_HOST; still importable from here (the extension uses it).
+export { apiUrl } from "./backendHost";
 
 export interface ApiError {
   message: string;
@@ -38,8 +28,7 @@ export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {
     throw new ApiRequestError("VITE_CLIENT_SECRET is missing from environment variables.");
   }
 
-  const cleanEndpoint = endpoint.startsWith("/api") ? endpoint.replace("/api", "") : endpoint;
-  const targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
+  const targetUrl = apiUrl(endpoint);
 
   try {
     const response = await fetch(targetUrl, {
@@ -131,13 +120,7 @@ export async function downloadFile(
     throw new Error("VITE_CLIENT_SECRET is missing from environment variables.");
   }
 
-  let targetUrl = url;
-  if (url.startsWith("/api")) {
-    const cleanEndpoint = url.replace("/api", "");
-    targetUrl = `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
-  } else if (!url.startsWith("http")) {
-    targetUrl = `${BACKEND_HOST}${url.startsWith("/") ? url : `/${url}`}`;
-  }
+  const targetUrl = serverUrl(url);
 
   const response = await fetch(targetUrl, {
     headers: {

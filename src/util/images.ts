@@ -4,7 +4,7 @@
  * a concurrency limit, retries and an optional cache). The component that shows
  * them is components/AuthenticatedImage.tsx.
  */
-import { BACKEND_HOST } from "./backendHost";
+import { serverUrl } from "./backendHost";
 
 /**
  * Called for every Onshape image request AuthenticatedImage makes (the Chrome
@@ -89,7 +89,7 @@ export function publicDriveImageUrl(src: string): string | null {
       return null;
     }
   }
-  return src.startsWith("/api/drive/file/id/") ? `${BACKEND_HOST}${src}` : null;
+  return src.startsWith("/api/drive/file/id/") ? serverUrl(src) : null;
 }
 
 /** Bytes of a base64 string (atob is native, so this is fast even for large images). */
@@ -102,12 +102,7 @@ function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
 
 /** Full URL of an image src: paths without a host go to our backend. */
 export function imageTargetUrl(src: string): string {
-  if (src.startsWith("/api")) {
-    const cleanEndpoint = src.replace("/api", "");
-    return `${BACKEND_HOST}/api${cleanEndpoint.startsWith("/") ? cleanEndpoint : `/${cleanEndpoint}`}`;
-  }
-  if (!src.startsWith("http")) return `${BACKEND_HOST}${src.startsWith("/") ? src : `/${src}`}`;
-  return src;
+  return serverUrl(src);
 }
 
 /** Onshape API images use the browser's Onshape session; never send our client secret there. */
