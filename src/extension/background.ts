@@ -35,6 +35,7 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(conso
  * click (no awaits before sidePanel.open), or Chrome refuses to open it.
  */
 function openPanelForTab(tabId: number): void {
+  tabsWithPanel.add(tabId);
   // ?tab= tells the panel which tab it belongs to (onshapeTab.ts getOwnTab),
   // even if the user switches tabs while it loads.
   chrome.sidePanel.setOptions({ tabId, path: `${PANEL_PATH}?tab=${tabId}`, enabled: true }).catch(console.error);
@@ -48,6 +49,11 @@ function openPanelForTab(tabId: number): void {
 // open; if the worker is restarted anyway, the panels reconnect.
 const PANEL_PORT_PREFIX = "demacia-bom:panel:";
 const tabsWithOpenPanel = new Set<number>();
+/**
+ * Tabs this worker enabled a panel for (open or since closed by the user).
+ * Forgotten if the worker restarts; open panels are still known by their port.
+ */
+const tabsWithPanel = new Set<number>();
 
 chrome.runtime.onConnect.addListener((port) => {
   if (!port.name.startsWith(PANEL_PORT_PREFIX)) return;
@@ -88,10 +94,18 @@ chrome.action.onClicked.addListener((tab) => {
   if (tab.id !== undefined && isOnshapeUrl(tab.url)) togglePanelForTab(tab.id);
 });
 
-// The tab left Onshape (navigated to another site): close its panel.
+// The tab left Onshape (navigated to another site): close its panel. Only
+// tabs that have one: other tabs' page loads don't need a sidePanel call.
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status !== "loading" && changeInfo.url === undefined) return;
+  if (!tabsWithPanel.has(tabId) && !tabsWithOpenPanel.has(tabId)) return;
   if (!isOnshapeUrl(tab.url)) {
+    tabsWithPanel.delete(tabId);
+    tabsWithOpenPanel.delete(tabId);
     chrome.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
   }
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabsWithPanel.delete(tabId);
+  tabsWithOpenPanel.delete(tabId);
 });
