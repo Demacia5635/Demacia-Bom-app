@@ -1,4 +1,4 @@
-import { useState, useEffect, type MouseEvent } from "react";
+import { useState, useEffect, useMemo, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthenticatedImage, fetchFromApi } from "../../util/ApiService";
 import { useThemeSync } from "../../util/misc/useThemeSync";
@@ -171,8 +171,6 @@ const BomRow: React.FC<BomRowProps> = ({
 export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
   const { isLight } = useThemeSync();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
-  const [rootBoms, setRootBoms] = useState<BomSummary[]>([]);
-  const [filtering, setFiltering] = useState<boolean>(true);
 
   const tableBg = isLight ? "bg-white border-zinc-200 text-zinc-900" : "bg-zinc-900 border-zinc-800 text-zinc-100";
   const headerBg = isLight ? "bg-zinc-100 text-zinc-700" : "bg-zinc-950 text-zinc-300";
@@ -180,48 +178,16 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
   const borderCol = isLight ? "border-zinc-200" : "border-zinc-800";
   const textMuted = isLight ? "text-zinc-500" : "text-zinc-400";
 
-  // Filter out any BOM that is referenced as a sub-assembly inside another BOM
-  useEffect(() => {
-    let isMounted = true;
-
-    async function filterChildBoms() {
-      setFiltering(true);
-      try {
-        const childBomIds = new Set<string>();
-
-        await Promise.all(
-          boms.map(async (bom) => {
-            const fullBom = await fetchFromApi<BomModel>(`/db/bom/id/${bom.id}`).catch(() => null);
-            if (fullBom?.subAssemblies) {
-              fullBom.subAssemblies.forEach((sub) => {
-                if (sub.bomID) childBomIds.add(sub.bomID);
-              });
-            }
-          })
-        );
-
-        if (isMounted) {
-          // Keep only top-level root BOMs
-          setRootBoms(boms.filter((bom) => !childBomIds.has(bom.id)));
-        }
-      } catch (err) {
-        console.error("Failed to filter child BOMs:", err);
-        if (isMounted) setRootBoms(boms);
-      } finally {
-        if (isMounted) setFiltering(false);
+  // Only top-level assemblies: leave out any that is a sub-assembly of another.
+  // The list request already returns each assembly's sub-assemblies.
+  const rootBoms = useMemo(() => {
+    const childBomIds = new Set<string>();
+    for (const bom of boms) {
+      for (const sub of (bom as Partial<BomModel>).subAssemblies ?? []) {
+        if (sub.bomID) childBomIds.add(sub.bomID);
       }
     }
-
-    if (boms.length > 0) {
-      filterChildBoms();
-    } else {
-      setRootBoms([]);
-      setFiltering(false);
-    }
-
-    return () => {
-      isMounted = false;
-    };
+    return boms.filter((bom) => !childBomIds.has(bom.id));
   }, [boms]);
 
   const handleImageClick = (e: MouseEvent, src: string) => {
@@ -240,24 +206,16 @@ export const BomTable: React.FC<{ boms: BomSummary[] }> = ({ boms }) => {
           </tr>
         </thead>
         <tbody>
-          {filtering ? (
-            <tr>
-              <td colSpan={3} className={`py-8 text-center text-sm ${textMuted}`}>
-                Structuring assembly tree...
-              </td>
-            </tr>
-          ) : (
-            rootBoms.map((bom) => (
-              <BomRow
-                key={bom.id}
-                bom={bom}
-                onImageClick={handleImageClick}
-                rowHover={rowHover}
-                borderCol={borderCol}
-                textMuted={textMuted}
-              />
-            ))
-          )}
+          {rootBoms.map((bom) => (
+            <BomRow
+              key={bom.id}
+              bom={bom}
+              onImageClick={handleImageClick}
+              rowHover={rowHover}
+              borderCol={borderCol}
+              textMuted={textMuted}
+            />
+          ))}
         </tbody>
       </table>
 
