@@ -5,6 +5,7 @@ import { recordImageSrc } from "../../../util/recordImage";
 import RecordHeaderCard from "../../../components/RecordHeaderCard";
 import { CatalogNumber } from "../../../components/CopyButton";
 import HeaderTotals from "../../../components/HeaderTotals";
+import { Link } from "react-router-dom";
 
 interface WorkOrderDataUIProps {
     workOrder: WorkOrderModel;
@@ -56,6 +57,15 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, totals }) 
                         },
                     ]}
                 />
+            )}
+            actions={workOrder.bomID && (
+                // Back to the assembly this work order was made from (QW4).
+                <Link
+                    to={`/bom/${encodeURIComponent(workOrder.bomID)}`}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md w-full lg:w-auto text-center"
+                >
+                    Open BOM
+                </Link>
             )}
             comments={workOrder.comments}
         />

@@ -23,6 +23,7 @@ import { showToast } from "../../../util/toast";
 import { usePartInAddress } from "../../../components/usePartInAddress";
 import SaveStatus from "../../../components/SaveStatus";
 import { SkeletonTable } from "../../../components/Skeleton";
+import BomWorkOrders from "./BomWorkOrders";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -343,6 +344,12 @@ export default function BomDetailsPage() {
 
       {mainBomData && (
         <MainBomDataUI bom={mainBomData} totals={treeTotals} />
+      )}
+      {/* The assembly's work orders, each a link (QW4). */}
+      {bomId && mainBomData && (
+        <div className="mt-4">
+          <BomWorkOrders bomId={bomId} />
+        </div>
       )}
       {Object.keys(saveErrors).length > 0 && (
         <ErrorBanner title="Changes not saved" className="mb-6 p-4 rounded-lg">
