@@ -8,16 +8,20 @@ import type { BomModel } from "../../util/Models";
 import { recordImageSrc } from "../../util/recordImage";
 import { fetchBomsByIds } from "../../util/records";
 import ImageLightbox from "../../components/ImageLightbox";
+import { bomPath } from "../../util/bomTrail";
 
 interface BomRowProps {
   bom: BomSummary;
   level?: number;
+  /** The assemblies above this row (for the BOM page's breadcrumbs). */
+  trail?: string[];
   onImageClick: (e: MouseEvent, src: string) => void;
 }
 
 const BomRow: React.FC<BomRowProps> = ({
   bom,
   level = 0,
+  trail = [],
   onImageClick,
 }) => {
   const navigate = useNavigate();
@@ -98,7 +102,7 @@ const BomRow: React.FC<BomRowProps> = ({
   return (
     <>
       <tr
-        onClick={() => navigate(`/bom/${bom.id}`)}
+        onClick={() => navigate(bomPath(bom.id, trail))}
         className={`${theme.rowHover} cursor-pointer transition-colors border-b ${theme.border}`}
       >
         <td
@@ -153,6 +157,7 @@ const BomRow: React.FC<BomRowProps> = ({
             key={`${bom.id}-${subBom.id}`}
             bom={subBom}
             level={level + 1}
+            trail={[...trail, bom.id]}
             onImageClick={onImageClick}
           />
         ))}

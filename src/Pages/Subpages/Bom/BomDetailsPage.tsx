@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, type MouseEvent } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import Table from "../../../components/Table";
 import { fetchFromApi, type ApiError } from "../../../util/ApiService";
 import type { BomModel, PartModel } from "../../../util/Models";
@@ -24,6 +24,9 @@ import { usePartInAddress } from "../../../components/usePartInAddress";
 import SaveStatus from "../../../components/SaveStatus";
 import { SkeletonTable } from "../../../components/Skeleton";
 import BomWorkOrders from "./BomWorkOrders";
+import { bomPath, readTrail } from "../../../util/bomTrail";
+import BomBreadcrumbs from "./BomBreadcrumbs";
+import BomUsedIn from "./BomUsedIn";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -145,6 +148,9 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
 
 export default function BomDetailsPage() {
   const { bomId } = useParams<{ bomId: string }>();
+  // The assemblies above this one you came through (?trail=), for the breadcrumbs.
+  const [searchParams] = useSearchParams();
+  const trail = readTrail(searchParams);
   const navigate = useNavigate();
 
   // The app's theme toggle (like every other page), not the OS setting.
@@ -334,7 +340,10 @@ export default function BomDetailsPage() {
     closeContextMenu();
     const subBomId = row.subBomId;
     if (subBomId) {
-      navigate(`/bom/${subBomId}`);
+      // The row's id is its path from this BOM ("sub-<this>/<a>/<sub>"): the
+      // assemblies on the way become the next page's breadcrumbs.
+      const path = row.id.startsWith("sub-") ? row.id.slice(4).split("/") : [bomId ?? ""];
+      navigate(bomPath(subBomId, [...trail, ...path.slice(0, -1)].filter(Boolean)));
     }
   };
 
@@ -342,12 +351,14 @@ export default function BomDetailsPage() {
   return (
     <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
+      {mainBomData && <BomBreadcrumbs trail={trail} current={mainBomData} />}
       {mainBomData && (
         <MainBomDataUI bom={mainBomData} totals={treeTotals} />
       )}
-      {/* The assembly's work orders, each a link (QW4). */}
+      {/* Where it's used (QW3) and its work orders (QW4), each a link. */}
       {bomId && mainBomData && (
         <div className="mt-4">
+          <BomUsedIn bomId={bomId} />
           <BomWorkOrders bomId={bomId} />
         </div>
       )}
