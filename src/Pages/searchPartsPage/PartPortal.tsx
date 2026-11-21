@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { recordImageSrc } from "../../util/recordImage";
 import { openExternal } from "../../util/openExternal";
+import ImageLightbox from "../../components/ImageLightbox";
 
 /** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
 const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
@@ -375,34 +376,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
             </form>
 
             {/* Enlarged Image Preview Overlay Modal */}
-            {enlargedImageSrc && (
-                <div 
-                    className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-                    onClick={() => setEnlargedImageSrc(null)}
-                >
-                    <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-                        <button
-                            type="button"
-                            onClick={() => setEnlargedImageSrc(null)}
-                            className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md"
-                        >
-                            ✕ Close
-                        </button>
-                        {enlargedImageSrc === "FAILED" ? (
-                            <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
-                                <span className="text-xl font-bold">Image Failed to Load</span>
-                                <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>
-                            </div>
-                        ) : (
-                            <AuthenticatedImage
-                                src={enlargedImageSrc}
-                                alt="Enlarged Preview"
-                                className="max-w-full max-h-[85vh] object-contain rounded-xl border border-zinc-700 shadow-2xl"
-                            />
-                        )}
-                    </div>
-                </div>
-            )}
+            <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
 
             {/* Multiple Linked BOMs Selection Modal */}
             {isBomModalOpen && createPortal(

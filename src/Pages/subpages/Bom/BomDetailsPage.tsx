@@ -2,7 +2,6 @@ import { useEffect, useState, useRef, type MouseEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Table from "../../../components/Table";
 import { fetchFromApi, type ApiError } from "../../../util/ApiService";
-import { AuthenticatedImage } from "../../../components/AuthenticatedImage";
 import type { BomModel, PartModel } from "../../../util/Models";
 import type BomTableRow from "./BomTableRow";
 import MainBomDataUI from "./MainBomDataUI";
@@ -14,6 +13,7 @@ import { loadBomTree, type BomTree } from "../../../util/bomTree";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
+import ImageLightbox from "../../../components/ImageLightbox";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -490,34 +490,7 @@ export default function BomDetailsPage() {
         </div>
       )}
 
-      {enlargedImageSrc && (
-        <div 
-          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
-          onClick={() => setEnlargedImageSrc(null)}
-        >
-          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => setEnlargedImageSrc(null)}
-              className="absolute -top-10 right-0 px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold shadow-md"
-            >
-              ✕ Close
-            </button>
-            {enlargedImageSrc === "FAILED" ? (
-              <div className="w-96 h-96 bg-zinc-900 border border-zinc-700 rounded-xl flex flex-col items-center justify-center text-zinc-400 gap-2 shadow-2xl">
-                <span className="text-xl font-bold">Image Failed to Load</span>
-                <span className="text-xs font-mono text-zinc-500">NO IMAGE AVAILABLE</span>
-              </div>
-            ) : (
-              <AuthenticatedImage
-                src={enlargedImageSrc}
-                alt="Enlarged Preview"
-                className="max-w-full max-h-[85vh] object-contain rounded-xl border border-zinc-700 shadow-2xl"
-              />
-            )}
-          </div>
-        </div>
-      )}
+      <ImageLightbox src={enlargedImageSrc} onClose={() => setEnlargedImageSrc(null)} />
     </div>
   );
 }
