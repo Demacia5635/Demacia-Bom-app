@@ -35,13 +35,17 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(conso
  * click (no awaits before sidePanel.open), or Chrome refuses to open it.
  */
 function openPanelForTab(tabId: number): void {
-  chrome.sidePanel.setOptions({ tabId, path: PANEL_PATH, enabled: true }).catch(console.error);
+  // ?tab= tells the panel which tab it belongs to (onshapeTab.ts getOwnTab),
+  // even if the user switches tabs while it loads.
+  chrome.sidePanel.setOptions({ tabId, path: `${PANEL_PATH}?tab=${tabId}`, enabled: true }).catch(console.error);
   chrome.sidePanel.open({ tabId }).catch(console.error);
 }
 
 // Each open panel holds a port named PANEL_PORT_PREFIX + its tab ID
 // (reportPanelOpen in onshapeTab.ts). Kept in memory so the click handlers
-// can check it synchronously; if the worker restarts, the panels reconnect.
+// can check it synchronously (sidePanel.open must be called before any await).
+// The panel pings the port, which keeps this worker alive while a panel is
+// open; if the worker is restarted anyway, the panels reconnect.
 const PANEL_PORT_PREFIX = "demacia-bom:panel:";
 const tabsWithOpenPanel = new Set<number>();
 
@@ -50,6 +54,7 @@ chrome.runtime.onConnect.addListener((port) => {
   const tabId = Number(port.name.slice(PANEL_PORT_PREFIX.length));
   if (!Number.isInteger(tabId)) return;
   tabsWithOpenPanel.add(tabId);
+  port.onMessage.addListener(() => {}); // keep-alive pings: receiving them is enough
   port.onDisconnect.addListener(() => tabsWithOpenPanel.delete(tabId));
 });
 

@@ -69,10 +69,10 @@ function ownTabParam(): number | null {
 const hasOwnTabParam = () => ownTabParam() !== null;
 
 /**
- * The tab this panel document was opened for. Firefox gives each tab its own
- * panel document, panel.html?tab=<id> (background.firefox.ts). Otherwise
- * (Chrome, or Firefox's default panel) it's the tab that is active while the
- * panel loads.
+ * The tab this panel document was opened for: each tab's panel is
+ * panel.html?tab=<id> (background.ts, background.firefox.ts). Otherwise
+ * (Firefox's default panel, or a Chrome panel opened by an older version)
+ * it's the tab that is active while the panel loads.
  */
 export function getOwnTab(): Promise<chrome.tabs.Tab | undefined> {
   const tabParam = ownTabParam();
@@ -84,8 +84,10 @@ export function getOwnTab(): Promise<chrome.tabs.Tab | undefined> {
 /**
  * Chrome only: tells the background worker that this panel is open for its
  * tab, so a second click on the toolbar icon or the in-page "BOM" button
- * closes it (background.ts). The open port is the signal; when the worker is
- * restarted the port drops, so reconnect to re-register.
+ * closes it (background.ts). The open port is the signal. An idle port doesn't
+ * keep the worker alive, so the panel pings it: otherwise Chrome stops the
+ * worker after ~30 s, the port drops, and a click before the reconnect would
+ * open the panel instead of closing it. If the port drops anyway, reconnect.
  */
 export function reportPanelOpen(): void {
   if (!("sidePanel" in chrome)) return; // Firefox toggles its sidebar itself.
@@ -94,7 +96,12 @@ export function reportPanelOpen(): void {
     const name = `${PANEL_PORT_PREFIX}${tab.id}`;
     const connect = () => {
       try {
-        chrome.runtime.connect({ name }).onDisconnect.addListener(() => setTimeout(connect, 200));
+        const port = chrome.runtime.connect({ name });
+        const ping = setInterval(() => port.postMessage("ping"), KEEP_ALIVE_MS);
+        port.onDisconnect.addListener(() => {
+          clearInterval(ping);
+          setTimeout(connect, 200);
+        });
       } catch {
         // Extension reloaded: this panel is orphaned; nothing to report to.
       }
@@ -105,6 +112,8 @@ export function reportPanelOpen(): void {
 
 // Keep in sync with background.ts.
 const PANEL_PORT_PREFIX = "demacia-bom:panel:";
+/** Under Chrome's 30 s idle limit for the service worker. */
+const KEEP_ALIVE_MS = 20_000;
 
 /**
  * The Onshape tab this side panel belongs to. The panel is opened per tab
