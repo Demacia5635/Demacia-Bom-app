@@ -1719,7 +1719,13 @@ export default function AssemblyBomPage() {
         for (const phase of publishPhases(rows)) await publishAll(phase);
 
         // What was published is now saved: update those rows in place (no reload).
-        const nextRows = rows.map((r) =>
+        // Rows expanded or collapsed during the publish keep their new state
+        // (cell edits are blocked while publishing; expanding isn't).
+        const expandedNow = new Map(currentTreeRef.current.rows.map((r) => [r.id, r.isExpanded]));
+        const nextRows = rows.map((snapshot) => {
+          const isExpanded = expandedNow.get(snapshot.id) ?? snapshot.isExpanded;
+          return isExpanded === snapshot.isExpanded ? snapshot : { ...snapshot, isExpanded };
+        }).map((r) =>
           published.has(r.id)
             ? {
                 ...r,
