@@ -63,18 +63,16 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
      * (util/catalogNumbers.ts, the same the BOM extension shows) and throws
      * listing the problems, if any.
      */
-    async function checkCatalogNumbers(topBomId: string) {
+    async function checkCatalogNumbers(topBomId: string, fetchBom: (id: string) => Promise<BomModel>) {
         const names = new Map<string, string>();
         const seen = new Set<string>();
         async function load(bomId: string): Promise<CatalogNode> {
-            const bom = await fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomId)}`);
+            const bom = await fetchBom(bomId);
             const partRecords = await fetchPartsByIds((bom.parts || []).map((p) => p.partID));
-            const children: CatalogNode[] = [];
-            for (const sub of bom.subAssemblies || []) {
-                if (seen.has(sub.bomID)) continue; // a shared sub-assembly is checked once
-                seen.add(sub.bomID);
-                children.push(await load(sub.bomID));
-            }
+            // A shared sub-assembly is checked once; the others load in parallel.
+            const subIds = (bom.subAssemblies || []).map((sub) => sub.bomID).filter((id) => !seen.has(id));
+            subIds.forEach((id) => seen.add(id));
+            const children: CatalogNode[] = await Promise.all([...new Set(subIds)].map((id) => load(id)));
             for (const p of bom.parts || []) {
                 const part = partRecords.get(p.partID) ?? null;
                 const name = part?.name || p.partID;
@@ -109,11 +107,10 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
      * without the parts inside it. Quantities aren't stored: the page shows the
      * BOM's current totals.
      */
-    async function collectWorkOrderParts(targetBomId: string): Promise<WorkorderPartModel[]> {
+    async function collectWorkOrderParts(targetBomId: string, fetchBom: (id: string) => Promise<BomModel>): Promise<WorkorderPartModel[]> {
         if (!targetBomId || targetBomId === "undefined") {
             throw new Error("Assembly ID is missing or undefined.");
         }
-        const fetchBom = (id: string) => fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(id)}`);
         const totals = new Map<string, number>();
         const boughtAssemblies = new Map<string, BomModel>();
         for (const [partID, quantity] of await collectBomParts(fetchBom, targetBomId, 1, [], boughtAssemblies)) {
@@ -175,8 +172,18 @@ export function WorkOrderForm({ bomId, avatarID, onCancel, onBusyChange }: WorkO
             // Random, so two work orders made at the same moment can't collide. Older
             // work orders keep their Date.now() ids (and addresses).
             const id = crypto.randomUUID();
-            await checkCatalogNumbers(bomId);
-            const parts = await collectWorkOrderParts(bomId);
+            // Both walks below read the same assemblies: each is fetched once.
+            const bomRequests = new Map<string, Promise<BomModel>>();
+            const fetchBom = (bomID: string) => {
+                let request = bomRequests.get(bomID);
+                if (!request) {
+                    request = fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(bomID)}`);
+                    bomRequests.set(bomID, request);
+                }
+                return request;
+            };
+            await checkCatalogNumbers(bomId, fetchBom);
+            const parts = await collectWorkOrderParts(bomId, fetchBom);
 
             const payload: WorkorderModel = {
                 id: id,
