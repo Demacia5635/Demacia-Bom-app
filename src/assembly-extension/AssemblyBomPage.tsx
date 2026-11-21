@@ -36,6 +36,7 @@ import PublishBomModal, { type PublishBomFormValues, type PublishCheck, type Pub
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
+import ConfirmModal from "./ConfirmModal";
 import { CATALOG_NUMBER_FORMAT, checkCatalogTree, type CatalogNode } from "../util/catalogNumbers";
 
 function resolveWvm(context: Pick<ReturnType<typeof useOnshapeContext>, "workspaceId" | "versionId">): { wvmType: string; wvmID: string } | null {
@@ -1954,22 +1955,14 @@ export default function AssemblyBomPage() {
    * Onshape lacks). Saves nothing, and discards edits not published yet -
    * after asking, when there are any.
    */
+  const [discardEdits, setDiscardEdits] = useState<string[] | null>(null);
   const handleRefresh = useCallback(() => {
     const editedItems = currentTreeRef.current.rows.filter((r) => changedFields(r, r.loaded).length > 0);
-    if (editedItems.length > 0) {
-      const names = editedItems.slice(0, 5).map((r) => `• ${r.name}`).join("\n");
-      const more = editedItems.length > 5 ? `\n…and ${editedItems.length - 5} more` : "";
-      // A saved copy can't be published (it must be refreshed first), so there
-      // is no way to keep its edits.
-      const keep = cachedAt === null ? "Publish BOM first to keep them. " : "";
-      const ok = window.confirm(
-        `Refresh BOM will discard your unpublished edits to ${editedItems.length} item${editedItems.length === 1 ? "" : "s"}. ` +
-          `They will be lost:\n\n${names}${more}\n\n${keep}Discard and refresh?`
-      );
-      if (!ok) return;
-    }
-    loadTree();
-  }, [loadTree, cachedAt]);
+    // Asked in a panel dialog: window.confirm may not show in Firefox's sidebar.
+    if (editedItems.length > 0) setDiscardEdits(editedItems.map((r) => r.name));
+    else loadTree();
+  }, [loadTree]);
+  const cancelDiscard = useCallback(() => setDiscardEdits(null), []);
 
   if (!rootKey) {
     return (
@@ -2256,6 +2249,34 @@ export default function AssemblyBomPage() {
                   `Close this dialog and press Refresh BOM first.` +
                   (pendingEditCount > 0 ? ` Your unpublished edits in this copy will be lost on Refresh.` : "")
             }
+          />
+        )}
+
+        {discardEdits && (
+          <ConfirmModal
+            title="Discard unpublished edits?"
+            message={
+              <>
+                <p>
+                  Refresh BOM will discard your unpublished edits to {discardEdits.length} item
+                  {discardEdits.length === 1 ? "" : "s"}. They will be lost:
+                </p>
+                <ul className="mt-2 list-disc pl-5 text-sm text-zinc-300">
+                  {discardEdits.slice(0, 5).map((name, i) => (
+                    <li key={i} className="truncate">{name}</li>
+                  ))}
+                  {discardEdits.length > 5 && <li>…and {discardEdits.length - 5} more</li>}
+                </ul>
+                {/* A saved copy can't be published (it must be refreshed first), so its edits can't be kept. */}
+                {cachedAt === null && <p>Publish BOM first to keep them.</p>}
+              </>
+            }
+            confirmLabel="Discard and refresh"
+            onCancel={cancelDiscard}
+            onConfirm={() => {
+              setDiscardEdits(null);
+              loadTree();
+            }}
           />
         )}
 
