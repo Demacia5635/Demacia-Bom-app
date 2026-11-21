@@ -66,6 +66,9 @@ const errorHandler: ErrorRequestHandler = (
 ) => {
     console.error(err.stack);
 
+    // A reply was already (partly) sent: Express's default handler closes it.
+    if (res.headersSent) return next(err);
+
     // Bad input the client can fix (e.g. a wrong field type): say what's wrong.
     if (err.name === "ValidationError" || err.name === "CastError") {
         return res.status(400).json({ message: err.message });
