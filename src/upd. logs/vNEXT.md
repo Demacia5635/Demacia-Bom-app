@@ -22,6 +22,8 @@
 - **Right-clicking a CNC job's shared Links cell acts on the part on that line,** not always on the job's first part. ("Remove from CNC job" used to remove the wrong part.) (B25, `f2d0a45`)
 - **The BOMs page loads at once,** without one extra request per BOM and the "Structuring assembly tree..." wait. (P1, `4886ab3`)
 - Telemetry page: switching the date range quickly can't show an older range's data, and a selected user who isn't in the new range falls back to all users. (W1, W2: `dc24aa4`, `cbacae5`)
+- **Sub-assembly rows on the BOM page are read-only,** like bought items. Edits to them showed on screen but were never saved; sub-assemblies are edited in the extension. (B4, `fde49bd`)
+- **After saving in Part Portal, the list or table behind it shows the new values** right away, instead of the old ones until a reload. (W4, `79799f3`)
 - An internal fix to how BOM-page edits are kept in memory. (W3, `cafabff`)
 
 ## Tables (also in the extension panel)

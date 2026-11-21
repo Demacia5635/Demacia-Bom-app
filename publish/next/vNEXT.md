@@ -34,6 +34,7 @@
 - **On Firefox, the BOM button on the Onshape page tells you to click the toolbar icon instead,** since Firefox doesn't let it open the sidebar. Before, it did nothing. (B10, `b04ea8d`)
 - On Chrome, the toolbar icon and BOM button open and close the panel reliably, also after it has been open a while, and a panel opened while switching tabs stays on the right tab. (E7, `8b2aac5`)
 - Unticking "Show size" or closing the panel stops the size requests to Onshape. (E8, `4895894`)
+- Closing the panel also stops sub-assembly loads that were still running. (P9, `4e2ac98`)
 - If a Refresh BOM fails halfway, the header keeps describing the BOM still shown. (E6, `52892d5`)
 - Assembly names no longer start with a stray space, and record IDs no longer end in "_undefined" when Onshape gives no BOM id. (E2, E3: `516348a`, `dac3361`)
 
