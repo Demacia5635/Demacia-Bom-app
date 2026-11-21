@@ -57,7 +57,8 @@
 4. Publish BOM with an edit: progress, success, and the row is no longer marked as edited. Saved items keep their engineer, new ones get the default. Then try one publish while offline: the error shows inside the dialog.
 5. Tick "Show size", then untick it while sizes are still loading.
 6. The logo on the in-page BOM button looks right.
-7. Firefox only: the BOM button's note to use the toolbar icon, and the sidebar following the active tab.
+7. The table (its code was reorganised on the website side): frozen Avatar and Name columns, the sticky header, resizing and dragging columns, the red problem tooltips, editing a cell (saved on leaving it or Enter), opening and closing rows, and the search and hide filters.
+8. Firefox only: the BOM button's note to use the toolbar icon, and the sidebar following the active tab.
 
 ## Not tested yet
 
