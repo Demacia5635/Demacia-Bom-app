@@ -32,14 +32,7 @@ export default function buildAssemblyBomColumns(cellProblem?: CellProblem, defau
   });
 
   return [
-    {
-      key: "avatar",
-      label: "Avatar",
-      type: "image",
-      isDisabled: isStandardContent,
-      // Several items with the same catalog number, combined into one part (copyRows.ts).
-      badge: (row: AssemblyBomRow) => ((row.copies?.length ?? 0) > 1 ? `×${row.copies!.length} copies` : undefined),
-    },
+    { key: "avatar", label: "Avatar", type: "image", isDisabled: isStandardContent },
     editable("name", "Name", "string"),
     // Parts named only by catalog number (spacers...) can be told apart by size.
     ...(showSize ? [{ key: "size", label: "Size", type: "string", isDisabled: () => true } satisfies ColumnConfig] : []),
