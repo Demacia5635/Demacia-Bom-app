@@ -38,6 +38,9 @@ app.use(cors({
     allowedHeaders: ["Content-Type", "x-client-secret", "Authorization"],
     // Lets the website and extension read it, e.g. to show it with an error.
     exposedHeaders: ["X-Request-Id"],
+    // Browsers may reuse a preflight answer for 2 hours (Chrome's maximum)
+    // instead of sending OPTIONS before every save.
+    maxAge: 7200,
 }));
 
 // Big enough for a whole BOM or a new work order with all its parts
