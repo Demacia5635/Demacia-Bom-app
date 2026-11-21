@@ -62,7 +62,7 @@ npm install
 npm run dev        # tsx watch, listens on http://localhost:5050
 ```
 
-Create `server/.env`:
+Create `server/.env` (copy `server/.env.example`, which lists every setting):
 
 ```env
 PORT=5050
@@ -72,7 +72,7 @@ MONGODB_URI=mongodb+srv://...
 CLIENT_SECRET=some-long-random-string
 
 # Extra browser origins allowed to call the API, comma-separated.
-# localhost:5173 and localhost:5050 are always allowed.
+# localhost:5173 and localhost:5050 are allowed unless NODE_ENV=production.
 ALLOWED_ORIGINS=https://demacia5635.github.io,chrome-extension://ijejpoheiljnajdnanepbkhiegidelkl
 
 # Google Drive (OAuth2 refresh token with Drive scope)
