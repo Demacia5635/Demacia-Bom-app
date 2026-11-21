@@ -924,6 +924,7 @@ export default function AssemblyBomPage() {
 
     setLoading(true);
     setError(null);
+    setPublishError(null);
     setLoadProgress(null);
     // Row images wait for the model-change check before rendering (imageCache.ts).
     beginImageVersionCheck();
@@ -1969,7 +1970,10 @@ export default function AssemblyBomPage() {
             <button
               type="button"
               className="publish-btn-primary px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold shadow-md transition-colors"
-              onClick={() => setPublishOpen(true)}
+              onClick={() => {
+                setPublishError(null);
+                setPublishOpen(true);
+              }}
               disabled={loading || publishing || subtreeLoads > 0 || rows.length === 0}
               title="Save everything shown to the database, replacing the saved data and files, and write edited cells to Onshape"
             >
@@ -2180,6 +2184,7 @@ export default function AssemblyBomPage() {
             preview={publishPreview}
             checks={publishChecks}
             checking={savedRecords === null}
+            error={publishError}
           />
         )}
 

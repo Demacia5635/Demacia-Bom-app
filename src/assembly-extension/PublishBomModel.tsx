@@ -66,6 +66,8 @@ interface PublishBomModalProps {
   onCancel: () => void;
   onSubmit: (values: PublishBomFormValues) => void;
   submitting?: boolean;
+  /** Why the last publish failed; shown above the buttons until the next try. */
+  error?: string | null;
 }
 
 export default function PublishBomModal({
@@ -79,6 +81,7 @@ export default function PublishBomModal({
   preview = null,
   checks = [],
   checking = false,
+  error = null,
 }: PublishBomModalProps) {
   const [name, setName] = useState(initialValues.name ?? "");
   const [description, setDescription] = useState(initialValues.description ?? "");
@@ -230,6 +233,12 @@ export default function PublishBomModal({
                   {item.name}: {item.step}
                 </div>
               ))}
+            </div>
+          )}
+
+          {!submitting && error && (
+            <div className="publish-progress publish-progress-failed" role="alert">
+              {error}
             </div>
           )}
 
