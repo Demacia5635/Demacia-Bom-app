@@ -634,6 +634,7 @@ export default function WorkOrderDetailsPage() {
                 return;
             }
             console.error("Failed to fetch part data for modal portal", err);
+            window.alert(`Couldn't load "${row.name || partId}": ${err?.message || "an unexpected error occurred."}`);
         }
     };
 
