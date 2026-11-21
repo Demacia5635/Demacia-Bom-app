@@ -13,6 +13,8 @@ import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import { matchesSearch, searchPattern } from "../../util/search";
 import Highlight from "../../components/Highlight";
 import { useSearchShortcut } from "../../components/useSearchShortcut";
+import { usePartInAddress } from "../../components/usePartInAddress";
+import CopyButton from "../../components/CopyButton";
 
 /** A search result: a part, or a sub-assembly (an assembly some other assembly uses). */
 type SearchItem =
@@ -48,6 +50,8 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const [items, setItems] = useState<SearchItem[]>([]);
     /** The part shown in Part Portal (null: closed). */
     const [openPart, setOpenPart] = useState<PartModel | null>(null);
+    // ?part=<id> opens that part, and the address follows Part Portal (shareable link).
+    usePartInAddress(openPart, setOpenPart);
     // Without these, a slow or failed load showed "Nothing found", as if the database were empty.
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<ApiError | null>(null);
@@ -221,6 +225,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
 
                                         <p className={`text-xs font-mono ${theme.textMuted}`}>
                                             Cat #: <span className={theme.textValue}><Highlight text={part.catalogNumber || "N/A"} pattern={pattern} /></span>
+                                            {part.catalogNumber && <CopyButton text={part.catalogNumber} what="catalog number" />}
                                         </p>
 
                                         {part.description && (

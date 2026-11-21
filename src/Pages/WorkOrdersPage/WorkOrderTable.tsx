@@ -5,6 +5,7 @@ import type { WorkOrderRow } from "../../util/Models";
 import { recordImageSrc } from "../../util/recordImage";
 import ImageLightbox from "../../components/ImageLightbox";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
+import { CatalogNumber } from "../../components/CopyButton";
 
 export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workOrders }) => {
     const navigate = useNavigate();
@@ -61,7 +62,7 @@ export const WorkOrderTable: React.FC<{ workOrders: WorkOrderRow[] }> = ({ workO
                                     {wo.name || "Unnamed Work Order"}
                                 </td>
                                 <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
-                                    {wo.catalogNumber || "N/A"}
+                                    <CatalogNumber value={wo.catalogNumber} />
                                 </td>
                                 <td className={`py-3 px-4 text-sm ${theme.textMuted}`}>
                                     {wo.bomName || "N/A"}

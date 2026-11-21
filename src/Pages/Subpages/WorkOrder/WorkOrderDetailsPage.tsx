@@ -23,6 +23,7 @@ import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 import { showToast } from "../../../util/toast";
+import { usePartInAddress } from "../../../components/usePartInAddress";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -51,6 +52,8 @@ export default function WorkOrderDetailsPage() {
     );
 
     const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
+    // ?part=<id> opens that part's Part Portal, and the address follows it (shareable link).
+    usePartInAddress(selectedPart, setSelectedPart);
     // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
     const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
     const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<WorkOrderTableRow>();

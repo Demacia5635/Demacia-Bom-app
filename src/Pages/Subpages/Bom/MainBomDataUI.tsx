@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { WorkOrderForm } from "./WorkOrderForm";
 import { recordImageSrc } from "../../../util/recordImage";
 import RecordHeaderCard from "../../../components/RecordHeaderCard";
+import { CatalogNumber } from "../../../components/CopyButton";
 
 const ACTION_BUTTON = "px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold tracking-wide transition-all shadow-md w-full lg:w-auto text-center";
 
@@ -23,7 +24,7 @@ const MainBomDataUI: React.FC<{ bom: BomModel }> = ({ bom }) => {
         title={bom.name || "Unnamed Assembly"}
         description={bom.description}
         facts={[
-          { label: "Catalog No", value: bom.catalogNumber || "N/A" },
+          { label: "Catalog No", value: <CatalogNumber value={bom.catalogNumber} onHover={false} /> },
           { label: "Engineer", value: bom.engineer || "N/A" },
         ]}
         actions={

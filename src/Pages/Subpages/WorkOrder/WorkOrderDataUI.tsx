@@ -3,6 +3,7 @@ import type { WorkOrderModel, BomModel } from "../../../util/Models";
 import { fetchFromApi } from "../../../util/ApiService";
 import { recordImageSrc } from "../../../util/recordImage";
 import RecordHeaderCard from "../../../components/RecordHeaderCard";
+import { CatalogNumber } from "../../../components/CopyButton";
 
 interface WorkOrderDataUIProps {
     workOrder: WorkOrderModel;
@@ -36,7 +37,7 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder }) => {
             description={workOrder.description}
             facts={[
                 // Not stored on the work order: the assembly's.
-                { label: "Catalog No", value: bomData?.catalogNumber || "N/A" },
+                { label: "Catalog No", value: <CatalogNumber value={bomData?.catalogNumber} onHover={false} /> },
                 { label: "Owner", value: workOrder.workOrderOwner || "N/A" },
                 { label: "Parts", value: workOrder.parts?.length || 0 },
             ]}

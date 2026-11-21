@@ -10,6 +10,9 @@ import { openExternal } from "../../util/openExternal";
 import ImageLightbox from "../../components/ImageLightbox";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import { showToast } from "../../util/toast";
+import CopyButton from "../../components/CopyButton";
+import { copyToClipboard, partLink } from "../../util/clipboard";
+import { Link2 } from "lucide-react";
 
 /** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
 const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
@@ -169,8 +172,9 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                 {/* Row 1: Catalog Number & Revision & Engineer */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
-                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider flex items-center ${labelColor}`}>
                             Catalog Number
+                            {formData.catalogNumber && <CopyButton text={formData.catalogNumber} what="catalog number" onHover={false} />}
                         </label>
                         <input
                             type="text"
@@ -357,7 +361,16 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
 
                 {/* Footer Actions */}
                 {/* Onshape opens from its card, next to the STL / Parasolid downloads. */}
-                <div className={`flex flex-col sm:flex-row items-center justify-end gap-4 pt-3 border-t ${theme.border}`}>
+                <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t ${theme.border}`}>
+                    {/* A link that opens this part's Part Portal (QW5). */}
+                    <button
+                        type="button"
+                        onClick={() => void copyToClipboard(partLink(part.id), "link")}
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold border ${theme.border} ${theme.textValue} hover:bg-zinc-500/10`}
+                    >
+                        <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        Copy link
+                    </button>
                     {/* The note is on the wrapper: a disabled button gets no hover in some browsers. */}
                     <div
                         className="flex items-center gap-3 w-full sm:w-auto"

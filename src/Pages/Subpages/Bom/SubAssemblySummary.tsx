@@ -5,6 +5,7 @@ import { openExternal } from "../../../util/openExternal";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { recordImageSrc } from "../../../util/recordImage";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
+import CopyButton from "../../../components/CopyButton";
 
 /**
  * "Show Part Data" for a sub-assembly the team makes: it has only a BOM
@@ -47,7 +48,10 @@ export default function SubAssemblySummary({ bom }: { bom: BomModel }) {
                 {fields.map(([label, value]) => (
                     <div key={label} className={label === "Description" || label === "Comments" ? "sm:col-span-2" : ""}>
                         <dt className={`text-xs font-semibold uppercase tracking-wide ${labelColor}`}>{label}</dt>
-                        <dd className={`mt-1 text-sm whitespace-pre-wrap break-words ${theme.textValue}`}>{value?.trim() || "—"}</dd>
+                        <dd className={`mt-1 text-sm whitespace-pre-wrap break-words ${theme.textValue}`}>
+                            {value?.trim() || "—"}
+                            {label === "Catalog #" && value?.trim() && <CopyButton text={value.trim()} what="catalog number" onHover={false} />}
+                        </dd>
                     </div>
                 ))}
             </dl>

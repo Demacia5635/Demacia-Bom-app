@@ -20,6 +20,7 @@ import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
 import { showToast } from "../../../util/toast";
+import { usePartInAddress } from "../../../components/usePartInAddress";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -155,6 +156,8 @@ export default function BomDetailsPage() {
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
 
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
+  // ?part=<id> opens that part's Part Portal, and the address follows it (shareable link).
+  usePartInAddress(selectedPart, setSelectedPart);
   /** "Show Part Data" of a made sub-assembly (only a BOM record): read-only summary. */
   const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
   const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<BomTableRow>();
