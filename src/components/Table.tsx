@@ -178,9 +178,9 @@ export function Table<T extends RowData>({ data, columnsData, newRowFunction, se
     };
 
     const handleAddRow = (parentId: string | null = null) => {
-        const newId = Date.now().toString();
         if (!newRowFunction) return;
-        const newRow = newRowFunction(newId, parentId);
+        // Random, so two rows added in the same millisecond can't share an id.
+        const newRow = newRowFunction(crypto.randomUUID(), parentId);
 
         let newData = [...data, newRow];
         if (parentId !== null) newData = newData.map(row => row.id === parentId ? { ...row, isExpanded: true } : row);
