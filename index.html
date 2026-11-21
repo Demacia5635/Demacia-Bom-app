@@ -7,6 +7,16 @@
     <title>Demacia BOM</title>
   </head>
   <body>
+    <!-- The saved theme before anything is drawn, so light-theme users see no dark
+         flash while the app loads (util/misc/useThemeSync.ts keeps it in step). -->
+    <script>
+      try {
+        var light = localStorage.getItem("theme-preference") === "light";
+        document.body.className = light ? "light-theme-active" : "dark-theme-active";
+      } catch (e) {
+        document.body.className = "dark-theme-active";
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* The page's colours from the first paint: index.html sets the theme class on
+   <body> before the app loads (same colours as MainLayout's background). */
+body.dark-theme-active {
+  background-color: var(--color-gray-950);
+}
+body.light-theme-active {
+  background-color: var(--color-zinc-50);
+}
