@@ -36,6 +36,7 @@ import { assemblyKeyId, bomIdOf, itemKey, keyOf, keyString, recordId } from "./o
 import ConfirmModal from "./ConfirmModal";
 import ProgressBar from "./ProgressBar";
 import BomToolbar from "./BomToolbar";
+import BomHeader from "./BomHeader";
 import {
   catalogNumberInName,
   changedFields,
@@ -1532,64 +1533,25 @@ export default function AssemblyBomPage() {
   return (
     <div className="assembly-bom-page p-8 flex gap-6">
       <div className="flex-1">
-        <div className="assembly-bom-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
-          <div>
-            <h1 className="assembly-bom-title text-2xl font-bold">{displayName}</h1>
-            {(rootOnshapeBom?.description || rootBomDB?.description) && (
-              <p className="assembly-bom-subtitle text-zinc-500 text-sm mt-1">{rootOnshapeBom?.description || rootBomDB?.description}</p>
-            )}
-            {!rootIsPublished && (
-              <p className="assembly-bom-unpublished-hint text-xs text-blue-500 mt-1 italic">
-                This assembly isn't in the database yet - it's showing live Onshape data.
-              </p>
-            )}
-            {topProblem && (
-              <p className="assembly-bom-top-problem text-xs mt-1" title="Set the top assembly's catalog number in Onshape (Part number) or in the Publish BOM form">
-                ⚠ {topAssembly.number ? `Catalog number ${topAssembly.number}: ` : ""}{topProblem}
-              </p>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {theme && (
-              // Same as the website's switch (components/Appbar.tsx).
-              <button
-                type="button"
-                onClick={theme.toggle}
-                aria-label="Toggle Theme"
-                title={theme.isLight ? "Switch to dark mode" : "Switch to light mode"}
-                className={`p-1.5 rounded-md text-sm transition-colors ${
-                  theme.isLight ? "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100" : "text-gray-300 hover:text-white hover:bg-gray-800"
-                }`}
-              >
-                {theme.isLight ? "🌙" : "☀️"}
-              </button>
-            )}
-            <button
-              type="button"
-              className="publish-btn-primary shadow-md"
-              onClick={handleRefresh}
-              disabled={loading || publishing || subtreeLoads > 0}
-              title="Reload everything from Onshape (the database only for fields Onshape doesn't have). Saves nothing; discards edits not published yet."
-            >
-              {loading ? "Refreshing..." : "Refresh BOM"}
-            </button>
-
-            <button
-              type="button"
-              className="publish-btn-primary shadow-md"
-              onClick={() => {
-                setPublishError(null);
-                setSavedRecords(null); // checked again for this dialog
-                setPublishOpen(true);
-              }}
-              disabled={loading || publishing || subtreeLoads > 0 || rows.length === 0}
-              title="Save everything shown to the database, replacing the saved data and files, and write edited cells to Onshape"
-            >
-              {publishing ? "Publishing..." : pendingEditCount > 0 ? `Publish BOM (${pendingEditCount} changes)` : "Publish BOM"}
-            </button>
-          </div>
-        </div>
+        <BomHeader
+          displayName={displayName}
+          description={rootOnshapeBom?.description || rootBomDB?.description}
+          rootIsPublished={rootIsPublished}
+          topProblem={topProblem}
+          topNumber={topAssembly.number}
+          theme={theme}
+          busy={loading || publishing || subtreeLoads > 0}
+          loading={loading}
+          publishing={publishing}
+          hasRows={rows.length > 0}
+          pendingEditCount={pendingEditCount}
+          onRefresh={handleRefresh}
+          onPublish={() => {
+            setPublishError(null);
+            setSavedRecords(null); // checked again for this dialog
+            setPublishOpen(true);
+          }}
+        />
 
         {error && (
           <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
