@@ -33,7 +33,7 @@ import PublishBomModal, {
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
-import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, recordId } from "./onshapeKeys";
+import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, keyOf, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
 import ProgressBar from "./ProgressBar";
 import {
@@ -55,7 +55,11 @@ import {
 } from "./treeLoader";
 import BomToolbar from "./BomToolbar";
 import BomHeader from "./BomHeader";
-import { bomPageUrl } from "./websiteLinks";
+import { bomPageUrl, partPageUrl } from "./websiteLinks";
+import { useRowContextMenu } from "../components/useRowContextMenu";
+import RowMenu from "./RowMenu";
+import { suggestFix } from "./problemFixes";
+import { openExternal } from "../util/openExternal";
 import { useServerStatus } from "./useServerStatus";
 import { useOnshapeChangeWatch } from "./useOnshapeChangeWatch";
 import { notifyPublishEnded } from "./publishNotify";
@@ -661,6 +665,50 @@ export default function AssemblyBomPage() {
   );
   const revertRow = useCallback((row: AssemblyBomRow) => revertRows(new Set([row.id])), [revertRows]);
 
+  /**
+   * Right-click on a row: 💡 a suggested fix for the clicked red cell
+   * (problemFixes.ts, an ordinary undoable edit), "Open on the website" for
+   * items in the database, and "Copy Onshape link". Shift+right-click keeps
+   * the browser's own menu (copy / paste in a cell).
+   */
+  const { menu: rowMenu, openFor: openRowMenu, close: closeRowMenu } = useRowContextMenu<AssemblyBomRow>();
+  const [rowMenuField, setRowMenuField] = useState<string | null>(null);
+  const onTableContextMenu = useCallback(
+    (e: React.MouseEvent<HTMLElement>) => {
+      const target = e.target as HTMLElement;
+      if (e.shiftKey || !target.closest("tr[data-row-id]")) return; // header, or the browser's menu
+      setRowMenuField(target.closest("td")?.dataset.colKey ?? null);
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      openRowMenu(e, (tr) => byId.get((tr as HTMLElement).dataset.rowId ?? ""));
+    },
+    [rows, openRowMenu]
+  );
+  /** Puts `value` in the `field` cell of every use of the item (a normal edit). */
+  const applyFix = useCallback(
+    (row: AssemblyBomRow, field: string, value: string) => {
+      handleTableEdit(rows.map((r) => (r.id === row.id ? ({ ...r, [field]: value } as AssemblyBomRow) : r)));
+    },
+    [rows, handleTableEdit]
+  );
+  /** The right-clicked cell's problem, and the fix offered for it. */
+  const rowMenuProblem = rowMenu && rowMenuField ? workOrderProblems.get(rowMenu.row.id)?.get(rowMenuField) : undefined;
+  const rowMenuFix = useMemo(
+    () => (rowMenu && rowMenuField && rowMenuProblem ? suggestFix(rowMenu.row, rowMenuField, rows, onshapeUserName) : null),
+    [rowMenu, rowMenuField, rowMenuProblem, rows, onshapeUserName]
+  );
+  const applyRowMenuFix = useCallback(() => {
+    if (rowMenu && rowMenuFix) applyFix(rowMenu.row, rowMenuFix.field, rowMenuFix.value);
+  }, [rowMenu, rowMenuFix, applyFix]);
+  const copyText = useCallback(
+    (text: string, what: string) => {
+      navigator.clipboard.writeText(text).then(
+        () => client.showMessageBubble(`${what} copied.`),
+        () => client.showMessageBubble(`Couldn't copy the ${what.toLowerCase()}.`)
+      );
+    },
+    [client]
+  );
+
   // Rebuilt when the problems change (after edits): cheap, the table only
   // re-reads its column list.
   const columns = useMemo(
@@ -1256,6 +1304,7 @@ export default function AssemblyBomPage() {
             editedItemCount={busy ? 0 : editedItemCount}
             onRevertAll={onRevertAll}
           />
+          <div onContextMenuCapture={onTableContextMenu}>
           <Table
             data={rows}
             columnsData={columns}
@@ -1268,6 +1317,25 @@ export default function AssemblyBomPage() {
             rowFilter={searchFilter}
             hideRow={hideRow}
           />
+          </div>
+          {rowMenu && (
+            <RowMenu
+              x={rowMenu.x}
+              y={rowMenu.y}
+              problem={rowMenuProblem}
+              fix={rowMenuFix}
+              canEdit={!busy}
+              inDatabase={rowMenu.row.source === "db"}
+              onApplyFix={applyRowMenuFix}
+              onOpenWebsite={() =>
+                openExternal(rowMenu.row.isAssembly ? bomPageUrl(rowMenu.row.id) : partPageUrl(rowMenu.row.id))
+              }
+              onCopyOnshapeLink={() =>
+                copyText(rowMenu.row.onshapeURL || buildOnshapeElementURL(context.server, keyOf(rowMenu.row)), "Onshape link")
+              }
+              onClose={closeRowMenu}
+            />
+          )}
           </>
         )}
 
