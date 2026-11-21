@@ -19,13 +19,10 @@ export function checkAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(403).json({ message: 'Origin not allowed' });
   }
 
-  // Public health checks only. (There used to be an "/auth" bypass, matched
-  // anywhere in the URL - even "?x=/auth" skipped the secret. The auth routes
-  // are gone, and so is the bypass.)
-  if (req.path === '/health' || req.path === '/') {
-    console.log(`>>> [AUTH BYPASS] Allowing public route: ${req.originalUrl}`);
-    return next();
-  }
+  // The public health check, GET /api, needs no secret. (There used to be an
+  // "/auth" bypass, matched anywhere in the URL - even "?x=/auth" skipped the
+  // secret. The auth routes are gone, and so is the bypass.)
+  if (req.path === '/') return next();
 
   const clientSecret = req.headers['x-client-secret'];
 
