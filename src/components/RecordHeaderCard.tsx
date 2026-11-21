@@ -11,6 +11,8 @@ interface RecordHeaderCardProps {
   description?: string;
   /** Shown as "Label: value" under the title. */
   facts: { label: string; value: ReactNode }[];
+  /** In the middle of the card, right of the title and facts (e.g. totals). */
+  middle?: ReactNode;
   /** Buttons on the right (above the comments). */
   actions?: ReactNode;
   comments?: string;
@@ -18,7 +20,7 @@ interface RecordHeaderCardProps {
 }
 
 /** The card at the top of a BOM or work-order page: image, title, facts, actions and comments. */
-export default function RecordHeaderCard({ imageSrc, imageAlt, title, description, facts, actions, comments, className = "" }: RecordHeaderCardProps) {
+export default function RecordHeaderCard({ imageSrc, imageAlt, title, description, facts, middle, actions, comments, className = "" }: RecordHeaderCardProps) {
   const theme = useThemeClasses();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
 
@@ -57,6 +59,8 @@ export default function RecordHeaderCard({ imageSrc, imageAlt, title, descriptio
           </div>
         </div>
       </div>
+
+      {middle && <div className="lg:flex-1 flex lg:justify-center">{middle}</div>}
 
       <div className={`flex flex-col items-start lg:items-end gap-3 self-stretch lg:self-auto shrink-0 border-t lg:border-t-0 ${theme.border} pt-4 lg:pt-0`}>
         {actions}

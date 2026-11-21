@@ -16,7 +16,7 @@ import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 import { useCncGroups } from "./useCncGroups";
-import { toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
+import { isFinishedRow, isPurchasedRow, toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
 import WorkOrderFilters from "./WorkOrderFilters";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
@@ -197,6 +197,16 @@ export default function WorkOrderDetailsPage() {
 
     // ---- Filters for the people making the parts (remembered in this browser) ----
     const filters = useWorkOrderFilters();
+    // The header's totals (QW11): made = not purchased and tracked, as the filters count them.
+    const rowTotals = useMemo(() => {
+        const made = rows.filter((r) => !isPurchasedRow(r) && r.statusCode !== "Untracked");
+        return {
+            parts: rows.length,
+            quantity: rows.reduce((sum, r) => sum + (r.quantityTotal || 0), 0),
+            made: made.length,
+            finished: made.filter(isFinishedRow).length,
+        };
+    }, [rows]);
     const { rowFilter } = filters;
     const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
 
@@ -257,7 +267,7 @@ export default function WorkOrderDetailsPage() {
         <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
             {workOrderData && (
-                <WorkOrderDataUI workOrder={workOrderData} />
+                <WorkOrderDataUI workOrder={workOrderData} totals={loading ? undefined : rowTotals} />
             )}
             {/* Under the title card: the note on the left, "Show size" on the right. */}
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 -mt-3 mb-3">

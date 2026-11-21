@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, useRef, type MouseEvent } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Table from "../../../components/Table";
 import { fetchFromApi, type ApiError } from "../../../util/ApiService";
@@ -9,7 +9,7 @@ import SubAssemblySummary from "./SubAssemblySummary";
 import BomColumns from "./BomColumns";
 import PartPortal from "../../../Pages/SearchPartsPage/PartPortal";
 import { recordImageSrc } from "../../../util/recordImage";
-import { loadBomTree, type BomTree } from "../../../util/bomTree";
+import { loadBomTree, workOrderLines, type BomTree } from "../../../util/bomTree";
 import { useThemeSync } from "../../../util/misc/useThemeSync";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
@@ -165,6 +165,16 @@ export default function BomDetailsPage() {
   const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<BomTableRow>();
   const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
   const [tree, setTree] = useState<BomTree | null>(null);
+  // The header's totals: distinct parts and pieces for one assembly (QW11).
+  const treeTotals = useMemo(() => {
+    if (!tree) return undefined;
+    try {
+      const { totals } = workOrderLines(tree);
+      return { parts: totals.size, quantity: [...totals.values()].reduce((a, b) => a + b, 0) };
+    } catch {
+      return undefined; // a BOM that contains itself: the table says what's wrong
+    }
+  }, [tree]);
   const [view, setView] = useState<BomView>(savedView);
   /** "Show size" checkbox, shared with the work-order page (remembered in this browser). */
   const [showSize, setShowSize] = useState(readShowSize);
@@ -332,7 +342,7 @@ export default function BomDetailsPage() {
     <div className={`p-8 min-h-screen transition-colors duration-200 ${theme.page}`}>
 
       {mainBomData && (
-        <MainBomDataUI bom={mainBomData} />
+        <MainBomDataUI bom={mainBomData} totals={treeTotals} />
       )}
       {Object.keys(saveErrors).length > 0 && (
         <ErrorBanner title="Changes not saved" className="mb-6 p-4 rounded-lg">
