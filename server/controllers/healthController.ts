@@ -1,6 +1,16 @@
+import { timingSafeEqual } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import { isConnected } from "../db/connection";
 import { isAllowedOrigin, CLIENT_SECRET as CLIENT_SECRET_KEY } from "../config";
+
+const SECRET = Buffer.from(CLIENT_SECRET_KEY);
+
+/** Compares in constant time, so response timing doesn't reveal the secret. */
+function isClientSecret(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  const given = Buffer.from(value);
+  return given.length === SECRET.length && timingSafeEqual(given, SECRET);
+}
 
 export function checkAuth(req: Request, res: Response, next: NextFunction) {
   const origin = req.headers.origin;
@@ -20,7 +30,7 @@ export function checkAuth(req: Request, res: Response, next: NextFunction) {
   const clientSecret = req.headers['x-client-secret'];
 
   // Never match an empty secret (config.ts already refuses to start without one).
-  if (!CLIENT_SECRET_KEY || clientSecret !== CLIENT_SECRET_KEY) {
+  if (!CLIENT_SECRET_KEY || !isClientSecret(clientSecret)) {
     console.warn(`>>> [AUTH FAILED] Blocked route missing/invalid client secret: ${req.originalUrl}`);
     return res.status(401).json({ message: 'Invalid or missing client secrets' });
   }
