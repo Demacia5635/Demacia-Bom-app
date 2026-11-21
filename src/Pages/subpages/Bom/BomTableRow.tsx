@@ -35,3 +35,12 @@ export default interface BomTableRow extends RowData {
 export function isLockedBomRow(row: BomTableRow): boolean {
   return row.vendor !== "" || !!row.isStandardContent || !!row.markedStandard;
 }
+
+/**
+ * Cells that can't be edited on the BOM page: bought items (isLockedBomRow) and
+ * sub-assemblies, whose details are edited in the BOM extension (edits here
+ * were never saved).
+ */
+export function isReadOnlyBomRow(row: BomTableRow): boolean {
+  return !!row.isSubAssembly || isLockedBomRow(row);
+}

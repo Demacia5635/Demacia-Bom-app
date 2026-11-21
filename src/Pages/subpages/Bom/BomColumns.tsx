@@ -2,22 +2,22 @@ import type { ColumnConfig } from "../../../components/Table";
 import { downloadDriveFile } from "../../../util/ApiService";
 import { openExternal } from "../../../util/openExternal";
 import type BomTableRow from "./BomTableRow";
-import { isLockedBomRow } from "./BomTableRow";
+import { isReadOnlyBomRow } from "./BomTableRow";
 
 const BomColumns: ColumnConfig[] = [
-  { key: "avatar", label: "Avatar", type: "image", isDisabled: isLockedBomRow },
-  { key: "name", label: "Name", type: "string", isDisabled: isLockedBomRow },
+  { key: "avatar", label: "Avatar", type: "image", isDisabled: isReadOnlyBomRow },
+  { key: "name", label: "Name", type: "string", isDisabled: isReadOnlyBomRow },
   // Shown by the "Show size" checkbox (BomDetailsPage); saved by Publish BOM.
   { key: "size", label: "Size", type: "string", isDisabled: () => true },
-  { key: "description", label: "Description", type: "string", isDisabled: isLockedBomRow },
-  { key: "catalogNumber", label: "Catalog No.", type: "string", isDisabled: isLockedBomRow },
-  { key: "revision", label: "Revision", type: "string", isDisabled: isLockedBomRow },
-  { key: "engineer", label: "Engineer", type: "string", isDisabled: isLockedBomRow },
+  { key: "description", label: "Description", type: "string", isDisabled: isReadOnlyBomRow },
+  { key: "catalogNumber", label: "Catalog No.", type: "string", isDisabled: isReadOnlyBomRow },
+  { key: "revision", label: "Revision", type: "string", isDisabled: isReadOnlyBomRow },
+  { key: "engineer", label: "Engineer", type: "string", isDisabled: isReadOnlyBomRow },
   { key: "quantity", label: "Quantity", type: "number", isDisabled: () => true },
-  { key: "material", label: "Material", type: "string", isDisabled: isLockedBomRow },
-  { key: "mass", label: "Mass", type: "number", isDisabled: isLockedBomRow },
-  { key: "price", label: "Price", type: "number", isDisabled: isLockedBomRow },
-  { key: "comments", label: "Comments", type: "string", isDisabled: isLockedBomRow },
+  { key: "material", label: "Material", type: "string", isDisabled: isReadOnlyBomRow },
+  { key: "mass", label: "Mass", type: "number", isDisabled: isReadOnlyBomRow },
+  { key: "price", label: "Price", type: "number", isDisabled: isReadOnlyBomRow },
+  { key: "comments", label: "Comments", type: "string", isDisabled: isReadOnlyBomRow },
   
   // External Link Action (Sub-assemblies can open their Onshape document URL if available)
   {
