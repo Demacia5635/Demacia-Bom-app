@@ -10,7 +10,7 @@ Website changes are logged in `src/upd. logs/`, server changes in `server/upd. l
 
 | Version | Built | Highlights |
 |---|---|---|
-| [3.1.0](3.1.0/v3.1.0.md) | Not built yet | Copies of a part drawn several times combine into one row |
+| [3.2.0](3.2.0/v3.2.0.md) | Not built yet | Copies of a part drawn several times combine into one row; "Not the same part" to split them |
 | [3.0.0](3.0.0/v3.0.0.md) | 2026-11-17 23:17 | Show part sizes; panel toggle; polycarbonate → Parasolid; redder problem cells |
 | [2.0.0](2.0.0/v2.0.0.md) | 2026-11-15 20:13 | Safe Publish BOM, correct sub-assembly quantities, vendor parts always standard, no ghost rows |
 | [1.0.0](1.0.0/v1.0.0.md) | 2026-11-14 23:00 | The version in use before the code review |
