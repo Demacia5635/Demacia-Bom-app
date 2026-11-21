@@ -15,7 +15,7 @@ import { fetchPartsByIds } from "../../../util/records";
 import { printPartsPdf } from "../../../util/exportPartsPdf";
 import { partDisplayName } from "../../../util/partDisplayName";
 import { readShowSize, writeShowSize } from "../../../util/partSize";
-import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, type CncGroup } from "./cncGroups";
+import { applyCncGroups, combinedLinks, isCncCandidate, suggestCncGroups, toCncGroups, type CncGroup } from "./cncGroups";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -326,7 +326,7 @@ export default function WorkOrderDetailsPage() {
     // The work order's groups, as loaded (later changes come back from the server).
     useEffect(() => {
         const loaded = (workOrderData?.id === workOrderID ? workOrderData?.cncGroups : undefined) ?? [];
-        setCncGroups(loaded.map((g) => ({ id: g.id, partIDs: g.partIDs ?? [], links: g.links ?? "" })));
+        setCncGroups(toCncGroups(loaded));
         setMergeSelection([]);
     }, [workOrderData, workOrderID]);
 
@@ -351,10 +351,9 @@ export default function WorkOrderDetailsPage() {
             cncShownSeqRef.current = seq;
             setCncGroups((current) => {
                 const localLinks = new Map(current.map((g) => [g.id, g.links]));
-                return (serverGroups ?? []).map((g) => {
+                return toCncGroups(serverGroups).map((g) => {
                     const typedLater = groupLinkTimersRef.current.has(g.id) || (linksRequestSeqRef.current.get(g.id) ?? 0) > seq;
-                    const links = typedLater && localLinks.has(g.id) ? localLinks.get(g.id)! : g.links ?? "";
-                    return { id: g.id, partIDs: g.partIDs ?? [], links };
+                    return typedLater && localLinks.has(g.id) ? { ...g, links: localLinks.get(g.id)! } : g;
                 });
             });
         };

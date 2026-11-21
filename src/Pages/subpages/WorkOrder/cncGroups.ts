@@ -13,6 +13,11 @@ export interface CncGroup {
   links: string;
 }
 
+/** Groups as stored or sent by the server (fields may be missing), with the defaults filled in. */
+export function toCncGroups(groups: { id: string; partIDs?: string[]; links?: string }[] | undefined): CncGroup[] {
+  return (groups ?? []).map((g) => ({ id: g.id, partIDs: g.partIDs ?? [], links: g.links ?? "" }));
+}
+
 /** Methods whose parts are never cut on the CNC, so they aren't suggested. */
 const NOT_CNC = new Set(["Lathed", "Printed", "Externally produced", "Purchased"]);
 
