@@ -25,6 +25,7 @@
 - A file download can no longer be cancelled by the browser right after it starts. (W15, `028af0c`)
 - A download that gets an unexpected answer from the server shows an error instead of saving an empty or broken file. (W16, `78daf59`)
 - **The browser tab says "Demacia BOM"** instead of "bom-app". (W18, `d0a157e`)
+- A BOM page asks the server for its assembly once instead of twice, and a work order's header picture can't show the previous work order's when you switch quickly. (P6, `25bcd78`)
 - **New work orders get a long random ID** (and so a longer address, /workOrder/<id>), so two people creating one at the same moment can't collide. Existing work orders keep their IDs and addresses. (W17, `c5de334`)
 - Each page of the site loads the first time you open it, so the first page appears faster; "Loading..." shows briefly the first time. **After a new version is deployed, a tab that was already open reloads itself** when it next changes page, instead of breaking. (P11, `79f2ce7`)
 - The PDF export always frees the memory of its pictures, even when drawing one fails. (T6, `ddbcbe8`)
