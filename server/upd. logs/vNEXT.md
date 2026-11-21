@@ -15,6 +15,14 @@
 - If the database address is missing, the server now says "MONGODB_URI is not set" instead of "Failed to connect to .env". (D7, `830552b`)
 - An error after a reply was already sent no longer causes a second, broken reply. (D6, `d8f0254`)
 - The server accepts saves of up to 2 MB (was 100 KB), so publishing a very large BOM or sending a big batch of usage events no longer fails with "too large". (D5, `e796f25`)
+- A new work order keeps one entry per part, even if the same part was sent twice. (D3, `bc1505a`)
+- New BOM and work-order records get a database `_id` like other records. Existing records and API replies are unchanged. (D8, `2bd9b0e`)
+- Saves report "created" or "updated" from the write itself, not from a separate check that could race. (D4, `a6ae80f`)
+- Drive files are cached by the browser only, not by shared proxies. (D9, `4b983af`)
+- **Removed:** the unused numeric work-order status list and its two routes (`/api/enum/status/...`), the unused Drive folder route, and the unused folder helpers. Nothing in the website or extension used them. (`42b0765`, `292730e`)
+- `/api/health` now answers 401 instead of 404 (it never existed). `GET /api` stays public. The health check no longer logs a line on every call. (`1ef623a`)
+- A browser pre-check ("preflight") from a website that isn't allowed now gets 403 instead of an empty 204. Allowed websites are unaffected. (`98c06b2`)
+- Code cleanup with no change in behaviour: one shared batch lookup for parts and BOMs, the access check moved to `server/auth.ts`, a typo fixed in a function name, a type import fixed, and a broken model reference removed. (R10, C4, X1: `b862a02`, `4554b49`, `b3429fb`, `8beb1fd`, `287f58f`)
 
 ## Before you deploy
 
@@ -28,4 +36,4 @@
 
 ## Not tested yet
 
-- Not run against a real database (no local MongoDB was available). Type-checked only.
+- Not run against a real database or Drive (no local MongoDB was available). Checked with type-checks, mocked requests and starting the server without a database. After deploying, save one new and one existing record once to check the "created"/"updated" answers (D4).

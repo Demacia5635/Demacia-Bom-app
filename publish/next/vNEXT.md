@@ -29,6 +29,13 @@
 - **A saved copy must be refreshed before it can be published.** When the panel shows a copy saved in the browser ("Saved copy from 3 days ago"), Publish BOM is disabled and the dialog says to press Refresh BOM first, because Onshape may have changed since. If the copy has unpublished edits, it warns that they'll be lost on Refresh. Before, an old copy could be published over newer data. (B13, `ab6c8f1`)
 - On Firefox, a BOM sidebar opened from the sidebar menu follows the tab you switch to, instead of staying on the first one. (B11, `ebc3275`)
 - Opening or closing rows while Publish BOM runs is no longer undone when it finishes. (E1, `e133abe`)
+- **The Default engineer in the Publish dialog only applies to items that aren't in the database yet.** New items get your Onshape name (shown greyed in their empty Engineer cell), or whatever you type in the dialog, or nothing if you clear it. Items already saved keep their saved engineer, even an empty one, and a saved made part with no engineer is now flagged for work orders. (E4, `bbe3152`)
+- **Refresh BOM asks before throwing away unpublished edits in a dialog inside the panel** ("Discard unpublished edits?", listing the items), instead of the browser's pop-up, which Firefox's sidebar may block. (E5, `ea62f6d`)
+- **On Firefox, the BOM button on the Onshape page tells you to click the toolbar icon instead,** since Firefox doesn't let it open the sidebar. Before, it did nothing. (B10, `b04ea8d`)
+- On Chrome, the toolbar icon and BOM button open and close the panel reliably, also after it has been open a while, and a panel opened while switching tabs stays on the right tab. (E7, `8b2aac5`)
+- Unticking "Show size" or closing the panel stops the size requests to Onshape. (E8, `4895894`)
+- If a Refresh BOM fails halfway, the header keeps describing the BOM still shown. (E6, `52892d5`)
+- Assembly names no longer start with a stray space, and record IDs no longer end in "_undefined" when Onshape gives no BOM id. (E2, E3: `516348a`, `dac3361`)
 
 ## Removed
 
@@ -36,6 +43,6 @@
 
 ## Not tested yet
 
-- The checklist fixes haven't been run in the real extension, and no failure was forced to see the messages. The Firefox fix needs Firefox.
+- The checklist fixes haven't been run in the real extension, and no failure was forced to see the messages. The Firefox fixes need Firefox. On Chrome, check that the icon and BOM button still open and close the panel, also after it has been open for over a minute.
 - Not run in the real panel in Onshape or against the live database: the notice, Combine, the red catalog-number problems, and the Publish dialog's database check (the full parts list may be slow to load). The grouping and combining rules, the dialog and the notice passed scripted checks.
 - Light mode hasn't been opened in Chrome or Firefox at all, so some parts of the panel may still be dark.

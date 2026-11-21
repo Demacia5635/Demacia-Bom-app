@@ -13,7 +13,26 @@
 - On bought parts (vendor, Standard Content or marked standard), Part Portal's **Save / Upsert Part** button is greyed out, with a note that they're edited in the extension. Before, it could be clicked and showed "Saved ✓" without saving anything. (B7, `4f3ba23`)
 - The clear buttons in the search boxes on the Search Parts and Work Orders pages change colour on hover again. (B17, `6b8be3c`)
 - **The work-order PDF shows the "Assembly:" line again.** (B18, `2a467a6`)
-- The BOM page's **Open CAD** button is greyed out when the part's Onshape link is incomplete, instead of opening a broken page. Part Portal's **Open Onshape** is greyed out when there's no link. (B19, `797038d`; B20, `ae281f3`)
+- The BOM page's **Open CAD** button is greyed out when the part's Onshape link is incomplete, instead of opening a broken page. (B19, `797038d`)
+- Part Portal's **Open Onshape** is greyed out when there's no link. (B20, `ae281f3`)
+- **Part Portal has one Open Onshape button,** next to the STL and Parasolid downloads. The duplicate "Open CAD Link ↗" next to Save is gone. (B20, `cc1cfe0`)
+- **The STL / Parasolid downloads on the BOM and work-order pages use the same server as the rest of the site,** and a failed download shows a message instead of doing nothing. (B3, `bcb19fe`)
+- **Editing a work-order cell no longer moves rows around.** A part that leaves its CNC job goes back to its place in the BOM. (B24, `378a548`)
+- **Typing in a CNC job's Links cell no longer flickers back to older text** when a save answer arrives late. (B23, `968f448`)
+- **Right-clicking a CNC job's shared Links cell acts on the part on that line,** not always on the job's first part. ("Remove from CNC job" used to remove the wrong part.) (B25, `f2d0a45`)
+- **The BOMs page loads at once,** without one extra request per BOM and the "Structuring assembly tree..." wait. (P1, `4886ab3`)
+- Telemetry page: switching the date range quickly can't show an older range's data, and a selected user who isn't in the new range falls back to all users. (W1, W2: `dc24aa4`, `cbacae5`)
+- An internal fix to how BOM-page edits are kept in memory. (W3, `cafabff`)
+
+## Tables (also in the extension panel)
+
+- **Right-click works normally on table rows again,** including copy and paste inside a cell. The BOM and work-order pages keep their own "Show Part Data" menu. (B15, `d1406d3`)
+- Dragging a column edge to resize can't get stuck following the mouse any more. (B16, `7526b07`)
+- The column menu (Move Left / Move Right) closes when you click anywhere outside it. (W10, `4443c0a`)
+
+## For developers
+
+- `npm run build` (the website) stops with an error when `VITE_CLIENT_URL` isn't set, instead of quietly using the production address. The GitHub Pages deploy already sets it. The extension build is unchanged. (C9, `9961bb6`)
 
 ## Not tested yet
 
