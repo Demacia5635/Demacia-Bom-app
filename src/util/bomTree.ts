@@ -30,11 +30,41 @@ export function isBoughtAssembly(bom: Pick<BomModel, "markedStandard" | "vendor"
 }
 
 /**
- * Loads a BOM's whole tree. `onRoot` gets the root BOM as soon as it's loaded
+ * Loads a BOM's whole tree (in one request from the server's tree route,
+ * else level by level). `onRoot` gets the root BOM as soon as it's loaded
  * (the BOM page's header shows it while the rest loads). Sub-assemblies missing
  * from the database are simply absent from `boms`.
  */
 export async function loadBomTree(rootId: string, onRoot?: (root: BomModel) => void): Promise<BomTree> {
+  // One request when the server has the tree route (GET /db/bom/tree/:id).
+  try {
+    const reply = await fetchFromApi<TreeReply>(`/db/bom/tree/${encodeURIComponent(rootId)}`);
+    const root = reply.boms.find((b) => b.id === reply.rootID);
+    if (root && !reply.truncated) {
+      onRoot?.(root);
+      const boms = new Map(reply.boms.filter((b) => b.id !== reply.rootID).map((b) => [b.id, b] as const));
+      const parts = new Map(reply.parts.map((p) => [p.id, p] as const));
+      return { rootId, root, boms, parts };
+    }
+    // A tree too big for the route (truncated): loaded level by level below.
+  } catch (err: any) {
+    // 404: a server without the route (or no such BOM, which the loader below reports).
+    if (err?.statusCode !== 404) throw err;
+  }
+  return loadBomTreeByLevel(rootId, onRoot);
+}
+
+/** The tree route's reply (server/API.md). */
+interface TreeReply {
+  rootID: string;
+  boms: BomModel[];
+  parts: PartModel[];
+  missing?: { boms: string[]; parts: string[] };
+  truncated?: boolean;
+}
+
+/** Loads the tree one batch request per level, then one for all the parts. */
+async function loadBomTreeByLevel(rootId: string, onRoot?: (root: BomModel) => void): Promise<BomTree> {
   const root = await fetchFromApi<BomModel>(`/db/bom/id/${encodeURIComponent(rootId)}`);
   onRoot?.(root);
   const boms = new Map<string, BomModel>();
