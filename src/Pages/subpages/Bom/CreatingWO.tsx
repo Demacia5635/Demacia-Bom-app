@@ -129,8 +129,9 @@ export function WorkOrderForm({ bomId, avatarID, onCancel }: WorkOrderFormProps)
             const material = partRecord?.material?.trim() || "";
             const engineer = partRecord?.engineer?.trim() || "";
             
-            // Bought, not made (Onshape Standard Content such as screws, or a part
-            // with a vendor): no catalog number, material or engineer needed.
+            // Bought, not made (Onshape Standard Content such as screws, a part
+            // with a vendor, or one marked standard in the extension): no catalog
+            // number, material or engineer needed.
             const isPurchased = isPurchasedPart(partRecord);
 
             if (!isPurchased) {

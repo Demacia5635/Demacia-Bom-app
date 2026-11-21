@@ -116,6 +116,7 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
         exportSTL: "",
         exportParasolid: "",
         vendor: record?.vendor || "",
+        markedStandard: !!record?.markedStandard,
       });
       // `path` guards against a BOM that (wrongly) contains itself.
       if (view !== "single" && record && !path.includes(sub.bomID)) addBom(record, rowId, subPath);
@@ -151,6 +152,7 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
         exportParasolid: part.parasolidLink || "",
         vendor: part.vendor || "",
         isStandardContent: !!part.isStandardContent,
+        markedStandard: !!part.markedStandard,
       });
     }
   };

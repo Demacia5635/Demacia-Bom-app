@@ -62,9 +62,14 @@ export interface PartModel {
   updatedAt?: Date;
 }
 
-/** Bought rather than made: has a vendor, or is Onshape Standard Content. */
-export function isPurchasedPart(part: Pick<PartModel, "vendor" | "isStandardContent"> | null | undefined): boolean {
-  return Boolean(part?.isStandardContent || (part?.vendor && part.vendor.trim() !== ""));
+/**
+ * Bought rather than made: has a vendor, is Onshape Standard Content, or was
+ * marked standard in the extension (older records may have only that mark).
+ */
+export function isPurchasedPart(
+  part: Pick<PartModel, "vendor" | "isStandardContent" | "markedStandard"> | null | undefined
+): boolean {
+  return Boolean(part?.isStandardContent || part?.markedStandard || (part?.vendor && part.vendor.trim() !== ""));
 }
 
 export interface WorkorderPartModel {

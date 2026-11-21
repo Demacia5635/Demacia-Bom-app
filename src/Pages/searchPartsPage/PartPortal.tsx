@@ -12,7 +12,7 @@ const PartPortal: React.FC<{ part: PartModel }> = ({ part }) => {
     const navigate = useNavigate();
 
     // Bought parts (a vendor, Onshape Standard Content, or marked standard in the
-    // extension, which saves isStandardContent) are locked, as in the extension.
+    // extension) are locked, as in the extension.
     // A part with no vendor field at all isn't one.
     const locked = isPurchasedPart(part);
     const [formData, setFormData] = useState<PartModel>({ ...part });

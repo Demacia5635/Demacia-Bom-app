@@ -22,6 +22,8 @@ export default interface WorkOrderTableRow extends RowData {
     vendor: string;
     /** Onshape Standard Content (screws, nuts...): purchased, so its name and method are fixed. */
     isStandardContent?: boolean;
+    /** Marked standard (bought) in the extension: treated like Standard Content. */
+    markedStandard?: boolean;
     /** The part's ID (rows are keyed by work order + part). */
     partID?: string;
     /** Set (as shown in the table) when the part is in a CNC group; its links are then the group's (cncGroups.ts). */

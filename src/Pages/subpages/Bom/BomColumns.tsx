@@ -26,9 +26,10 @@ const BomColumns: ColumnConfig[] = [
     type: "button",
     buttonText: "Open Onshape",
     // Standard Content lives in Onshape's library, not in your documents: no link.
-    isDisabled: (row: BomTableRow) => !!row.isStandardContent || (!row.onshapeURL && !row.documentID),
+    // Items marked standard are bought, so no link either (as in the extension).
+    isDisabled: (row: BomTableRow) => !!row.isStandardContent || !!row.markedStandard || (!row.onshapeURL && !row.documentID),
     onButtonClick: (row: BomTableRow) => {
-      if (row.isStandardContent) return;
+      if (row.isStandardContent || row.markedStandard) return;
       let url = row.onshapeURL;
       if (!url && row.documentID && row.elementID) {
         url = `https://cad.onshape.com/documents/${row.documentID}/${row.wvmType || "w"}/${row.wvmID}/e/${row.elementID}`;

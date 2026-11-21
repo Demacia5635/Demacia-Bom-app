@@ -3,8 +3,11 @@ import { downloadFile } from "../../../util/ApiService";
 import { openExternal } from "../../../util/openExternal";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 
-/** Vendor parts and Onshape Standard Content: their name isn't edited here. */
-const isBoughtPart = (row: WorkOrderTableRow) => row.vendor !== "" || !!row.isStandardContent;
+/** Onshape Standard Content and parts marked standard in the extension: purchased, so status and method are fixed. */
+const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!row.markedStandard;
+
+/** Vendor parts, Standard Content and parts marked standard: their name isn't edited here. */
+const isBoughtPart = (row: WorkOrderTableRow) => row.vendor !== "" || isStandardRow(row);
 
 export const MANUFACTURING_METHODS = ['Manual', 'Milled', 'Lathed', 'CNC', 'Printed', 'Externally produced', 'Purchased'];
 export const PRIORITIES = ['High', 'Medium', 'Low', 'Untracked', 'Finished'];
@@ -54,8 +57,8 @@ const WorkOrderColumns: ColumnConfig[] = [
         type: "select",
         valueClass: valueColour,
         options: ['CATNUM Written', 'In Planning', 'Manufacturing approved', 'In manufacturing', 'Finished Manufacturing', 'Untracked'],
-        // Standard Content is purchased: not tracked through manufacturing.
-        isDisabled: (row: WorkOrderTableRow) => !!row.isStandardContent,
+        // Standard items are purchased: not tracked through manufacturing.
+        isDisabled: isStandardRow,
     },
     { key: "approxArrivalDate", label: "Approx. Arrival Date", type: "string" },
     {
@@ -64,8 +67,8 @@ const WorkOrderColumns: ColumnConfig[] = [
         type: "select",
         valueClass: valueColour,
         options: MANUFACTURING_METHODS,
-        // Standard Content is always "Purchased".
-        isDisabled: (row: WorkOrderTableRow) => !!row.isStandardContent,
+        // Standard items are always "Purchased".
+        isDisabled: isStandardRow,
     },
     { key: "material", label: "Material", type: "string", isDisabled: () => true }, // Read-only
     { 

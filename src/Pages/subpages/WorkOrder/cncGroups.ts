@@ -36,7 +36,7 @@ export interface CncSuggestion {
 
 /** Whether a row could be cut on the CNC (made here, not lathed / printed / bought). */
 export function isCncCandidate(row: WorkOrderTableRow): boolean {
-  return !row.isStandardContent && (row.vendor ?? "").trim() === "" && !NOT_CNC.has(row.manufacturingMethod);
+  return !row.isStandardContent && !row.markedStandard && (row.vendor ?? "").trim() === "" && !NOT_CNC.has(row.manufacturingMethod);
 }
 
 /**

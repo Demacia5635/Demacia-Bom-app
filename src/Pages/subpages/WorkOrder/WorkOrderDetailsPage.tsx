@@ -57,9 +57,9 @@ const SAVED_PART_FIELDS = [
 const isFinishedRow = (row: WorkOrderTableRow) =>
     row.statusCode === "Finished Manufacturing" || row.Priority === "Finished";
 
-/** Bought, not made: Onshape Standard Content, a vendor part, or set to "Purchased". */
+/** Bought, not made: Onshape Standard Content, marked standard, a vendor part, or set to "Purchased". */
 const isPurchasedRow = (row: WorkOrderTableRow) =>
-    !!row.isStandardContent || (row.vendor ?? "").trim() !== "" || row.manufacturingMethod === "Purchased";
+    !!row.isStandardContent || !!row.markedStandard || (row.vendor ?? "").trim() !== "" || row.manufacturingMethod === "Purchased";
 
 // The work-order filters are remembered in this browser (the same for every work order).
 const FILTER_STORAGE_PREFIX = "workOrderFilter:";
@@ -230,6 +230,7 @@ export default function WorkOrderDetailsPage() {
                     exportParasolid: part?.parasolidLink || "",
                     vendor: part?.vendor || "",
                     isStandardContent: !!part?.isStandardContent,
+                    markedStandard: !!part?.markedStandard,
                 };
                 collectedRows.push(partRow);
             }
