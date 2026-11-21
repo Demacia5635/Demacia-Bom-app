@@ -435,10 +435,14 @@ function isSavedSizeStale(row: AssemblyBomRow, currentVersion: string | null): b
   return row.sizeVersion !== undefined && !!currentVersion && row.sizeVersion !== currentVersion;
 }
 
-/** A part's size text from Onshape (util/partSize), waiting and retrying when rate-limited. */
-async function readPartSize(row: AssemblyBomRow): Promise<string> {
+/**
+ * A part's size text from Onshape (util/partSize), waiting and retrying when
+ * rate-limited. Stops (throws LOAD_CANCELLED) once `isCancelled` says so.
+ */
+async function readPartSize(row: AssemblyBomRow, isCancelled?: () => boolean): Promise<string> {
   const key = { documentID: row.documentID, wvmType: row.wvmType, wvmID: row.wvmID, elementID: row.elementID };
   for (let attempt = 0; ; attempt++) {
+    if (isCancelled?.()) throw LOAD_CANCELLED;
     try {
       return formatPartSize(await getPartBoundingBox(key, row.entityID, row.configuration || undefined));
     } catch (err) {
@@ -1122,15 +1126,27 @@ export default function AssemblyBomPage() {
   /** A load or publish replaces the rows: sizes arriving then are dropped (and read again after). */
   const sizeBusyRef = useRef(false);
   sizeBusyRef.current = loading || publishing;
+  /** Bumped when "Show size" is unticked or the panel closes: reads from before are dropped. */
+  const sizeRunRef = useRef(0);
+  useEffect(() => {
+    if (!showSize) return;
+    const requested = sizeRequestedRef.current;
+    return () => {
+      sizeRunRef.current += 1;
+      requested.clear();
+    };
+  }, [showSize]);
   useEffect(() => {
     if (!showSize || loading || publishing) return;
     const limit = (sizeLimitRef.current ??= createLimiter(SIZE_CONCURRENCY));
     const requested = sizeRequestedRef.current;
+    const run = sizeRunRef.current;
+    const cancelled = () => sizeRunRef.current !== run;
     const pending = new Map<string, string>();
     let flushTimer: ReturnType<typeof setTimeout> | undefined;
     const flush = () => {
       flushTimer = undefined;
-      if (pending.size === 0 || sizeBusyRef.current) return pending.clear();
+      if (pending.size === 0 || sizeBusyRef.current || cancelled()) return pending.clear();
       const done = new Map(pending);
       pending.clear();
       saveRows(currentTreeRef.current.rows.map((r) => (done.has(r.id) && r.size === undefined ? { ...r, size: done.get(r.id)! } : r)));
@@ -1140,9 +1156,10 @@ export default function AssemblyBomPage() {
       const requestKey = `${row.id}|${row.configuration ?? ""}`;
       if (requested.has(requestKey)) continue;
       requested.add(requestKey);
-      limit(() => readPartSize(row))
+      limit(() => readPartSize(row, cancelled))
         .catch(() => "")
         .then((size) => {
+          if (cancelled()) return; // unticked or closed meanwhile
           requested.delete(requestKey);
           pending.set(row.id, size);
           flushTimer ??= setTimeout(flush, 300);
