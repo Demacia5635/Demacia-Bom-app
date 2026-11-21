@@ -60,6 +60,22 @@ export async function getWorkOrderByID(
   }
 }
 
+/**
+ * One entry per partID (the first one wins): per-part edits change only the
+ * first match, so a duplicate would drift out of sync.
+ */
+function uniqueParts(parts: unknown): unknown {
+  if (!Array.isArray(parts)) return parts; // The schema rejects it.
+  const seen = new Set<unknown>();
+  return parts.filter((part) => {
+    const partID = (part as SubPartBody | null)?.partID;
+    if (partID === undefined) return true;
+    if (seen.has(partID)) return false;
+    seen.add(partID);
+    return true;
+  });
+}
+
 export async function upsertWorkOrderByID(
   req: Request<{ id: string }, unknown, WorkOrderBody>,
   res: Response,
@@ -77,7 +93,7 @@ export async function upsertWorkOrderByID(
     // an older copy can't undo someone's merge.
     const { parts, cncGroups: _ignored, ...fields } = cleanUpdateBody(req.body);
     const update: Record<string, unknown> = { $set: { ...fields, id: id } };
-    if (parts !== undefined) update.$setOnInsert = { parts };
+    if (parts !== undefined) update.$setOnInsert = { parts: uniqueParts(parts) };
 
     const workOrder = await upsertWithRetry(() => WorkOrder.findOneAndUpdate(
       { id: id },
