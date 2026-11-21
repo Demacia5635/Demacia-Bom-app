@@ -8,9 +8,14 @@ One folder per extension version that was built and handed out: `publish/<versio
 
 Website changes are logged in `src/upd. logs/`, server changes in `server/upd. logs/`.
 
+## How versions are made
+
+- Log entries are written on the `upd-logs` branch, not on `MASTER`, in `vNEXT.md` (the extension's in `publish/next/`).
+- When a new version is made (4.0.0, 5.0.0, …), `vNEXT.md` is renamed to that version, dated, and `upd-logs` is merged into `MASTER`. That merge is the new version.
+
 | Version | Built | Highlights |
 |---|---|---|
-| [3.2.0](3.2.0/v3.2.0.md) | Not built yet | Copies of a part drawn several times combine into one row; "Not the same part" to split them; "×N copies" badge; light mode |
+| [4.0.0](4.0.0/v4.0.0.md) | 2026-11-21 18:33 | Same name + catalog number = same part (asks before combining); light mode |
 | [3.0.0](3.0.0/v3.0.0.md) | 2026-11-17 23:17 | Show part sizes; panel toggle; polycarbonate → Parasolid; redder problem cells |
 | [2.0.0](2.0.0/v2.0.0.md) | 2026-11-15 20:13 | Safe Publish BOM, correct sub-assembly quantities, vendor parts always standard, no ghost rows |
 | [1.0.0](1.0.0/v1.0.0.md) | 2026-11-14 23:00 | The version in use before the code review |
