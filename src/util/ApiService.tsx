@@ -313,6 +313,9 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
   useEffect(() => {
     setError(false);
+    // A new src: don't keep showing the previous image (its object URL is
+    // revoked by the cleanup below) while this one loads.
+    setImageSrc(null);
     if (!src || publicUrl) return;
     // Inline images need no fetching.
     if (src.startsWith("data:")) {
