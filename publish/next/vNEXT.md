@@ -47,3 +47,10 @@ If there's no time to check step 5, the Excel-style editing can be left out with
 ## Not tested yet
 
 - None of it in the real panel: the new menu near the panel's edges, undo across a standard-mark change, the ↺ column, Excel-style selection and paste from Excel, the notification in Firefox's sidebar, Alt+R in Firefox, and the "Onshape changed" line after a real edit in Onshape. The narrow layout was checked by narrowing Chrome's panel, not in Firefox.
+
+## Not in this release (branch `fix/ext-next`, for the version after it)
+
+These need server 5.0.0 and are kept off `fix/ext` so this release stays as it is.
+
+- **A red cover over the whole panel when the assembly was already published from another workspace or version** of the document: "<catalog> (<name>) was already published from another workspace or version of this Onshape document. Its BOM is kept for one workspace only: publish it from the workspace it was first published from.", with an **Open the published workspace ↗** button. Nothing in the panel can be used underneath. With an older server nothing happens. (`454e58c`)
+- **Publish BOM explains a refused save in the server's words:** published from another workspace, or catalog number already used by another assembly, or two unnamed-catalog assemblies with the same name under one parent, instead of "someone saved it at the same moment". (`e0aebf1`, `eb5c7aa`)
