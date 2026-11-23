@@ -18,6 +18,7 @@ One file per website version: `v<version>.md`, listing what that deploy changed 
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [2.1.1](v2.1.1.md) | Unreleased | Tab title shows the assembly (catalog number - BOM / Work Order) |
 | [2.1.0](v2.1.0.md) | 2026-11-21 | Quality-of-life round: search, links between pages, save indicator, CSV, progress, phone layout, What's new, charts |
 | [2.0.2](v2.0.2.md) | 2026-11-21 18:55 | The website's own version number |
 | [2.0.1](v2.0.1.md) | 2026-11-21 18:35 | Follow-ups after the code review |
