@@ -19,6 +19,7 @@ import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave
 import { useCncGroups } from "./useCncGroups";
 import { isFinishedRow, isPurchasedRow, toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
 import WorkOrderFilters from "./WorkOrderFilters";
+import { madeStatus } from "./workOrderOptions";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
@@ -146,12 +147,17 @@ export default function WorkOrderDetailsPage() {
                 // Parts made elsewhere or bought aren't tracked through manufacturing.
                 if (oldRow.manufacturingMethod !== updated.manufacturingMethod && (updated.manufacturingMethod === 'Externally produced' || updated.manufacturingMethod === 'Purchased')) {
                     updated.statusCode = 'Untracked';
+                } else if (isPurchasedRow(oldRow) && !isPurchasedRow(updated)) {
+                    // Made again: from the bought list ("To buy" / "Finished") to the made one.
+                    updated.statusCode = madeStatus(updated.statusCode);
                 }
 
-                if (oldRow.statusCode !== updated.statusCode && updated.statusCode === 'Finished Manufacturing') {
+                // "Finished" (bought) / "Finished Manufacturing" (made) and priority "Finished" go together.
+                const finishedStatus = isPurchasedRow(updated) ? 'Finished' : 'Finished Manufacturing';
+                if (oldRow.statusCode !== updated.statusCode && updated.statusCode === finishedStatus) {
                     updated.Priority = 'Finished';
                 } else if (oldRow.Priority !== updated.Priority && updated.Priority === 'Finished') {
-                    updated.statusCode = 'Finished Manufacturing';
+                    updated.statusCode = finishedStatus;
                 }
             }
 

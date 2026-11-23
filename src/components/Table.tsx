@@ -43,6 +43,8 @@ export interface ColumnConfig<T extends RowData = any> {
     buttonText?: string;
     onButtonClick?: (row: T) => void;
     options?: string[];
+    /** A select's choices for one row, instead of `options` (e.g. bought items' own status list). */
+    rowOptions?: (row: T) => string[];
     isDisabled?: (row: T) => boolean;
     /** Highlights the cell (class "cell-modified"), e.g. for an edit not saved yet. */
     isModified?: (row: T) => boolean;

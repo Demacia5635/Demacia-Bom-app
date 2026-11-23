@@ -6,6 +6,8 @@ import { partDisplayName } from "../../../util/partDisplayName";
 import { recordImageSrc } from "../../../util/recordImage";
 import { fetchPartsByIds } from "../../../util/records";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
+import { isPurchasedRow } from "./useWorkOrderFilters";
+import { boughtStatus } from "./workOrderOptions";
 
 const ISRAEL_TIME = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Jerusalem",
@@ -179,6 +181,8 @@ export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (wor
                 isStandardContent: !!part?.isStandardContent,
                 markedStandard: !!part?.markedStandard,
             };
+            // A bought item shows its own status list (stored values mapped, not rewritten).
+            if (isPurchasedRow(partRow)) partRow.statusCode = boughtStatus(partRow.statusCode, partRow.Priority);
             collectedRows.push(partRow);
         }
         return collectedRows;
