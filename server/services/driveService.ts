@@ -59,6 +59,8 @@ export function isTeamFolder(folderId: string): boolean {
 
 /** Most file IDs remembered by isInTeamFolders. */
 const TEAM_FILE_CACHE_MAX = 5000;
+/** Deepest folder nesting isInTeamFolders follows up to a type folder. */
+const MAX_FOLDER_DEPTH = 20;
 
 export class GoogleDriveService {
   private drive: drive_v3.Drive;
@@ -68,27 +70,69 @@ export class GoogleDriveService {
     this.drive = google.drive({ version: "v3", auth: oauth2Client, timeout: DRIVE_TIMEOUT_MS });
   }
 
-  /** fileId -> whether it's directly inside one of the team folders. */
+  /** fileId -> whether it's inside one of the team folders (at any depth). */
   private teamFileCache = new Map<string, boolean>();
+  /** folderId -> whether it is, or is inside, one of the team folders. */
+  private teamFolderCache = new Map<string, boolean>();
+
+  /** A file's or folder's parent folder IDs; null if Drive doesn't know the ID. */
+  private async parentsOf(id: string): Promise<string[] | null> {
+    try {
+      const res = await this.drive.files.get({ fileId: id, fields: "parents" });
+      return res.data.parents ?? [];
+    } catch (err: any) {
+      const status = Number(err?.response?.status ?? err?.code);
+      if (status === 404 || status === 400) return null;
+      throw err; // Drive/OAuth failure: the caller mustn't cache an answer.
+    }
+  }
 
   /**
-   * Whether a file is directly inside one of the team folders. The API must
-   * not read or delete anything else the Google account can reach. Answers
-   * are cached (files don't move between folders), so each file costs one
-   * metadata request per server start. Unknown/malformed IDs answer false.
+   * Whether a folder is one of the three type folders or inside one, at any
+   * depth (the files are sorted into assembly folders inside them). Walks the
+   * parents upward; every folder's answer is cached, so a new folder costs one
+   * request.
+   */
+  private async isTeamFolderOrInside(folderId: string, depth = 0): Promise<boolean> {
+    if (isTeamFolder(folderId)) return true;
+    const cached = this.teamFolderCache.get(folderId);
+    if (cached !== undefined) return cached;
+    if (depth >= MAX_FOLDER_DEPTH) return false;
+
+    const parents = await this.parentsOf(folderId);
+    let inside = false;
+    for (const parent of parents ?? []) {
+      if (await this.isTeamFolderOrInside(parent, depth + 1)) {
+        inside = true;
+        break;
+      }
+    }
+    if (this.teamFolderCache.size >= TEAM_FILE_CACHE_MAX) {
+      this.teamFolderCache.delete(this.teamFolderCache.keys().next().value!);
+    }
+    this.teamFolderCache.set(folderId, inside);
+    return inside;
+  }
+
+  /**
+   * Whether a file is inside one of the team folders, directly or in a
+   * folder under them. The API must not read or delete anything else the
+   * Google account can reach. Answers are cached (files only move between
+   * folders inside the team folders), so each file costs one metadata request
+   * per server start, plus one per folder not seen before. Unknown/malformed
+   * IDs answer false.
    */
   async isInTeamFolders(fileId: string): Promise<boolean> {
     const cached = this.teamFileCache.get(fileId);
     if (cached !== undefined) return cached;
 
-    let inTeam: boolean;
-    try {
-      const file = await this.getFile(fileId);
-      inTeam = (file.parents ?? []).some(isTeamFolder);
-    } catch (err: any) {
-      const status = Number(err?.response?.status ?? err?.code);
-      if (status !== 404 && status !== 400) throw err; // Drive/OAuth failure: don't cache
-      inTeam = false;
+    const parents = await this.parentsOf(fileId);
+    let inTeam = false;
+    for (const parent of parents ?? []) {
+      if (await this.isTeamFolderOrInside(parent)) {
+        inTeam = true;
+        break;
+      }
     }
 
     if (this.teamFileCache.size >= TEAM_FILE_CACHE_MAX) {
