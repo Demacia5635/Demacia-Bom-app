@@ -70,6 +70,8 @@ const bomSchema = new mongoose.Schema(
 bomSchema.index({ "subAssemblies.bomID": 1 });
 // Saving checks that no other BOM has the same catalog number.
 bomSchema.index({ catalogNumber: 1 });
+// Whether a part is used (deleting parts refuses used ones).
+bomSchema.index({ "parts.partID": 1 });
 // Saving checks for the same Onshape assembly saved from another workspace/version.
 bomSchema.index({ "onshapeID.documentID": 1, "onshapeID.elementID": 1 });
 

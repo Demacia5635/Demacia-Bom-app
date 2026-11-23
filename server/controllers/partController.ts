@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
 import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
+import { partInUse } from "./orphanParts";
 import { makeGetByIds } from "./getByIds";
 import { makeListAll } from "./listAll";
 
@@ -86,11 +87,22 @@ export async function upsertPartByID(
     return next(err);
   }
 }
+/**
+ * DELETE /id/:id: deletes a part record, but never one a BOM uses (409
+ * PART_IN_USE). The one exception: the leftover part record of an assembly
+ * whose standard mark was removed, which the extension deletes right after
+ * saving that assembly, while its parent may still list it until it's saved.
+ * Drive files are left alone. One log line per delete.
+ */
 export async function deletePartByID(req: Request<{ id: string }>, res: Response, next: NextFunction) {
   try {
     const id = req.params.id;
-    const deleted = await Part.findOneAndDelete({ id: id });
+    const reason = await partInUse(id, true);
+    if (reason) return res.status(409).json({ code: "PART_IN_USE", message: `This part can't be deleted: it ${reason}.` });
+    const deleted = await Part.findOneAndDelete({ id: id }).lean<Record<string, any>>();
     if (!deleted) return res.status(404).json({ message: `Part ${id} not found` });
+    const { _id, __v, ...record } = deleted;
+    console.log(`[part delete ${res.locals.requestId}] by ${updatedByOf(req).updatedBy || "unknown"}: deleted part ${id} "${deleted.name ?? ""}"; record: ${JSON.stringify(record)}`);
     return res.status(204).send();
   } catch (err) {
     return next(err);
@@ -113,11 +125,13 @@ export async function findPartByOnshapeKey(req: Request<OnshapeID>, res: Respons
   }
 }
 
-export async function deletePartByOnshapeKey(req: Request<OnshapeID>, res: Response, next: NextFunction) {
-  const id = formID(req.params);
-  const delegateReq = req as unknown as Request<{ id: string }>;
-  delegateReq.params = { id: id };
-  return deletePartByID(delegateReq, res, next);
+/**
+ * DELETE by Onshape key: turned off (nothing calls it; deleting goes through
+ * DELETE /id/:id or the /orphans page, which check that a part isn't used).
+ */
+export function deletePartByOnshapeKey(req: Request<OnshapeID>, res: Response) {
+  res.setHeader("Allow", "GET");
+  return res.status(405).json({ message: "Deleting parts by Onshape key is turned off" });
 }
 /** POST /ids: the Part records with these ids. */
 export const getPartsByIds = makeGetByIds(Part);

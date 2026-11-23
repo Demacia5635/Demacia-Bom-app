@@ -33,7 +33,50 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 |---|---|
 | `GET /api` | `200 { status: "online", version, startedAt, database: "connected" \| "disconnected" }`. Public. |
 | `GET /api/db` | `200 { connected: true }`, or `503 { connected: false }`. |
+| `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
 | `GET /api/drive` | `200` when Drive answers, `503` when it doesn't: `{ connected, ... }`. |
+
+### `GET /api/db/health`
+
+Every problem in the database. It reads all BOMs and all parts in two queries and does the rest in memory, so it's one call with no paging.
+
+```json
+{
+  "generatedAt": "...",
+  "counts": { "problems": 14, "byCode": { "MISSING_MATERIAL": 3 } },
+  "codeTitles": { "MISSING_MATERIAL": "Missing material" },
+  "problems": [{
+    "code": "MISSING_MATERIAL", "severity": "warning", "message": "Work orders need a material for made parts.",
+    "records": [{ "kind": "part", "id": "...", "name": "Bracket", "catalogNumber": "2603-1002", "onshapeURL": "...",
+                  "parents": [{ "id": "...", "name": "Robot", "catalogNumber": "2603-1000" }] }]
+  }]
+}
+```
+
+- **`problems`** is sorted by code, then by catalog number or name.
+- **`records`** has one entry for most problems and several for duplicates. A record that isn't saved has only `kind`, `id` and `parents`.
+- **`parents`** lists the BOMs that list the record directly, at most 10.
+- **`codeTitles`** holds a short, stable title for every code.
+
+"Made" means not bought: not Standard Content, not marked standard, and with no vendor. The checks use the same rules that publishing and work orders use.
+
+Severity follows the user's definitions:
+- **`warning`:** data the team must fix before the item can go into a work order.
+- **`error`:** data the code should have made impossible, such as a BOM pointing at a record that isn't saved.
+
+A part that no BOM lists is reported once, as `NOT_IN_ANY_ASSEMBLY`, and isn't checked further.
+
+| Code | Severity | What |
+|---|---|---|
+| `CATALOG_NUMBER_INVALID` | warning | Breaks the numbering rules (`src/util/catalogNumbers.ts`, as in the extension and "Create work order"), checked on each top-level assembly's tree. Bought items are exempt. The message is the rule's own text. |
+| `CATALOG_NUMBER_DUPLICATE` | warning | Several assemblies have the same catalog number (republishing them is refused). |
+| `ASSEMBLY_NAME_DUPLICATE` | warning | Assemblies with no catalog number and the same name under one parent. |
+| `ASSEMBLY_IN_TWO_WORKSPACES` | warning | The same Onshape assembly saved from several workspaces or versions (with short IDs in the message). |
+| `PART_MISSING`, `SUB_ASSEMBLY_MISSING` | error | A BOM lists an ID that isn't saved. |
+| `MISSING_MATERIAL`, `MISSING_ENGINEER` | warning | A made part without them (work orders need them; "Standard Part" doesn't count as an engineer). |
+| `MISSING_IMAGE` | warning | A made part or assembly without an image. |
+| `MISSING_STL`, `MISSING_PARASOLID` | warning | A made part set to export the file (`wantStl` / `wantParasolid`) that has none. |
+| `NOT_IN_ANY_ASSEMBLY` | warning | A part no BOM lists. It shouldn't exist and should be deleted (there's no delete from here). |
 
 ## Parts: `/api/db/part`
 
@@ -41,11 +84,13 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 |---|---|---|
 | `GET /all` | | Every part, by `id`. See [Lists](#lists) for paging. |
 | `POST /ids` | `{ ids: string[] }` (at most 500) | The parts that exist, in any order. Never creates any. |
+| `GET /orphans` | | Read-only: the parts no BOM uses, newest first, as full part records plus `filesToTrash`: how many of the part's Drive files no other part or BOM points at. For the website's `/orphans` page. A part is **in use** when a BOM lists it in its `parts`, or when it is the part record of an assembly marked standard. An unmarked assembly's leftover part record is not in use. |
+| `POST /orphans/delete` | `{ ids: string[] }` (1-200) | **Admin** (the `x-admin-secret` header as well, like the Drive sort; a missing or wrong one gets `404`). Deletes those parts if no BOM uses them, re-checking each one right before deleting it. Returns `200 { deleted: [{ id, name, catalogNumber, filesTrashed }], refused: [{ id, reason }] }`; a partial success is still `200`. A deleted part's Drive files that no other record points at go to Drive's trash, for 30 days; shared files stay. There's no undo: each delete is one server-log line with who (`X-Updated-By`), the trashed files and the whole record, so it can be restored by hand. |
 | `GET /id/:id` | | The part (`onshapeID` and `onshapeURL` filled in from the id when missing), or `404`. |
 | `POST /id/:id` | The part's fields | Creates or updates it: `201` created, `200` updated, with the record. A new part without a usable `name` gets one from `title`, `catalogNumber` or its Onshape part ID. An empty `name` never overwrites a saved one. |
-| `DELETE /id/:id` | | `204`, or `404`. |
+| `DELETE /id/:id` | | `204`, or `404`. Refused with `409 PART_IN_USE` while a BOM lists the part, or while it is the part record of an assembly marked standard. An assembly's leftover part record, once its mark is removed, may go, even if its parent still lists it (the extension deletes it during a publish). Drive files are left alone. Each delete is logged with the whole record. |
 | `GET /d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/p/:partID` | | The part with this Onshape identity, or `404`. Read-only. |
-| `DELETE` (same path) | | Deletes it: `204`, or `404`. |
+| `DELETE` (same path) | | **Turned off:** `405`. |
 
 ## BOMs (assemblies): `/api/db/bom`
 
@@ -176,7 +221,9 @@ Inside each type folder (Images, STL, Parasolid), the files are sorted into one 
 - **Files no assembly reaches** (parts in no BOM) stay where they are.
 - **Files are moved, never copied or deleted:** their IDs and links stay, and the database doesn't change. Folders are found or created by name, never twice. Emptied folders are left alone.
 
-The server sorts an assembly's tree by itself after a publish: 60 s after the last BOM save in that tree, in the background (it never delays or fails a save). The first full sort is started by hand with the admin routes below.
+The server sorts an assembly's tree by itself after a publish: 60 s after the last BOM save in that tree, in the background (it never delays or fails a save).
+
+Just before that sort, the same background run deletes the parts the publish dropped from its BOMs that no BOM uses by then, under the same rules as `POST /api/db/part/orphans/delete`: it re-checks each part, moves unshared Drive files to Drive's trash, and writes one log line per part. A part moved between sub-assemblies within one publish is listed again by then, so it stays. Only parts a publish dropped are considered; other orphans are left to the `/orphans` page. If the cleanup fails, the sort still runs. The first full sort is started by hand with the admin routes below.
 
 ### Admin: `/api/drive/organize`
 
@@ -202,9 +249,12 @@ A job:
     "names": [],
     "workspaces": [{ "documentID": "...", "elementID": "...", "boms": [{ "id": "...", "name": "...", "catalogNumber": "...", "wvmType": "w", "wvmID": "..." }] }]
   },
+  "cleanup": { "candidates": 2, "deleted": [{ "id": "...", "name": "...", "filesTrashed": ["..."] }], "kept": [{ "id": "...", "reason": "is used by assembly Base (...)" }], "error": "..." },
   "error": "..."
 }
 ```
+
+- **`cleanup`** (publish runs only) covers the dropped parts: those deleted, and those kept because something uses them again. The log line ends with, for example, `cleanup: 1 deleted, 1 kept (...)`.
 
 - **In a dry run,** `moved` and `foldersCreated` mean "would move" and "would create".
 - **`clashes`** lists the existing records that will be refused when they're published again, so they can be fixed first:

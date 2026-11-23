@@ -17,6 +17,7 @@ import { bomClashes, type BomClashReport } from "../controllers/bomNameClash";
 import { drive } from "./driveClient";
 import { FILE_FIELDS, planFolders, type Placement } from "./driveFolderPlan";
 import { isTeamFolder } from "./driveService";
+import { deleteUnusedParts } from "../controllers/orphanParts";
 
 /** Most moves / skips one job keeps for its report (the counts are always complete). */
 const MAX_LISTED = 5000;
@@ -57,6 +58,17 @@ export interface OrganizeJob {
     /** Existing catalog-number / name clashes (they share a folder name until fixed). */
     clashes?: BomClashReport;
     error?: string;
+    /**
+     * Publish runs: the parts the publish dropped from its BOMs that no BOM
+     * uses any more, deleted first (controllers/orphanParts.ts). A cleanup
+     * failure is reported here and doesn't stop the sort.
+     */
+    cleanup?: {
+        candidates: number;
+        deleted: { id: string; name?: string; filesTrashed: string[] }[];
+        kept: { id: string; reason: string }[];
+        error?: string;
+    };
 }
 
 const jobs: OrganizeJob[] = [];
@@ -86,7 +98,30 @@ async function loadRecords() {
 }
 
 /** Runs one job: plans, then checks (and moves) each planned file. */
+/** Deletes the parts a publish dropped from this job's trees, if no BOM uses them now. Never throws. */
+async function cleanUp(job: OrganizeJob): Promise<void> {
+    const candidates = new Map<string, string>(); // partID -> who saved the BOM that dropped it
+    for (const top of job.topIDs ?? []) {
+        for (const [partID, who] of droppedByTop.get(top) ?? []) candidates.set(partID, who);
+        droppedByTop.delete(top);
+    }
+    if (candidates.size === 0) return;
+    job.cleanup = { candidates: candidates.size, deleted: [], kept: [] };
+    try {
+        const who = [...new Set(candidates.values())].filter(Boolean).join(", ");
+        const result = await deleteUnusedParts([...candidates.keys()], who, `[part cleanup after publish ${job.id.slice(0, 8)}]`);
+        job.cleanup.deleted = result.deleted.map(({ id, name, filesTrashed }) => ({ id, name, filesTrashed }));
+        job.cleanup.kept = result.refused;
+    } catch (err: any) {
+        job.cleanup.error = err?.message ?? String(err);
+        console.error(`[part cleanup after publish ${job.id.slice(0, 8)}] failed:`, err);
+    }
+}
+
 async function run(job: OrganizeJob): Promise<void> {
+    if (job.trigger === "publish") await cleanUp(job);
+    // Without the type folders configured there's nothing to sort.
+    if (!googleConfig.imageFolderId && !googleConfig.stlFolderId && !googleConfig.parasolidFolderId) return;
     const { boms, parts } = await loadRecords();
     const plan = planFolders(boms, parts);
     if (job.trigger === "manual") {
@@ -221,9 +256,14 @@ function launch(job: OrganizeJob): void {
         .finally(() => {
             job.finishedAt = new Date().toISOString();
             const { moved, alreadyInPlace, notInAnyAssembly, skipped, foldersCreated } = job.summary;
+            const cleanup = job.cleanup
+                ? `; cleanup: ${job.cleanup.deleted.length} deleted, ${job.cleanup.kept.length} kept`
+                    + `${job.cleanup.kept.length ? ` (${job.cleanup.kept.map((k) => `${k.id} ${k.reason}`).join("; ")})` : ""}`
+                    + `${job.cleanup.error ? `, failed: ${job.cleanup.error}` : ""}`
+                : "";
             console.log(`${label} ${job.status}: ${job.dryRun ? "would move" : "moved"} ${moved}, already in place ${alreadyInPlace}, `
                 + `not in any assembly ${notInAnyAssembly}, folders ${job.dryRun ? "to create" : "created"} ${foldersCreated}, `
-                + `skipped ${JSON.stringify(skipped)}`);
+                + `skipped ${JSON.stringify(skipped)}${cleanup}`);
             running = null;
             startPending();
         });
@@ -244,6 +284,8 @@ const PUBLISH_DEBOUNCE_MS = 60_000;
 const timers = new Map<string, NodeJS.Timeout>();
 /** Top-level assemblies waiting for a run (their timer fired while another run was going on). */
 const pendingTops = new Set<string>();
+/** Top-level assembly -> parts a publish dropped from a BOM in its tree (partID -> who saved). */
+const droppedByTop = new Map<string, Map<string, string>>();
 
 function startPending(): void {
     if (running || pendingTops.size === 0) return;
@@ -269,15 +311,22 @@ async function topsAbove(bomID: string): Promise<string[]> {
 }
 
 /**
- * After a BOM is saved: sorts the files of its top-level assembly's tree,
- * 60 s after the last BOM save in that tree (a publish saves bottom-up, the
- * top assembly last). In the background: it never delays or fails the save.
+ * After a BOM is saved: 60 s after the last BOM save in its top-level
+ * assembly's tree (a publish saves bottom-up, the top assembly last), deletes
+ * the parts the publish dropped (`droppedPartIDs`) that no BOM uses by then,
+ * then sorts the tree's Drive files. A part moved between sub-assemblies in
+ * the same publish is listed again by then, so it stays. In the background:
+ * it never delays or fails the save.
  */
-export function scheduleOrganizeAfterSave(bomID: string): void {
-    if (!googleConfig.imageFolderId && !googleConfig.stlFolderId && !googleConfig.parasolidFolderId) return;
+export function scheduleOrganizeAfterSave(bomID: string, droppedPartIDs: string[] = [], who = ""): void {
     topsAbove(bomID)
         .then((tops) => {
             for (const top of tops) {
+                if (droppedPartIDs.length) {
+                    const dropped = droppedByTop.get(top) ?? new Map<string, string>();
+                    for (const id of droppedPartIDs) dropped.set(id, who);
+                    droppedByTop.set(top, dropped);
+                }
                 clearTimeout(timers.get(top));
                 const timer = setTimeout(() => {
                     timers.delete(top);
