@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
 import Part from '../models/Part';
 import { loadBoms, partIDsOf } from './bomTree';
+import { scheduleOrganizeAfterSave } from '../services/driveOrganizer';
 import { cleanUpdateBody, updatedByOf, upsertByID } from './upsert';
 import { makeGetByIds } from './getByIds';
 import { makeListAll } from './listAll';
@@ -149,6 +150,9 @@ export async function upsertBomByID(
         // Plain fields only, under $set: the body used to be passed as the
         // update itself, so {"$unset": ...} or {"$rename": ...} ran as operators.
         const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...cleanUpdateBody(req.body), ...updatedByOf(req), id: id } });
+        // Sorts its assembly's Drive files into folders a minute after the
+        // publish's last save (in the background; never fails this save).
+        scheduleOrganizeAfterSave(id);
 
         return res.status(created ? 201 : 200).json(bom);
     } catch (err) {
