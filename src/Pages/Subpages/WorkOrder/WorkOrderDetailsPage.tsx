@@ -60,9 +60,10 @@ export default function WorkOrderDetailsPage() {
     usePartInAddress(selectedPart, setSelectedPart);
     // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
     const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
-    // Browser tab: "<assembly's catalog number> - Work Order" (else the work order's name).
-    const assemblyCatalogNumber = bomName?.workOrderID === workOrderID ? bomName.catalogNumber : undefined;
-    useDocumentTitle(workOrderData ? recordTitle("Work Order", assemblyCatalogNumber, workOrderData.name) : null);
+    // Browser tab: "<assembly's name> - Work Order" (else its catalog number;
+    // "Demacia BOM" until the assembly has loaded, or with neither).
+    const assembly = bomName?.workOrderID === workOrderID ? bomName : null;
+    useDocumentTitle(assembly ? recordTitle("Work Order", assembly.name, assembly.catalogNumber) : null);
     const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<WorkOrderTableRow>();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
     const [lightboxImages, setLightboxImages] = useState<string[]>([]);

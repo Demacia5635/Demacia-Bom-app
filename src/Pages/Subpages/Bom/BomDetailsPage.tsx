@@ -165,8 +165,8 @@ export default function BomDetailsPage() {
   /** Failed cell saves by part id (each cleared when that part saves). */
   const [saveErrors, setSaveErrors] = useState<Record<string, string>>({});
   const [mainBomData, setMainBomData] = useState<BomModel | null>(null);
-  // Browser tab: "<catalog number> - BOM" (else the assembly's name).
-  useDocumentTitle(mainBomData ? recordTitle("BOM", mainBomData.catalogNumber, mainBomData.name) : null);
+  // Browser tab: "<assembly name> - BOM" (else its catalog number).
+  useDocumentTitle(mainBomData ? recordTitle("BOM", mainBomData.name, mainBomData.catalogNumber) : null);
 
   const [selectedPart, setSelectedPart] = useState<PartModel | null>(null);
   // ?part=<id> opens that part's Part Portal, and the address follows it (shareable link).
