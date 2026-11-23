@@ -4,6 +4,8 @@ export interface RowContextMenu<Row> {
   x: number;
   y: number;
   row: Row;
+  /** The column of the cell right-clicked (its data-col-key), if any. */
+  colKey?: string;
 }
 
 /**
@@ -43,7 +45,8 @@ export function useRowContextMenu<Row>() {
     }
 
     const row = rowOf(rowEl);
-    if (row) setMenu({ x: e.clientX, y: e.clientY, row });
+    const colKey = target.closest("[data-col-key]")?.getAttribute("data-col-key") ?? undefined;
+    if (row) setMenu({ x: e.clientX, y: e.clientY, row, colKey });
   };
 
   return { menu, openFor, close: () => setMenu(null) };

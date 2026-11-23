@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { Appbar } from "./Appbar";
 import { Sidebar } from "./Sidebar";
 import Toasts from "./Toasts";
+import DriveFileMenu from "./DriveFileMenu";
 import { useUnsavedEditsGuard } from "./useUnsavedEditsGuard";
 import { useThemeSync } from "../util/misc/useThemeSync";
 import '../css/table.css';
@@ -33,6 +34,8 @@ export default function MainLayout() {
                 </Suspense>
             </main>
             <Toasts />
+            {/* Right-click on a saved image or file: "Open … in Google Drive". */}
+            <DriveFileMenu />
         </div>
     );
 }

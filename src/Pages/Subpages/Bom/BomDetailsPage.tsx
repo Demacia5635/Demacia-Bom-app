@@ -29,6 +29,8 @@ import BomBreadcrumbs from "./BomBreadcrumbs";
 import BomUsedIn from "./BomUsedIn";
 import { recordTitle, useDocumentTitle } from "../../../components/useDocumentTitle";
 import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
+import { DriveMenuItem } from "../../../components/DriveFileMenu";
+import { driveFileOfCell } from "../partColumns";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -468,6 +470,11 @@ export default function BomDetailsPage() {
               >
                 Show Part Data
               </button>
+              {(() => {
+                // On the image / STL / Parasolid cell: "Open … in Google Drive".
+                const file = driveFileOfCell(contextMenu.colKey, contextMenu.row, (r) => !!r.isSubAssembly);
+                return file && <DriveMenuItem label={file.label} fileId={file.fileId} onDone={closeContextMenu} />;
+              })()}
             </div>
           )}
         </div>

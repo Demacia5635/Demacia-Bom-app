@@ -6,6 +6,7 @@
 import type { ColumnConfig, RowData } from "../../components/Table";
 import { downloadDriveFile } from "../../util/ApiService";
 import { openExternal } from "../../util/openExternal";
+import { driveFileIdFromSrc } from "../../util/driveLinks";
 
 interface FileRow {
   name?: string;
@@ -43,4 +44,20 @@ export function fileDownloadColumns<Row extends RowData & FileRow>(blocked: (row
     },
   });
   return [column("exportSTL", "Export STL", "stl"), column("exportParasolid", "Export Parasolid", "x_t")];
+}
+
+/**
+ * The Drive file behind a right-clicked cell, for the row menu's "Open … in
+ * Google Drive": the image (Avatar), STL or Parasolid. `fileId` is null (the
+ * item greyed out) when the row has none; null for other columns.
+ */
+export function driveFileOfCell<Row extends FileRow & { avatar?: string }>(
+  colKey: string | undefined,
+  row: Row,
+  blocked: (row: Row) => boolean = () => false,
+): { label: string; fileId: string | null } | null {
+  if (colKey === "avatar") return { label: "image", fileId: driveFileIdFromSrc(row.avatar) };
+  if (colKey === "exportSTL") return { label: "STL", fileId: blocked(row) ? null : row.exportSTL || null };
+  if (colKey === "exportParasolid") return { label: "Parasolid", fileId: blocked(row) ? null : row.exportParasolid || null };
+  return null;
 }

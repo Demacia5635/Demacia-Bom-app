@@ -7,6 +7,7 @@ import {
   isOnshapeApiUrl,
   publicDriveImageUrl,
 } from "../util/images";
+import { driveFileAttrs, driveFileIdFromSrc } from "../util/driveLinks";
 
 interface AuthenticatedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
@@ -94,7 +95,8 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
 
   if (publicUrl) {
     return error ? (
-      <span className="text-zinc-600 text-sm">Image Load Failed</span>
+      // Still in Drive, so it can still be opened there.
+      <span className="text-zinc-600 text-sm" {...driveFileAttrs(driveFileIdFromSrc(src), "image")}>Image Load Failed</span>
     ) : (
       <img
         src={publicUrl}
@@ -103,6 +105,8 @@ export function AuthenticatedImage({ src, alt, className, ...props }: Authentica
         loading="lazy"
         decoding="async"
         onError={() => setFailedSrc(src)}
+        // Right-click: "Open image in Google Drive" (DriveFileMenu).
+        {...driveFileAttrs(driveFileIdFromSrc(src), "image")}
         {...props}
       />
     );
