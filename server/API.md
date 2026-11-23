@@ -152,6 +152,51 @@ The whole list costs one query for the work orders, one per BOM level for all of
 
 Drive requests time out after 30 s, and uploads after 120 s.
 
+### Sorted folders
+
+Inside each type folder (Images, STL, Parasolid), the files are sorted into one folder per assembly, nested like the BOM tree, for example `Images/2714-0000/2714-1000/2714-1100`. The rules (`server/services/driveFolderPlan.ts`):
+
+- **Folder name:** the assembly's catalog number, or its name if it has none. Saving a BOM whose folder name would clash is refused (see the BOM routes).
+- **An assembly's own image** goes in its own folder.
+- **A part's files** go in the folder of the first assembly that lists it. "First" follows a fixed order: top-level assemblies (listed in no other BOM) oldest first, by `createdAt` then `id`. Each one is walked depth-first: its own parts before its sub-assemblies, both in BOM order. A file only moves when a BOM or a catalog number changes.
+- **Bought items** go in `Standard parts`, directly inside the type folder. A bought part goes there directly. A bought sub-assembly gets its own folder there, with everything inside it nested the same way.
+- **Files no assembly reaches** (parts in no BOM) stay where they are.
+- **Files are moved, never copied or deleted:** their IDs and links stay, and the database doesn't change. Folders are found or created by name, never twice. Emptied folders are left alone.
+
+The server sorts an assembly's tree by itself after a publish: 60 s after the last BOM save in that tree, in the background (it never delays or fails a save). The first full sort is started by hand with the admin routes below.
+
+### Admin: `/api/drive/organize`
+
+These routes need the `x-admin-secret` header (the `ADMIN_SECRET` setting, set only on Render) as well as `x-client-secret`. Without `ADMIN_SECRET` set, or with a wrong one, they answer `404`.
+
+| Route | Body | Reply |
+|---|---|---|
+| `POST /organize` | `{ "dryRun": true }` or `{}` | Starts a sort in the background: `202 { jobId, dryRun, status }`, or `409` if one is running. A dry run creates and moves nothing; it reports what it would do. |
+| `GET /organize/:jobId` | | The job (below), or `404`. |
+| `GET /organize` | | The last 10 jobs, without their lists (in memory: a restart forgets them). |
+
+A job:
+
+```json
+{
+  "id": "...", "dryRun": true, "trigger": "manual", "status": "running | done | failed",
+  "startedAt": "...", "finishedAt": "...", "progress": { "done": 120, "total": 480 },
+  "summary": { "moved": 300, "alreadyInPlace": 150, "notInAnyAssembly": 12, "skipped": { "not found in Drive": 3 }, "foldersCreated": 40 },
+  "moves": [{ "fileId": "...", "record": { "kind": "part", "id": "...", "name": "Plate" }, "field": "stlLink", "from": "STL", "to": "STL/2714-0000/2714-1000" }],
+  "skipped": [{ "fileId": "...", "record": { "kind": "part", "id": "..." }, "reason": "in Drive's trash" }],
+  "clashes": { "catalogNumbers": [{ "catalogNumber": "2714-1000", "boms": [{ "id": "...", "name": "..." }] }], "names": [] },
+  "error": "..."
+}
+```
+
+- **In a dry run,** `moved` and `foldersCreated` mean "would move" and "would create".
+- **`clashes`** lists existing BOMs that share a catalog number, or that have no catalog number and the same name under one parent. They share a folder until they're fixed, and they can't be published again until then.
+- **Skip reasons:** `not found in Drive`, `in Drive's trash`, `not in a team folder`, `is a folder`, or `error: ...`.
+- **Lists:** `moves` and `skipped` keep at most 5000 entries each, while the counts are always complete.
+- **Repeat runs:** running a sort again moves nothing.
+
+Drive requests are throttled to about 5 per second and retried on rate limits. The server log has a summary line for every run.
+
 ## Fixed lists: `/api/enum`
 
 | Route | Reply |
