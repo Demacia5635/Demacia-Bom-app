@@ -2,7 +2,8 @@ import type { ColumnConfig } from "../../../components/Table";
 import { cadLinkColumn, fileDownloadColumns } from "../partColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import { isPurchasedPart } from "../../../util/Models";
-import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
+import { BOUGHT_STATUSES, MADE_STATUSES, MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
+import { isPurchasedRow } from "./useWorkOrderFilters";
 
 /**
  * Onshape Standard Content and parts marked standard in the extension: the
@@ -19,6 +20,7 @@ const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!r
  */
 const VALUE_COLOURS: Record<string, string> = {
     'In Planning': 'status-bg-orange',
+    'To buy': 'status-bg-orange',
     'In manufacturing': 'status-bg-orange',
     'Medium': 'status-bg-orange',
     'Manual': 'status-bg-orange',
@@ -57,10 +59,10 @@ const WorkOrderColumns: ColumnConfig<WorkOrderTableRow>[] = [
         label: "Status",
         type: "select",
         valueClass: valueColour,
-        options: ['CATNUM Written', 'In Planning', 'Manufacturing approved', 'In manufacturing', 'Finished Manufacturing', 'Untracked'],
-        // Editable for every row, bought ones too (they start as "Untracked").
-        // A bought line's status never counts towards the made / finished
-        // progress (isPurchasedRow).
+        options: MADE_STATUSES,
+        // A bought item (isPurchasedRow) has its own list: Untracked / To buy /
+        // Finished. Its status never counts towards the made / finished progress.
+        rowOptions: (row: WorkOrderTableRow) => (isPurchasedRow(row) ? BOUGHT_STATUSES : MADE_STATUSES),
     },
     { key: "approxArrivalDate", label: "Approx. Arrival Date", type: "string" },
     {

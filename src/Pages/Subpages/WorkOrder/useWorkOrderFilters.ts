@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 
-/** Made already: status "Finished Manufacturing" or priority "Finished" (the table keeps them in step). */
+/** Done: status "Finished Manufacturing" (made) or "Finished" (bought), or priority "Finished" (the table keeps them in step). */
 export const isFinishedRow = (row: WorkOrderTableRow) =>
-    row.statusCode === "Finished Manufacturing" || row.Priority === "Finished";
+    row.statusCode === "Finished Manufacturing" || row.statusCode === "Finished" || row.Priority === "Finished";
 
 /** Bought, not made: Onshape Standard Content, marked standard, a vendor part, or set to "Purchased". */
 export const isPurchasedRow = (row: WorkOrderTableRow) =>
