@@ -39,8 +39,9 @@ router.post("/organize", checkAdmin, (req, res) => {
 });
 router.get("/organize", checkAdmin, (req, res) => res.status(200).json(listJobs()));
 router.get("/organize/:jobId", checkAdmin, (req, res) => {
-  const job = getJob(req.params.jobId);
-  if (!job) return res.status(404).json({ message: `No sort job ${req.params.jobId} (only the last 10 since the server started are kept)` });
+  const jobId = String(req.params.jobId);
+  const job = getJob(jobId);
+  if (!job) return res.status(404).json({ message: `No sort job ${jobId} (only the last 10 since the server started are kept)` });
   return res.status(200).json(job);
 });
 

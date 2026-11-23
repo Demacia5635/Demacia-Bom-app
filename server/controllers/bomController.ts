@@ -113,7 +113,7 @@ export async function getBomPublishedElsewhere(req: Request, res: Response, next
         if (typeof wvmType !== "string" || !/^[wvm]$/.test(wvmType)) bad.push("wvmType");
         if (bad.length) return res.status(400).json({ message: "documentID, elementID and wvmID must be Onshape IDs, and wvmType w, v or m", fields: bad });
         return res.status(200).json(await publishedElsewhere({
-            documentID: documentID as string, elementID: elementID as string, wvmType, wvmID: wvmID as string,
+            documentID: documentID as string, elementID: elementID as string, wvmType: wvmType as string, wvmID: wvmID as string,
         }));
     } catch (err) {
         return next(err);
