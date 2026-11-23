@@ -31,6 +31,13 @@ if (!CLIENT_SECRET) {
 }
 
 // The local dev servers, allowed only outside production.
+/**
+ * Secret for the admin routes (sorting the Drive folders), sent as
+ * x-admin-secret. Set only on the host, never in the website or extension.
+ * Not set: the admin routes don't exist (404).
+ */
+export const ADMIN_SECRET: string = process.env.ADMIN_SECRET ?? "";
+
 const defaultOrigins = process.env.NODE_ENV === "production" ? [] : [
     "http://localhost:5173",
     "http://localhost:5050",

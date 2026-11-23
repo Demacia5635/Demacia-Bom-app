@@ -1,20 +1,10 @@
 import express from "express";
 import * as driveController from "../controllers/driveController";
-import { createGoogleDriveService } from "../services/driveService";
-import { google } from "googleapis";
-import { google as googleConfig } from "../config";
+import { drive } from "../services/driveClient";
+import { checkAdmin } from "../auth";
+import { getJob, listJobs, startOrganize } from "../services/driveOrganizer";
 
 const router = express.Router();
-const auth = new google.auth.OAuth2(
-  googleConfig.clientId,
-  googleConfig.clientSecret,
-  googleConfig.redirectUri,
-);
-auth.setCredentials({
-  refresh_token: googleConfig.refreshToken,
-});
-
-const drive = createGoogleDriveService(auth);
 
 router.get(
   "/",
@@ -38,5 +28,20 @@ router.delete(
   async (req, res, next) =>
     await driveController.deleteFile(drive, req, res, next),
 );
+
+// Admin: sort the parts' and assemblies' files into assembly folders
+// (services/driveOrganizer.ts). Needs x-admin-secret as well.
+router.post("/organize", checkAdmin, (req, res) => {
+  const dryRun = req.body?.dryRun === true || req.query.dryRun === "true" || req.query.dryRun === "1";
+  const job = startOrganize(dryRun);
+  if (!job) return res.status(409).json({ message: "A sort is already running. Check GET /api/drive/organize." });
+  return res.status(202).json({ jobId: job.id, dryRun: job.dryRun, status: job.status });
+});
+router.get("/organize", checkAdmin, (req, res) => res.status(200).json(listJobs()));
+router.get("/organize/:jobId", checkAdmin, (req, res) => {
+  const job = getJob(req.params.jobId);
+  if (!job) return res.status(404).json({ message: `No sort job ${req.params.jobId} (only the last 10 since the server started are kept)` });
+  return res.status(200).json(job);
+});
 
 export default router;
