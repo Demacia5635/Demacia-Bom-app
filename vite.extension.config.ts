@@ -32,6 +32,13 @@ const DEFAULT_BACKEND_URL = 'https://demacia-bom-app-n2ag.onrender.com';
 const FIREFOX_ADDON_ID = 'demacia-bom@demacia5635';
 
 /**
+ * Where Firefox looks for new versions (self-distributed add-on): the website's
+ * public/firefox/updates.json, next to the signed .xpi files. Added by
+ * `npm run release -- firefox-update <signed.xpi>`; deployed with the website.
+ */
+const FIREFOX_UPDATE_URL = 'https://demacia5635.github.io/Demacia-Bom-app/firefox/updates.json';
+
+/**
  * Turns the Chrome manifest (extension/manifest.json, the source of truth) into
  * the Firefox one: sidebar_action instead of side_panel, background scripts
  * instead of a service worker, and a gecko ID instead of "key".
@@ -57,6 +64,7 @@ function toFirefoxManifest(manifest: Record<string, unknown>): Record<string, un
     browser_specific_settings: {
       gecko: {
         id: FIREFOX_ADDON_ID,
+        update_url: FIREFOX_UPDATE_URL,
         // Firefox 140 brought the built-in data-collection consent the key below uses.
         strict_min_version: '140.0',
         // What the extension sends to the team's server (the user's decision):

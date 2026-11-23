@@ -5,6 +5,7 @@
  *   npm run release -- extension patch|minor|major
  *   npm run release -- website   patch|minor|major
  *   npm run release -- server    patch|minor|major
+ *   npm run release -- firefox-update <signed .xpi>
  *
  * Flags:
  *   --dry-run     show what it would do; changes nothing
@@ -27,7 +28,8 @@
  * No dependencies.
  */
 import { execSync, spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -57,6 +59,41 @@ const BUMPS = ["patch", "minor", "major"];
 
 // ---- arguments ----
 const args = process.argv.slice(2);
+
+/**
+ * After Mozilla signed a Firefox version: copies the signed .xpi to
+ * public/firefox/demacia-bom-<version>.xpi and adds it to
+ * public/firefox/updates.json (with its sha256 update_hash), where installed
+ * copies look for updates (the manifest's update_url). The version is
+ * package.json's. Doesn't commit; deploy the website (push MASTER) to publish it.
+ */
+if (args[0] === "firefox-update") {
+  const xpi = args[1];
+  if (!xpi || !existsSync(xpi) || !/\.xpi$/i.test(xpi)) {
+    console.error("Usage: npm run release -- firefox-update <path to the signed .xpi from addons.mozilla.org>");
+    process.exit(1);
+  }
+  const ADDON_ID = "demacia-bom@demacia5635";
+  const SITE = "https://demacia5635.github.io/Demacia-Bom-app/firefox/";
+  const version = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+  const name = `demacia-bom-${version}.xpi`;
+  const target = join(ROOT, "public", "firefox", name);
+  const hash = "sha256:" + createHash("sha256").update(readFileSync(xpi)).digest("hex");
+  const updatesPath = join(ROOT, "public", "firefox", "updates.json");
+  const updates = JSON.parse(readFileSync(updatesPath, "utf8"));
+  const list = (updates.addons[ADDON_ID] ??= { updates: [] }).updates;
+  const entry = { version, update_link: SITE + name, update_hash: hash };
+  const at = list.findIndex((u) => u.version === version);
+  if (at >= 0) list[at] = entry;
+  else list.push(entry);
+  copyFileSync(xpi, target);
+  writeFileSync(updatesPath, JSON.stringify(updates, null, 2) + "\n");
+  console.log(`Firefox ${version}: copied to public/firefox/${name}, updates.json now lists:`);
+  console.log(JSON.stringify(entry, null, 2));
+  console.log("\nLeft to do: commit public/firefox/, then push MASTER (the website deploy publishes it).");
+  console.log("Copies installed from 5.0.0 or earlier have no update_url: install this version once by hand.");
+  process.exit(0);
+}
 const dryRun = args.includes("--dry-run");
 const noChecks = args.includes("--no-checks");
 const [target, bump] = args.filter((a) => !a.startsWith("--"));
@@ -185,7 +222,8 @@ step("Left to do (not done by this script)");
 const todo = {
   extension: [
     `Share the zips in publish/${to}/ (they contain the client secret: team only).`,
-    "Firefox: upload the Firefox zip to addons.mozilla.org to have it signed.",
+    "Firefox: upload the Firefox zip to addons.mozilla.org to have it signed, then run",
+    "  npm run release -- firefox-update <the signed .xpi>  (adds it to the website's updates.json).",
   ],
   website: ["Push MASTER: GitHub Pages deploys the website from it."],
   server: ["Push MASTER, then redeploy the server on Render."],
