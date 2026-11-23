@@ -6,6 +6,7 @@ import WorkOrderColumns from "./WorkOrderColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import type { BomModel, PartModel, WorkOrderModel } from "../../../util/Models";
 import WorkOrderDataUI from "./WorkOrderDataUI";
+import { recordTitle, useDocumentTitle } from "../../../components/useDocumentTitle";
 import PartPortal from "../../../Pages/SearchPartsPage/PartPortal";
 import SubAssemblySummary from "../Bom/SubAssemblySummary";
 import { partDisplayName } from "../../../util/partDisplayName";
@@ -59,6 +60,9 @@ export default function WorkOrderDetailsPage() {
     usePartInAddress(selectedPart, setSelectedPart);
     // A bought sub-assembly's line without a part record: its summary, as on the BOM page.
     const [selectedSubBom, setSelectedSubBom] = useState<BomModel | null>(null);
+    // Browser tab: "<assembly's catalog number> - Work Order" (else the work order's name).
+    const assemblyCatalogNumber = bomName?.workOrderID === workOrderID ? bomName.catalogNumber : undefined;
+    useDocumentTitle(workOrderData ? recordTitle("Work Order", assemblyCatalogNumber, workOrderData.name) : null);
     const { menu: contextMenu, openFor: openContextMenu, close: closeContextMenu } = useRowContextMenu<WorkOrderTableRow>();
     const [enlargedImageSrc, setEnlargedImageSrc] = useState<string | null>(null);
     const [lightboxImages, setLightboxImages] = useState<string[]>([]);
@@ -216,7 +220,7 @@ export default function WorkOrderDetailsPage() {
     const { tableAreaRef, pdfProgress, exportPdf: handleExportPdf } = useWorkOrderPdfExport({
         rowFromElement,
         title: workOrderData?.name || "Work order",
-        assemblyName: bomName?.workOrderID === workOrderID ? bomName?.name : undefined,
+        assemblyName: bomName?.workOrderID === workOrderID ? bomName?.name || undefined : undefined,
         filterLines: filters.describe(),
     });
 
