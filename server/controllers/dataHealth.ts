@@ -11,9 +11,10 @@
  * - made parts' material and engineer: the extension's workOrderProblems.ts.
  * Severity, as the user defined it:
  * - "warning": data the team must fix before the item can go into a work
- *   order (numbers, material, engineer, image, files, parts in no assembly);
+ *   order (numbers, duplicate numbers and names, an assembly saved from two
+ *   workspaces, material, engineer, image, files, parts in no assembly);
  * - "error": data the code should have made impossible (a BOM pointing at a
- *   record that isn't saved, clashes the publish block refuses).
+ *   record that isn't saved).
  * Parts in no assembly are reported once (they should be deleted) and not
  * checked further.
  */
@@ -28,9 +29,9 @@ type Rec = Record<string, any>;
 
 export const HEALTH_CODES = {
     CATALOG_NUMBER_INVALID: { title: "Catalog number breaks the numbering rules", severity: "warning" },
-    CATALOG_NUMBER_DUPLICATE: { title: "Catalog number used by several assemblies", severity: "error" },
-    ASSEMBLY_NAME_DUPLICATE: { title: "Same-name assemblies without a catalog number", severity: "error" },
-    ASSEMBLY_IN_TWO_WORKSPACES: { title: "Assembly saved from several workspaces", severity: "error" },
+    CATALOG_NUMBER_DUPLICATE: { title: "Catalog number used by several assemblies", severity: "warning" },
+    ASSEMBLY_NAME_DUPLICATE: { title: "Same-name assemblies without a catalog number", severity: "warning" },
+    ASSEMBLY_IN_TWO_WORKSPACES: { title: "Assembly saved from several workspaces", severity: "warning" },
     PART_MISSING: { title: "Part missing from the database", severity: "error" },
     SUB_ASSEMBLY_MISSING: { title: "Sub-assembly missing from the database", severity: "error" },
     MISSING_MATERIAL: { title: "Missing material", severity: "warning" },
