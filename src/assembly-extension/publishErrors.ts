@@ -42,21 +42,19 @@ export function explainPublishError(err: unknown): PublishErrorExplanation {
   }
 
   const status = typeof e.statusCode === "number" ? e.statusCode : 0;
-  // The server refused the save for a reason it explains (5.0.0+): show its words.
+  // The server refused the save for a reason it explains (5.0.0+). Its message
+  // already says what to do and that nothing was saved: shown as it is.
   const code = typeof (e as { code?: unknown }).code === "string" ? (e as { code: string }).code : "";
-  if (status === 409 && (code === "ASSEMBLY_PUBLISHED_ELSEWHERE" || /already published from another/i.test(detail))) {
-    return {
-      cause: detail,
-      next: "Publish it from the workspace it was first published from.",
-      detail: "ASSEMBLY_PUBLISHED_ELSEWHERE",
-    };
-  }
-  if (status === 409 && (code === "CATALOG_NUMBER_TAKEN" || /catalog number .* already used/i.test(detail))) {
-    return {
-      cause: detail,
-      next: "Give it its own catalog number in Onshape, press Refresh BOM, then publish again.",
-      detail: "CATALOG_NUMBER_TAKEN",
-    };
+  if (status === 409) {
+    const refusal =
+      code === "ASSEMBLY_PUBLISHED_ELSEWHERE" || /already published from another/i.test(detail)
+        ? "ASSEMBLY_PUBLISHED_ELSEWHERE"
+        : code === "CATALOG_NUMBER_TAKEN" || /catalog number .* already used/i.test(detail)
+          ? "CATALOG_NUMBER_TAKEN"
+          : code === "ASSEMBLY_NAME_TAKEN" || /give them catalog numbers/i.test(detail)
+            ? "ASSEMBLY_NAME_TAKEN"
+            : null;
+    if (refusal) return { cause: detail, next: "", detail: refusal };
   }
   if (status === 0) {
     // A request to our server that never got an answer (fetchFromApi throws an
@@ -100,7 +98,7 @@ export function explainPublishError(err: unknown): PublishErrorExplanation {
 /** One line: cause, next step, and the raw message in parentheses. */
 export function describePublishError(err: unknown): string {
   const { cause, next, detail } = explainPublishError(err);
-  return `${cause} ${next} (Details: ${detail})`;
+  return `${[cause, next].filter(Boolean).join(" ")} (Details: ${detail})`;
 }
 
 /** "Saving the assembly" -> "saving the assembly", to use mid-sentence. */
