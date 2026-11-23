@@ -121,7 +121,7 @@ export function useCellSelection<T extends RowData>({ enabled, rows, columns, da
           if (!col || col.isDisabled?.(row)) continue;
           const text = textAt(r, c);
           if (text === undefined) continue;
-          const value = valueFromText(col, text);
+          const value = valueFromText(col, text, row);
           if (value === undefined) continue;
           updates.set(row.id, { ...(updates.get(row.id) ?? {}), [col.key]: value });
         }

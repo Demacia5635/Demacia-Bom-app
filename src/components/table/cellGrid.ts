@@ -3,7 +3,7 @@
  * tab-separated text, and turning pasted text into a column's value. Pure
  * functions, so they can be tested.
  */
-import type { CellValue, ColumnConfig } from "../Table";
+import type { CellValue, ColumnConfig, RowData } from "../Table";
 
 /** A cell by its shown row and column index. */
 export interface CellPos {
@@ -57,7 +57,7 @@ export function cellText(col: ColumnConfig, value: unknown): string {
  * fit (the cell is left as it is): numbers like the table's own check, ticks
  * from TRUE/FALSE, yes/no, 1/0, x; a select only one of its options.
  */
-export function valueFromText(col: ColumnConfig, text: string): CellValue | undefined {
+export function valueFromText<T extends RowData>(col: ColumnConfig<T>, text: string, row?: T): CellValue | undefined {
   const t = text.trim();
   switch (col.type) {
     case "boolean": {
@@ -72,7 +72,8 @@ export function valueFromText(col: ColumnConfig, text: string): CellValue | unde
       return /^-?(\d+\.?\d*|\.\d+)$/.test(t) ? String(Number(t)) : undefined;
     }
     case "select":
-      return col.options?.includes(t) ? t : undefined;
+      // The row's own choices when the column has them (rowOptions), else the column's.
+      return ((row && col.rowOptions?.(row)) ?? col.options)?.includes(t) ? t : undefined;
     case "string":
       return text;
     default:
