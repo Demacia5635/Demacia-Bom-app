@@ -21,6 +21,7 @@ import { isFinishedRow, isPurchasedRow, toggleIn, useWorkOrderFilters } from "./
 import WorkOrderFilters from "./WorkOrderFilters";
 import { madeStatus } from "./workOrderOptions";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
+import { partListText } from "./copyPartList";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
@@ -237,6 +238,28 @@ export default function WorkOrderDetailsPage() {
             .map((tr) => rowFromElement(tr)?.avatar || "")
             .filter(Boolean))];
 
+    // ---- Copy the shown parts as plain text (copyPartList.ts) ----
+    const handleCopyList = async () => {
+        // As the table shows them: filtered and in its sort order.
+        const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+            .map(rowFromElement)
+            .filter((r): r is WorkOrderTableRow => !!r);
+        if (shownRows.length === 0) {
+            showToast("No parts are shown, so there's nothing to copy.", "info");
+            return;
+        }
+        const text = partListText(
+            workOrderData?.name || "Work order",
+            shownRows.map((r) => ({ catalogNumber: r.catalogNumber, name: r.name, quantity: r.quantityTotal }))
+        );
+        try {
+            await navigator.clipboard.writeText(text);
+            showToast(`Copied ${shownRows.length} part${shownRows.length === 1 ? "" : "s"}`, "success");
+        } catch {
+            showToast("Couldn't copy the list: the browser blocked the clipboard.", "error");
+        }
+    };
+
     const handleTableClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const target = e.target as HTMLElement;
         const cellEl = target.closest(".table-td, td");
@@ -396,6 +419,19 @@ export default function WorkOrderDetailsPage() {
                                 </span>
                             </div>
                         )}
+                    </div>
+                )}
+                {rows.length > 0 && (
+                    <div className="mb-3 flex">
+                        <button
+                            type="button"
+                            disabled={shownCount === 0}
+                            onClick={() => void handleCopyList()}
+                            title="Copy the parts shown below (catalog number, name, quantity) as plain text, for a message to a supplier or WhatsApp"
+                            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${theme.border} ${theme.textValue} hover:bg-zinc-500/10 disabled:opacity-50 disabled:cursor-default`}
+                        >
+                            Copy list
+                        </button>
                     </div>
                 )}
                 <div
