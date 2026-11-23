@@ -1,7 +1,12 @@
 import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
-import { cleanUpdateBody, upsertByID } from './upsert';
+import Part from '../models/Part';
+import { loadBoms, partIDsOf } from './bomTree';
+import { bomSaveClash, publishedElsewhere } from './bomNameClash';
+import { scheduleOrganizeAfterSave } from '../services/driveOrganizer';
+import { cleanUpdateBody, updatedByOf, upsertByID } from './upsert';
 import { makeGetByIds } from './getByIds';
+import { makeListAll } from './listAll';
 
 interface OnshapeID {
     documentID: string;
@@ -41,18 +46,8 @@ function formID(onshapeID: OnshapeID): string {
     return `${onshapeID.documentID}_${onshapeID.wvmType}_${onshapeID.wvmID}_${onshapeID.elementID}_${onshapeID.bomID}`;
 }
 
-export async function getAllBoms(
-    req: Request,
-    res: Response,
-    next: NextFunction,
-) {
-    try {
-        const boms = await Bom.find().sort({ id: 1 });
-        return res.status(200).json(boms);
-    } catch (err) {
-        return next(err);
-    }
-}
+/** GET /all: every BOM, or one page of them (see makeListAll). */
+export const getAllBoms = makeListAll(Bom, { id: 1 }, ["name", "catalogNumber", "projectCatalogNumber", "description", "id"]);
 
 export async function getBomByID(
     req: Request<{ id: string}>,
@@ -70,6 +65,106 @@ export async function getBomByID(
     }
 }
 
+/**
+ * GET /usedIn/:id: the BOMs that use this BOM as a sub-assembly ("Used in"),
+ * by name: [{ id, name, catalogNumber, quantity, driveFileId, avatarID,
+ * imageUrl, thumbnailURL }]. quantity is how many of it each one lists.
+ * An empty list when nothing uses it (or it isn't saved).
+ */
+export async function getBomUsedIn(
+    req: Request<{ id: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const id = req.params.id;
+        const parents = await Bom.find(
+            { "subAssemblies.bomID": id },
+            { id: 1, name: 1, catalogNumber: 1, subAssemblies: 1, driveFileId: 1, avatarID: 1, imageUrl: 1, thumbnailURL: 1 },
+        ).lean<Record<string, any>[]>();
+        const usedIn = parents
+            .map(({ subAssemblies, _id, ...parent }): Record<string, any> => ({
+                ...parent,
+                quantity: (subAssemblies ?? [])
+                    .filter((sub: { bomID?: string }) => sub?.bomID === id)
+                    .reduce((sum: number, sub: { quantity?: number }) => sum + (sub.quantity ?? 1), 0),
+            }))
+            .sort((a, b) => String(a.name ?? a.id).localeCompare(String(b.name ?? b.id)));
+        return res.status(200).json(usedIn);
+    } catch (err) {
+        return next(err);
+    }
+}
+
+const ONSHAPE_ID = /^[0-9a-f]{24}$/;
+
+/**
+ * GET /publishedElsewhere?documentID=&elementID=&wvmType=&wvmID=: whether
+ * this Onshape assembly is already saved from another workspace or version
+ * (then saving it from this one is refused), so the extension can warn
+ * before anyone edits. Read-only.
+ */
+export async function getBomPublishedElsewhere(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { documentID, elementID, wvmType, wvmID } = req.query;
+        const bad = [["documentID", documentID], ["elementID", elementID], ["wvmID", wvmID]]
+            .filter(([, value]) => typeof value !== "string" || !ONSHAPE_ID.test(value))
+            .map(([field]) => field as string);
+        if (typeof wvmType !== "string" || !/^[wvm]$/.test(wvmType)) bad.push("wvmType");
+        if (bad.length) return res.status(400).json({ message: "documentID, elementID and wvmID must be Onshape IDs, and wvmType w, v or m", fields: bad });
+        return res.status(200).json(await publishedElsewhere({
+            documentID: documentID as string, elementID: elementID as string, wvmType, wvmID: wvmID as string,
+        }));
+    } catch (err) {
+        return next(err);
+    }
+}
+
+/** Deepest sub-assembly level GET /tree/:id follows (the root is level 0). */
+const MAX_TREE_DEPTH = 10;
+/** Most BOMs one tree request returns. */
+const MAX_TREE_BOMS = 2000;
+
+/**
+ * GET /tree/:id: a BOM with all its sub-assemblies and parts, in one request
+ * instead of one per level:
+ * { rootID, boms: [...], parts: [...], missing: { boms, parts }, truncated }.
+ * boms includes the root; missing lists IDs the BOMs refer to that aren't
+ * saved. One query per level, then one for all the parts. A BOM reached
+ * twice (shared, or a cycle) is fetched once. truncated is true when the
+ * tree went deeper than 10 levels or past 2000 BOMs; what's below is left out.
+ */
+export async function getBomTree(
+    req: Request<{ id: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const rootID = req.params.id;
+        const loaded = await loadBoms([rootID], MAX_TREE_DEPTH, MAX_TREE_BOMS);
+        if (!loaded.boms.has(rootID))
+            return res.status(404).json({ message: `Bom ${rootID} not found` });
+        const boms = [...loaded.boms.values()];
+        const missingBoms = loaded.missing;
+        const truncated = loaded.truncated;
+        const partIDs = partIDsOf(boms);
+
+        const parts = partIDs.size ? await Part.find({ id: { $in: [...partIDs] } }).lean<Record<string, any>[]>() : [];
+        const foundParts = new Set(parts.map((part) => part.id));
+        const missingParts = [...partIDs].filter((id) => !foundParts.has(id));
+
+        return res.status(200).json({
+            rootID,
+            boms,
+            parts,
+            missing: { boms: missingBoms, parts: missingParts },
+            truncated,
+        });
+    } catch (err) {
+        return next(err);
+    }
+}
+
 export async function upsertBomByID(
     req: Request<{ id: string }, unknown, BomBody>,
     res: Response,
@@ -79,7 +174,14 @@ export async function upsertBomByID(
         const id = req.params.id;
         // Plain fields only, under $set: the body used to be passed as the
         // update itself, so {"$unset": ...} or {"$rename": ...} ran as operators.
-        const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...cleanUpdateBody(req.body), id: id } });
+        const fields = cleanUpdateBody(req.body);
+        // Each assembly needs its own folder name in the sorted Drive folders.
+        const clash = await bomSaveClash(id, fields);
+        if (clash) return res.status(409).json(clash);
+        const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...fields, ...updatedByOf(req), id: id } });
+        // Sorts its assembly's Drive files into folders a minute after the
+        // publish's last save (in the background; never fails this save).
+        scheduleOrganizeAfterSave(id);
 
         return res.status(created ? 201 : 200).json(bom);
     } catch (err) {

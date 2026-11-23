@@ -3,10 +3,10 @@ import mongoose from "mongoose";
 const subPartSchema = new mongoose.Schema(
   {
     partID: { type: String, required: true },
-    quantityTotal: { type: Number, default: 1 },
-    // Nothing is made yet when a part enters a work order (also when it's
-    // added later by the per-part route, which doesn't send this field).
-    quantityMade: { type: Number, default: 0 },
+    // No defaults: the website takes the quantity from the BOM and no longer
+    // stores either field. Kept in the schema for records that have them.
+    quantityTotal: { type: Number },
+    quantityMade: { type: Number },
     statusCode: { type: mongoose.Schema.Types.Mixed, default: "In Planning" },
     Priority: { type: String, default: "Medium" },
     manufacturingMethod: { type: String, default: "Manual" },
@@ -15,6 +15,7 @@ const subPartSchema = new mongoose.Schema(
     comments: { type: String },
     links: { type: String },                 // Added Links schema definition
     approxArrivalDate: { type: String },     // Added Arrival Date schema definition
+    updatedBy: { type: String },
     updatedAt: { type: Date },
     createdAt: { type: Date },
   },
@@ -39,6 +40,8 @@ const cncGroupSchema = new mongoose.Schema(
 const workOrderSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, unique: true, index: true },
+    // Who saved it last (X-Updated-By): a convenience, not an audit trail.
+    updatedBy: { type: String },
 
     name: { type: String },
     bomID: { type: String },
@@ -55,6 +58,9 @@ const workOrderSchema = new mongoose.Schema(
   // No _id: false here: a top-level document needs its _id for .save()/create().
   { timestamps: true },
 );
+
+// GET /all lists work orders oldest first (IDs are UUIDs, so not by id).
+workOrderSchema.index({ createdAt: 1, id: 1 });
 
 const WorkOrder = mongoose.model("Work Order", workOrderSchema);
 

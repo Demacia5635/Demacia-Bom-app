@@ -11,9 +11,11 @@ export function useColumnResize(
   columns: ColumnConfig[],
   wrapperRef: RefObject<HTMLDivElement | null>,
   defaultColWidth: number,
-  minLastColWidth: number
+  minLastColWidth: number,
+  /** Remembered widths (QW7). */
+  initialWidths: Record<string, number> = {}
 ) {
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>(initialWidths);
   const [autoLastColWidth, setAutoLastColWidth] = useState<number | null>(null);
 
   useEffect(() => {

@@ -19,9 +19,10 @@ export interface BoundingBox {
 /** "25 × 8 × 8 mm" (one decimal where needed), or "" for a missing/empty box. */
 export function formatPartSize(box: BoundingBox | null | undefined): string {
   if (!box) return "";
-  const sides = [box.highX - box.lowX, box.highY - box.lowY, box.highZ - box.lowZ].map((m) => m * 1000);
+  // Lengths, whichever way round the corners are, so they sort as they print.
+  const sides = [box.highX - box.lowX, box.highY - box.lowY, box.highZ - box.lowZ].map((m) => Math.abs(m * 1000));
   if (sides.some((mm) => !Number.isFinite(mm)) || sides.every((mm) => mm <= 0)) return "";
-  const text = (mm: number) => String(Math.round(Math.abs(mm) * 10) / 10);
+  const text = (mm: number) => String(Math.round(mm * 10) / 10);
   return `${sides.sort((a, b) => b - a).map(text).join(" × ")} mm`;
 }
 

@@ -9,6 +9,10 @@ import { recordImageSrc } from "../../util/recordImage";
 import { openExternal } from "../../util/openExternal";
 import ImageLightbox from "../../components/ImageLightbox";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
+import { showToast } from "../../util/toast";
+import CopyButton from "../../components/CopyButton";
+import { copyToClipboard, partLink } from "../../util/clipboard";
+import { Link2 } from "lucide-react";
 
 /** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
 const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
@@ -98,11 +102,11 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                 setLinkedBoms(matchingBoms);
                 setIsBomModalOpen(true);
             } else {
-                alert("This part is not currently linked to any BOM assemblies.");
+                showToast("This part is not currently linked to any BOM assemblies.", "info");
             }
         } catch (err) {
             console.error("Failed to fetch BOM list for linked assembly lookup:", err);
-            alert("Could not retrieve linked BOMs. Check console for details.");
+            showToast("Could not retrieve linked BOMs. Check console for details.", "error");
         } finally {
             setIsCheckingBoms(false);
         }
@@ -113,13 +117,13 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
 
     // Dynamic theme classes
     const labelColor = isLight ? "text-zinc-600" : "text-zinc-500";
-    const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-400 focus:ring-blue-600/50" : "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:ring-blue-500/50";
+    const inputBg = isLight ? "bg-zinc-50 border-zinc-300 text-zinc-900 placeholder-zinc-500 focus:ring-blue-600/50" : "bg-zinc-950 border-zinc-800 text-white placeholder-zinc-600 focus:ring-blue-500/50";
     const cardBg = isLight ? "bg-zinc-50 border-zinc-200" : "bg-zinc-950 border-zinc-800/80";
     const subInputBg = isLight ? "bg-white border-zinc-300 text-zinc-900 focus:ring-blue-600/50" : "bg-zinc-900 border-zinc-800 text-zinc-100 focus:ring-blue-500/50";
     const commentsColor = isLight ? "text-zinc-700 italic" : "text-zinc-300 italic";
 
     return (
-        <div className={`w-full max-w-4xl border rounded-2xl p-6 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto transition-colors duration-200 ${theme.raisedCard}`}>
+        <div className={`w-full max-w-4xl border rounded-2xl p-4 sm:p-8 space-y-6 my-auto max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-y-auto overscroll-contain transition-colors duration-200 ${theme.raisedCard}`}>
             {/* Header */}
             <div className={`flex items-start justify-between gap-4 border-b pb-5 ${theme.border}`}>
                 <div className="flex items-center gap-5 w-full">
@@ -135,7 +139,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                                 className="w-full h-full object-cover"
                             />
                         ) : (
-                            <span className={`text-[10px] font-mono ${isLight ? "text-zinc-400" : "text-zinc-600"}`}>NO IMAGE</span>
+                            <span className={`text-[10px] font-mono ${isLight ? "text-zinc-500" : "text-zinc-600"}`}>NO IMAGE</span>
                         )}
                     </div>
 
@@ -168,8 +172,9 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                 {/* Row 1: Catalog Number & Revision & Engineer */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>
-                        <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wider flex items-center ${labelColor}`}>
                             Catalog Number
+                            {formData.catalogNumber && <CopyButton text={formData.catalogNumber} what="catalog number" onHover={false} />}
                         </label>
                         <input
                             type="text"
@@ -334,7 +339,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                         onChange={handleChange}
                         disabled={locked}
                         placeholder="Detailed description of the part..."
-                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${theme.textValue}`}
+                        className={`w-full border rounded-lg p-3 text-xs ${isLight ? "placeholder-zinc-500" : "placeholder-zinc-400"} focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${theme.textValue}`}
                     />
                 </div>
 
@@ -350,13 +355,22 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                         onChange={handleChange}
                         disabled={locked}
                         placeholder="Additional manufacturing notes, comments, or issues..."
-                        className={`w-full border rounded-lg p-3 text-xs placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${commentsColor}`}
+                        className={`w-full border rounded-lg p-3 text-xs ${isLight ? "placeholder-zinc-500" : "placeholder-zinc-400"} focus:outline-none focus:ring-2 focus:ring-blue-500/50 resize-y ${subInputBg} ${commentsColor}`}
                     />
                 </div>
 
                 {/* Footer Actions */}
                 {/* Onshape opens from its card, next to the STL / Parasolid downloads. */}
-                <div className={`flex flex-col sm:flex-row items-center justify-end gap-4 pt-3 border-t ${theme.border}`}>
+                <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t ${theme.border}`}>
+                    {/* A link that opens this part's Part Portal (QW5). */}
+                    <button
+                        type="button"
+                        onClick={() => void copyToClipboard(partLink(part.id), "link")}
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold border ${theme.border} ${theme.textValue} hover:bg-zinc-500/10`}
+                    >
+                        <Link2 className="w-3.5 h-3.5" aria-hidden="true" />
+                        Copy link
+                    </button>
                     {/* The note is on the wrapper: a disabled button gets no hover in some browsers. */}
                     <div
                         className="flex items-center gap-3 w-full sm:w-auto"
@@ -379,6 +393,8 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
             {/* Multiple Linked BOMs Selection Modal */}
             {isBomModalOpen && createPortal(
                 <div 
+                    role="dialog"
+                    aria-modal="true"
                     className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
                     onClick={() => setIsBomModalOpen(false)}
                 >
@@ -393,7 +409,7 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                                 onClick={() => setIsBomModalOpen(false)}
                                 className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-semibold"
                             >
-                                ✕ Close
+                                <span aria-hidden="true">✕</span> Close
                             </button>
                         </div>
                         <p className={`text-xs ${isLight ? "text-zinc-600" : "text-zinc-400"}`}>

@@ -2,8 +2,21 @@
 // server/.env first (dotenv), so every value below is ready whichever module
 // is imported first.
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
 
 export const PORT = process.env.PORT || 5050;
+
+/** The server's own version, from server/package.json (the root package.json's version is the extension's). */
+export const SERVER_VERSION: string = (() => {
+    try {
+        return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version ?? 'unknown';
+    } catch {
+        return 'unknown';
+    }
+})();
+
+/** When this server process started (shown by GET /api). */
+export const STARTED_AT = new Date().toISOString();
 
 export const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -18,6 +31,13 @@ if (!CLIENT_SECRET) {
 }
 
 // The local dev servers, allowed only outside production.
+/**
+ * Secret for the admin routes (sorting the Drive folders), sent as
+ * x-admin-secret. Set only on the host, never in the website or extension.
+ * Not set: the admin routes don't exist (404).
+ */
+export const ADMIN_SECRET: string = process.env.ADMIN_SECRET ?? "";
+
 const defaultOrigins = process.env.NODE_ENV === "production" ? [] : [
     "http://localhost:5173",
     "http://localhost:5050",

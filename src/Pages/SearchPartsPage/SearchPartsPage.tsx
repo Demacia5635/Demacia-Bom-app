@@ -6,10 +6,17 @@ import type { BomModel, PartModel } from "../../util/Models";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import PartPortal from "./PartPortal";
+import RecordDialog from "../../components/RecordDialog";
 import { recordImageSrc } from "../../util/recordImage";
 import { isMadeRecord, splitStandard } from "../../util/standardItems";
 import ErrorBanner, { ApiErrorText } from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
+import { matchesSearch, searchPattern } from "../../util/search";
+import Highlight from "../../components/Highlight";
+import { useSearchShortcut } from "../../components/useSearchShortcut";
+import { usePartInAddress } from "../../components/usePartInAddress";
+import CopyButton from "../../components/CopyButton";
+import { SkeletonCards } from "../../components/Skeleton";
 
 /** A search result: a part, or a sub-assembly (an assembly some other assembly uses). */
 type SearchItem =
@@ -45,6 +52,8 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const [items, setItems] = useState<SearchItem[]>([]);
     /** The part shown in Part Portal (null: closed). */
     const [openPart, setOpenPart] = useState<PartModel | null>(null);
+    // ?part=<id> opens that part, and the address follows Part Portal (shareable link).
+    usePartInAddress(openPart, setOpenPart);
     // Without these, a slow or failed load showed "Nothing found", as if the database were empty.
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<ApiError | null>(null);
@@ -93,18 +102,18 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
         return () => { cancelled = true; };
     }, [standard]);
 
+    // Name, catalog #, description, material, engineer and vendor; case and
+    // extra spaces don't matter (util/search.ts). The matches are highlighted.
+    const pattern = useMemo(() => searchPattern(searchQuery), [searchQuery]);
     const filteredItems = useMemo(() => {
-        const query = searchQuery.toLowerCase().trim();
-        if (!query) return items;
-
+        if (!pattern) return items;
         return items.filter(({ record }) => {
-            const nameMatch = record.name?.toLowerCase().includes(query);
-            const catalogMatch = record.catalogNumber?.toLowerCase().includes(query);
-            const descriptionMatch = record.description?.toLowerCase().includes(query);
-
-            return nameMatch || catalogMatch || descriptionMatch;
+            const part = record as PartModel & BomModel;
+            return matchesSearch(pattern, [part.name, part.catalogNumber, part.description, part.material, part.engineer, part.vendor]);
         });
-    }, [searchQuery, items]);
+    }, [pattern, items]);
+    // "/" jumps to the search box, Esc clears it.
+    const { inputRef: searchInputRef, onKeyDown: onSearchKeyDown } = useSearchShortcut(() => setSearchQuery(""));
 
     // Theme Styles Mapping
     const cardBg = isLight ? "bg-white border-zinc-200 hover:border-zinc-300" : "bg-zinc-900 border-zinc-800 hover:border-zinc-700";
@@ -112,7 +121,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
     const textSubdued = "text-zinc-600"; // the same in both themes
 
     return (
-        <div className={`min-h-screen p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
+        <div className={`min-h-screen p-4 sm:p-6 space-y-6 transition-colors duration-200 ${theme.page}`}>
             {/* Header & Search Bar */}
             <div className="max-w-6xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -141,9 +150,13 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                     </div>
                     <input
                         type="text"
+                        ref={searchInputRef}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search by name, catalog #, or description..."
+                        onKeyDown={onSearchKeyDown}
+                        aria-label="Search parts"
+                        aria-keyshortcuts="/"
+                        placeholder="Search name, catalog #, description, material, engineer, vendor…   ( / )"
                         className={`w-full border rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-md ${theme.input}`}
                     />
                     {searchQuery && (
@@ -160,9 +173,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
             {/* Results Grid */}
             <div className="max-w-6xl mx-auto">
                 {loading ? (
-                    <div className={`${cardBg} border rounded-xl p-12 text-center`}>
-                        <p className={`${theme.textMuted} text-sm font-medium`}>Loading {standard ? "standard parts" : "parts"}...</p>
-                    </div>
+                    <SkeletonCards label={standard ? "Loading standard parts…" : "Loading parts…"} />
                 ) : error ? (
                     <ErrorBanner title="Error loading parts" className="p-4 rounded-xl">
                         <ApiErrorText error={error} />
@@ -203,7 +214,7 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                                     <div className="flex-1 min-w-0 space-y-1">
                                         <div className="flex items-center justify-between gap-2">
                                             <h3 className={`text-sm font-semibold ${theme.textHeading} truncate group-hover:text-blue-500 transition-colors`}>
-                                                {part.name || part.id}
+                                                <Highlight text={part.name || part.id} pattern={pattern} />
                                             </h3>
                                             {isSub && (
                                                 <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-blue-500/15 text-blue-500">
@@ -213,7 +224,8 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                                         </div>
 
                                         <p className={`text-xs font-mono ${theme.textMuted}`}>
-                                            Cat #: <span className={theme.textValue}>{part.catalogNumber || "N/A"}</span>
+                                            Cat #: <span className={theme.textValue}><Highlight text={part.catalogNumber || "N/A"} pattern={pattern} /></span>
+                                            {part.catalogNumber && <CopyButton text={part.catalogNumber} what="catalog number" />}
                                         </p>
 
                                         {part.description && (
@@ -234,20 +246,16 @@ export function PartsSearchPage({ standard = false }: { standard?: boolean }) {
                 )}
             </div>
             {openPart && createPortal(
-                <div
-                    onClick={() => setOpenPart(null)}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-                >
-                    <div onClick={(e) => e.stopPropagation()}>
-                        <PartPortal
-                            key={openPart.id}
-                            part={openPart}
-                            onSaved={(saved) => setItems((list) => list.map((item) =>
-                                item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item
-                            ))}
-                        />
-                    </div>
-                </div>,
+                // Close button, Esc and a tap outside close it (RecordDialog).
+                <RecordDialog onClose={() => setOpenPart(null)}>
+                    <PartPortal
+                        key={openPart.id}
+                        part={openPart}
+                        onSaved={(saved) => setItems((list) => list.map((item) =>
+                            item.kind === "part" && item.record.id === saved.id ? { ...item, record: saved } : item
+                        ))}
+                    />
+                </RecordDialog>,
                 document.body
             )}
         </div>

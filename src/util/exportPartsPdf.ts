@@ -5,6 +5,8 @@ export interface PdfPartRow {
     name: string;
     catalogNumber?: string;
     quantity: number | string;
+    /** Bounding box from Onshape (e.g. "25 × 8 × 8 mm"); "" when unknown. */
+    size?: string;
     /** A record image src (see recordImageSrc); "" for none. */
     imageSrc: string;
 }
@@ -82,7 +84,9 @@ function buildHtml(options: PartsPdfOptions, thumbnails: Map<string, string>): s
   <td class="img">${img ? `<img src="${img}" alt="">` : `<div class="noimg">No image</div>`}</td>
   <td class="name">${escapeHtml(row.name || "Unnamed part")}</td>
   <td class="cat">${row.catalogNumber?.trim() ? escapeHtml(row.catalogNumber.trim()) : `<span class="none">—</span>`}</td>
+  <td class="size">${row.size?.trim() ? escapeHtml(row.size.trim()) : `<span class="none">—</span>`}</td>
   <td class="qty">${escapeHtml(String(row.quantity ?? ""))}</td>
+  <td class="done"><span class="box"></span></td>
 </tr>`;
     }).join("\n");
 
@@ -112,15 +116,21 @@ function buildHtml(options: PartsPdfOptions, thumbnails: Map<string, string>): s
   th.cat, td.cat { width: 40mm; }
   td.cat { font-size: 10.5pt; font-family: Consolas, monospace; word-break: break-all; }
   td.cat .none { color: #aaa; }
+  th.size, td.size { width: 30mm; }
+  td.size { font-size: 9.5pt; color: #333; }
+  td.size .none { color: #aaa; }
   th.qty, td.qty { width: 22mm; text-align: center; }
   td.qty { font-size: 18pt; font-weight: 700; }
+  /* A box to tick by hand on the printed sheet. */
+  th.done, td.done { width: 16mm; text-align: center; }
+  td.done .box { display: inline-block; width: 7mm; height: 7mm; border: 1pt solid #333; border-radius: 1mm; }
 </style></head>
 <body>
   <h1>${escapeHtml(options.title)}</h1>
   ${subtitles}
   <div class="summary">${options.rows.length} part${options.rows.length === 1 ? "" : "s"} · total quantity ${totalQty}</div>
   <table>
-    <thead><tr><th class="num">#</th><th>Image</th><th>Name</th><th class="cat">Catalogue #</th><th class="qty">Qty</th></tr></thead>
+    <thead><tr><th class="num">#</th><th>Image</th><th>Name</th><th class="cat">Catalogue #</th><th class="size">Size</th><th class="qty">Qty</th><th class="done">Done</th></tr></thead>
     <tbody>
 ${body}
     </tbody>

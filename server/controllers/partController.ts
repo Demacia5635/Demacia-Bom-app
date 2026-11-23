@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
-import { cleanUpdateBody, upsertByID } from "./upsert";
+import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
 import { makeGetByIds } from "./getByIds";
+import { makeListAll } from "./listAll";
 
 interface OnshapeID {
   documentID: string;
@@ -29,14 +30,8 @@ function parseOnshapeIDFromCompoundKey(id: string): OnshapeID | null {
   };
 }
 
-export async function getAllParts(req: Request, res: Response, next: NextFunction) {
-  try {
-    const parts = await Part.find().sort({ id: 1 });
-    return res.status(200).json(parts);
-  } catch (err) {
-    return next(err);
-  }
-}
+/** GET /all: every part, or one page of them (see makeListAll). */
+export const getAllParts = makeListAll(Part, { id: 1 }, ["name", "catalogNumber", "description", "vendor", "id"]);
 
 /**
  * Read-only lookup of a saved part. 404 when there is no such part: a GET
@@ -84,7 +79,7 @@ export async function upsertPartByID(
       delete updateData.name;
     }
 
-    const { doc: part, created } = await upsertByID(Part, id, { $set: updateData });
+    const { doc: part, created } = await upsertByID(Part, id, { $set: { ...updateData, ...updatedByOf(req) } });
 
     return res.status(created ? 201 : 200).json(part);
   } catch (err) {

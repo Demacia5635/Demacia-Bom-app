@@ -14,6 +14,8 @@ const onshapeIDSchema = new mongoose.Schema(
 const partSchema = new mongoose.Schema(
   {
     id: { type: String, required: true, unique: true, index: true },
+    // Who saved it last (X-Updated-By): a convenience, not an audit trail.
+    updatedBy: { type: String },
 
     name: { type: String },
     catalogNumber: { type: String },

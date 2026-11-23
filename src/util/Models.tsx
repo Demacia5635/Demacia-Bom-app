@@ -28,6 +28,8 @@ export interface BomModel {
   imageUrl?: string;
   /** ISO date string (dates arrive as text in JSON). */
   updatedAt?: string;
+  /** Who saved it last (X-Updated-By: an Onshape user name, or "website"), when known. */
+  updatedBy?: string;
   /** ISO date string (dates arrive as text in JSON). */
   createdAt?: string;
 }
@@ -74,6 +76,8 @@ export interface PartModel {
   createdAt?: string;
   /** ISO date string (dates arrive as text in JSON). */
   updatedAt?: string;
+  /** Who saved it last (X-Updated-By: an Onshape user name, or "website"), when known. */
+  updatedBy?: string;
 }
 
 /**
@@ -109,6 +113,8 @@ export interface WorkOrderPartModel {
   approxArrivalDate?: string;
   /** ISO date string (dates arrive as text in JSON). */
   updatedAt?: string;
+  /** Who saved it last (X-Updated-By: an Onshape user name, or "website"), when known. */
+  updatedBy?: string;
   /** ISO date string (dates arrive as text in JSON). */
   createdAt?: string;
 }
@@ -129,6 +135,8 @@ export interface WorkOrderModel {
   createdAt?: string;
   /** ISO date string (dates arrive as text in JSON). */
   updatedAt?: string;
+  /** Who saved it last (X-Updated-By: an Onshape user name, or "website"), when known. */
+  updatedBy?: string;
 }
 
 /**
