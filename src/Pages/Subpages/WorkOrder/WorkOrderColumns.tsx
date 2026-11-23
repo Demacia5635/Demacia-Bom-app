@@ -5,9 +5,10 @@ import { isPurchasedPart } from "../../../util/Models";
 import { MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
 
 /**
- * Onshape Standard Content and parts marked standard in the extension: status
- * and method are fixed. Narrower than isPurchasedPart on purpose: a vendor
- * part's method and priority can still be set here.
+ * Onshape Standard Content and parts marked standard in the extension: the
+ * method is fixed ("Purchased"); the status can be set like any part's.
+ * Narrower than isPurchasedPart on purpose: a vendor part's method can still
+ * be set here.
  */
 const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!row.markedStandard;
 
@@ -57,8 +58,9 @@ const WorkOrderColumns: ColumnConfig<WorkOrderTableRow>[] = [
         type: "select",
         valueClass: valueColour,
         options: ['CATNUM Written', 'In Planning', 'Manufacturing approved', 'In manufacturing', 'Finished Manufacturing', 'Untracked'],
-        // Standard items are purchased: not tracked through manufacturing.
-        isDisabled: isStandardRow,
+        // Editable for every row, bought ones too (they start as "Untracked").
+        // A bought line's status never counts towards the made / finished
+        // progress (isPurchasedRow).
     },
     { key: "approxArrivalDate", label: "Approx. Arrival Date", type: "string" },
     {
