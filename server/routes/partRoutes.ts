@@ -1,6 +1,7 @@
 import express from 'express';
 import * as partController from '../controllers/partController';
-import { getOrphanParts } from '../controllers/orphanParts';
+import { deleteOrphanParts, getOrphanParts } from '../controllers/orphanParts';
+import { checkAdmin } from '../auth';
 
 const router = express.Router();
 
@@ -10,6 +11,8 @@ router.get('/all', partController.getAllParts);
 router.post('/ids', partController.getPartsByIds);
 // Parts no assembly uses (the website's /orphans page). Read-only.
 router.get('/orphans', getOrphanParts);
+// Admin (x-admin-secret): deletes parts no BOM uses, re-checked one by one.
+router.post('/orphans/delete', checkAdmin, deleteOrphanParts);
 router.get('/id/:id', partController.getPartByID);
 router.post('/id/:id', partController.upsertPartByID);
 router.delete('/id/:id', partController.deletePartByID);
