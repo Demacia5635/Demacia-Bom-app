@@ -33,7 +33,43 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 |---|---|
 | `GET /api` | `200 { status: "online", version, startedAt, database: "connected" \| "disconnected" }`. Public. |
 | `GET /api/db` | `200 { connected: true }`, or `503 { connected: false }`. |
+| `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
 | `GET /api/drive` | `200` when Drive answers, `503` when it doesn't: `{ connected, ... }`. |
+
+### `GET /api/db/health`
+
+Every problem in the database. It reads all BOMs and all parts in two queries and does the rest in memory, so it's one call with no paging.
+
+```json
+{
+  "generatedAt": "...",
+  "counts": { "problems": 14, "byCode": { "MISSING_MATERIAL": 3 } },
+  "codeTitles": { "MISSING_MATERIAL": "Missing material" },
+  "problems": [{
+    "code": "MISSING_MATERIAL", "severity": "warning", "message": "Work orders need a material for made parts.",
+    "records": [{ "kind": "part", "id": "...", "name": "Bracket", "catalogNumber": "2603-1002", "onshapeURL": "...",
+                  "parents": [{ "id": "...", "name": "Robot", "catalogNumber": "2603-1000" }] }]
+  }]
+}
+```
+
+- **`problems`** is sorted by code, then by catalog number or name.
+- **`records`** has one entry for most problems and several for duplicates. A record that isn't saved has only `kind`, `id` and `parents`.
+- **`parents`** lists the BOMs that list the record directly, at most 10.
+- **`codeTitles`** holds a short, stable title for every code.
+
+Only items used in an assembly are checked; parts in no BOM are skipped. "Made" means not bought: not Standard Content, not marked standard, and with no vendor. The checks use the same rules that publishing and work orders use.
+
+| Code | Severity | What |
+|---|---|---|
+| `CATALOG_NUMBER_INVALID` | error | Breaks the numbering rules (`src/util/catalogNumbers.ts`, as in the extension and "Create work order"), checked on each top-level assembly's tree. Bought items are exempt. The message is the rule's own text. |
+| `CATALOG_NUMBER_DUPLICATE` | error | Several assemblies have the same catalog number (republishing them is refused). |
+| `ASSEMBLY_NAME_DUPLICATE` | error | Assemblies with no catalog number and the same name under one parent. |
+| `ASSEMBLY_IN_TWO_WORKSPACES` | error | The same Onshape assembly saved from several workspaces or versions (with short IDs in the message). |
+| `PART_MISSING`, `SUB_ASSEMBLY_MISSING` | error | A BOM lists an ID that isn't saved. |
+| `MISSING_MATERIAL`, `MISSING_ENGINEER` | warning | A made part without them (work orders need them; "Standard Part" doesn't count as an engineer). |
+| `MISSING_IMAGE` | warning | A made part or assembly without an image. |
+| `MISSING_STL`, `MISSING_PARASOLID` | warning | A made part set to export the file (`wantStl` / `wantParasolid`) that has none. |
 
 ## Parts: `/api/db/part`
 
