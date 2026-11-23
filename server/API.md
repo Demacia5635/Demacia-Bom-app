@@ -19,7 +19,7 @@ Every error reply has this shape:
 { "code": "BAD_REQUEST", "message": "partID is required", "fields": ["partID"], "requestId": "..." }
 ```
 
-- `code` follows the status: `BAD_REQUEST` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403, origin not allowed), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405), `CONFLICT` (409), `TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `INTERNAL` (500), `UNAVAILABLE` (503).
+- `code` follows the status: `BAD_REQUEST` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403, origin not allowed), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405), `CONFLICT` (409; a BOM save's clashes have their own codes, see the BOM routes), `TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `INTERNAL` (500), `UNAVAILABLE` (503).
 - `fields` (only when known) lists the input fields that were wrong.
 - `message` is safe to show. For a 500 it is just "Internal server error"; the details are in the log under the `requestId`.
 
@@ -54,13 +54,26 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /all` | | Every BOM, by `id`. See [Lists](#lists). |
 | `POST /ids` | `{ ids: string[] }` (at most 500) | The BOMs that exist. |
 | `GET /tree/:id` | | The whole tree in one request (below). |
+| `GET /publishedElsewhere?documentID=&elementID=&wvmType=&wvmID=` | | Read-only: whether this Onshape assembly is already saved from another workspace or version, in which case saving it from this one is refused with `ASSEMBLY_PUBLISHED_ELSEWHERE`. Returns `{ elsewhere: false }` or `{ elsewhere: true, bom: { id, name, catalogNumber, onshapeURL, onshapeID: { documentID, wvmType, wvmID, elementID } } }`. Missing or malformed parameters give `400`. |
 | `GET /usedIn/:id` | | The BOMs that use this one as a sub-assembly, by name: `[{ id, name, catalogNumber, quantity, driveFileId, avatarID, imageUrl, thumbnailURL }]`. `quantity` is how many of it each one lists; the image fields appear only when set. An empty list when nothing uses it. |
 | `GET /id/:id` | | The BOM, or `404`. |
-| `POST /id/:id` | The BOM's fields | Creates or updates it: `201` or `200`, with the record. |
+| `POST /id/:id` | The BOM's fields | Creates or updates it: `201` or `200`, with the record. Refused with `409` when its folder name would clash (below). |
 | `DELETE /id/:id` | | **Turned off:** `405` "Deleting BOMs is turned off". |
 | `GET /d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/b/:bomID` | | The BOM with this Onshape identity, or `404`. |
 | `POST` (same path) | The BOM's fields | Creates or updates it; `onshapeID` is taken from the path. |
 | `DELETE` (same path) | | **Turned off:** `405`. |
+
+### Saving a BOM: clashes (`409`)
+
+In the sorted Drive folders, every assembly has its own folder, named by its catalog number (or its name). So saving a BOM is refused with `409`, and nothing is saved, when:
+
+| `code` | When | Extra fields |
+|---|---|---|
+| `ASSEMBLY_PUBLISHED_ELSEWHERE` | The same Onshape assembly (document + element) is already saved from another workspace or version. Its BOM is kept for one workspace only. | `publishedFrom: { documentID, wvmType, wvmID, elementID, onshapeURL }` |
+| `CATALOG_NUMBER_TAKEN` | Another assembly has this catalog number. | `fields: ["catalogNumber"]` |
+| `ASSEMBLY_NAME_TAKEN` | It has no catalog number, and another sub-assembly of the same parent has no catalog number and the same name. | `fields: ["name", "catalogNumber"]` |
+
+Each reply also has `conflictsWith: { id, name }` (the other record) and a `message` to show as is. For example: "Catalog number 2714-1000 is already used by another assembly, "Arm". Give this assembly its own catalog number in Onshape, then publish again. Nothing was saved." Saving the same record again is fine, and so is a record of the same Onshape assembly and workspace (if its BOM table ID changed).
 
 A BOM lists its parts as `parts: [{ partID, quantity }]` and its sub-assemblies as `subAssemblies: [{ bomID, quantity }]`.
 
@@ -151,6 +164,58 @@ The whole list costs one query for the work orders, one per BOM level for all of
 | `DELETE /file/id/:fileID` | | Moves a team-folder file to Drive's trash (Drive empties it after 30 days): `204`, or `404`. |
 
 Drive requests time out after 30 s, and uploads after 120 s.
+
+### Sorted folders
+
+Inside each type folder (Images, STL, Parasolid), the files are sorted into one folder per assembly, nested like the BOM tree, for example `Images/2714-0000/2714-1000/2714-1100`. The rules (`server/services/driveFolderPlan.ts`):
+
+- **Folder name:** the assembly's catalog number, or its name if it has none. Saving a BOM whose folder name would clash is refused (see the BOM routes).
+- **An assembly's own image** goes in its own folder.
+- **A part's files** go in the folder of the first assembly that lists it. "First" follows a fixed order: top-level assemblies (listed in no other BOM) oldest first, by `createdAt` then `id`. Each one is walked depth-first: its own parts before its sub-assemblies, both in BOM order. A file only moves when a BOM or a catalog number changes.
+- **Bought items** go in `Standard parts`, directly inside the type folder. A bought part goes there directly. A bought sub-assembly gets its own folder there, with everything inside it nested the same way.
+- **Files no assembly reaches** (parts in no BOM) stay where they are.
+- **Files are moved, never copied or deleted:** their IDs and links stay, and the database doesn't change. Folders are found or created by name, never twice. Emptied folders are left alone.
+
+The server sorts an assembly's tree by itself after a publish: 60 s after the last BOM save in that tree, in the background (it never delays or fails a save). The first full sort is started by hand with the admin routes below.
+
+### Admin: `/api/drive/organize`
+
+These routes need the `x-admin-secret` header (the `ADMIN_SECRET` setting, set only on Render) as well as `x-client-secret`. Without `ADMIN_SECRET` set, or with a wrong one, they answer `404`.
+
+| Route | Body | Reply |
+|---|---|---|
+| `POST /organize` | `{ "dryRun": true }` or `{}` | Starts a sort in the background: `202 { jobId, dryRun, status }`, or `409` if one is running. A dry run creates and moves nothing; it reports what it would do. |
+| `GET /organize/:jobId` | | The job (below), or `404`. |
+| `GET /organize` | | The last 10 jobs, without their lists (in memory: a restart forgets them). |
+
+A job:
+
+```json
+{
+  "id": "...", "dryRun": true, "trigger": "manual", "status": "running | done | failed",
+  "startedAt": "...", "finishedAt": "...", "progress": { "done": 120, "total": 480 },
+  "summary": { "moved": 300, "alreadyInPlace": 150, "notInAnyAssembly": 12, "skipped": { "not found in Drive": 3 }, "foldersCreated": 40 },
+  "moves": [{ "fileId": "...", "record": { "kind": "part", "id": "...", "name": "Plate" }, "field": "stlLink", "from": "STL", "to": "STL/2714-0000/2714-1000" }],
+  "skipped": [{ "fileId": "...", "record": { "kind": "part", "id": "..." }, "reason": "in Drive's trash" }],
+  "clashes": {
+    "catalogNumbers": [{ "catalogNumber": "2714-1000", "boms": [{ "id": "...", "name": "..." }] }],
+    "names": [],
+    "workspaces": [{ "documentID": "...", "elementID": "...", "boms": [{ "id": "...", "name": "...", "catalogNumber": "...", "wvmType": "w", "wvmID": "..." }] }]
+  },
+  "error": "..."
+}
+```
+
+- **In a dry run,** `moved` and `foldersCreated` mean "would move" and "would create".
+- **`clashes`** lists the existing records that will be refused when they're published again, so they can be fixed first:
+  - `catalogNumbers`: assemblies sharing a catalog number. They also share a folder until fixed.
+  - `names`: assemblies with no catalog number and the same name under one parent.
+  - `workspaces`: the same Onshape assembly saved from more than one workspace or version.
+- **Skip reasons:** `not found in Drive`, `in Drive's trash`, `not in a team folder`, `is a folder`, or `error: ...`.
+- **Lists:** `moves` and `skipped` keep at most 5000 entries each, while the counts are always complete.
+- **Repeat runs:** running a sort again moves nothing.
+
+Drive requests are throttled to about 5 per second and retried on rate limits. The server log has a summary line for every run.
 
 ## Fixed lists: `/api/enum`
 

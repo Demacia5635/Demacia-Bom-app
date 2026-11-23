@@ -1,7 +1,7 @@
 import dns from 'node:dns';
 import type { Server } from 'node:http';
 import mongoose from 'mongoose';
-import { PORT, SERVER_VERSION, allowedOrigins, google } from './config';
+import { ADMIN_SECRET, PORT, SERVER_VERSION, allowedOrigins, google } from './config';
 import app from './app';
 import { connect } from './db/connection';
 import { TELEMETRY_TTL_SECONDS } from './models/TelemetryEvent';
@@ -16,6 +16,7 @@ function settingsSummary(): string {
     `origins ${allowedOrigins.join(", ") || "(none)"}`,
     `Drive folders: image ${set(google.imageFolderId)}, STL ${set(google.stlFolderId)}, Parasolid ${set(google.parasolidFolderId)}`,
     `telemetry kept ${Math.round(TELEMETRY_TTL_SECONDS / 86_400)} days`,
+    `admin routes ${ADMIN_SECRET ? "on" : "off (ADMIN_SECRET not set)"}`,
   ].join(" | ");
 }
 

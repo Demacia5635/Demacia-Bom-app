@@ -2,6 +2,8 @@ import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
 import Part from '../models/Part';
 import { loadBoms, partIDsOf } from './bomTree';
+import { bomSaveClash, publishedElsewhere } from './bomNameClash';
+import { scheduleOrganizeAfterSave } from '../services/driveOrganizer';
 import { cleanUpdateBody, updatedByOf, upsertByID } from './upsert';
 import { makeGetByIds } from './getByIds';
 import { makeListAll } from './listAll';
@@ -94,6 +96,30 @@ export async function getBomUsedIn(
     }
 }
 
+const ONSHAPE_ID = /^[0-9a-f]{24}$/;
+
+/**
+ * GET /publishedElsewhere?documentID=&elementID=&wvmType=&wvmID=: whether
+ * this Onshape assembly is already saved from another workspace or version
+ * (then saving it from this one is refused), so the extension can warn
+ * before anyone edits. Read-only.
+ */
+export async function getBomPublishedElsewhere(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { documentID, elementID, wvmType, wvmID } = req.query;
+        const bad = [["documentID", documentID], ["elementID", elementID], ["wvmID", wvmID]]
+            .filter(([, value]) => typeof value !== "string" || !ONSHAPE_ID.test(value))
+            .map(([field]) => field as string);
+        if (typeof wvmType !== "string" || !/^[wvm]$/.test(wvmType)) bad.push("wvmType");
+        if (bad.length) return res.status(400).json({ message: "documentID, elementID and wvmID must be Onshape IDs, and wvmType w, v or m", fields: bad });
+        return res.status(200).json(await publishedElsewhere({
+            documentID: documentID as string, elementID: elementID as string, wvmType, wvmID: wvmID as string,
+        }));
+    } catch (err) {
+        return next(err);
+    }
+}
+
 /** Deepest sub-assembly level GET /tree/:id follows (the root is level 0). */
 const MAX_TREE_DEPTH = 10;
 /** Most BOMs one tree request returns. */
@@ -148,7 +174,14 @@ export async function upsertBomByID(
         const id = req.params.id;
         // Plain fields only, under $set: the body used to be passed as the
         // update itself, so {"$unset": ...} or {"$rename": ...} ran as operators.
-        const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...cleanUpdateBody(req.body), ...updatedByOf(req), id: id } });
+        const fields = cleanUpdateBody(req.body);
+        // Each assembly needs its own folder name in the sorted Drive folders.
+        const clash = await bomSaveClash(id, fields);
+        if (clash) return res.status(409).json(clash);
+        const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...fields, ...updatedByOf(req), id: id } });
+        // Sorts its assembly's Drive files into folders a minute after the
+        // publish's last save (in the background; never fails this save).
+        scheduleOrganizeAfterSave(id);
 
         return res.status(created ? 201 : 200).json(bom);
     } catch (err) {
