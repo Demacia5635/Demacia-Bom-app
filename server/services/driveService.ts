@@ -57,6 +57,23 @@ export function isTeamFolder(folderId: string): boolean {
   return !!folderId && [IMAGE_FOLDER_ID, STL_FOLDER_ID, PARASOLID_FOLDER_ID].includes(folderId);
 }
 
+const FOLDER_MIME = "application/vnd.google-apps.folder";
+/** The organizer's pace: at most one Drive request per this many ms. */
+const ORGANIZE_MIN_INTERVAL_MS = 200;
+/** Retries of one organizer request on rate limits and server errors. */
+const ORGANIZE_RETRIES = 5;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Drive asking us to slow down (429, 403 rate limit) or failing on its side (5xx). */
+function isRetryableDriveError(err: any): boolean {
+  const status = Number(err?.response?.status ?? err?.code);
+  if (status === 429 || status >= 500) return true;
+  if (status !== 403) return false;
+  const reasons: string[] = (err?.response?.data?.error?.errors ?? err?.errors ?? []).map((e: any) => e?.reason);
+  return reasons.some((r) => r === "rateLimitExceeded" || r === "userRateLimitExceeded");
+}
+
 /** Most file IDs remembered by isInTeamFolders. */
 const TEAM_FILE_CACHE_MAX = 5000;
 /** Deepest folder nesting isInTeamFolders follows up to a type folder. */
@@ -208,6 +225,94 @@ export class GoogleDriveService {
   async deleteFile(fileId: string): Promise<void> {
     await this.drive.files.update({ fileId, requestBody: { trashed: true } });
     this.teamFileCache.delete(fileId);
+  }
+
+  // ---- Sorting files into folders (services/driveOrganizer.ts) ----
+  // These run in the background, so they're throttled to stay well under
+  // Drive's rate limits and retried when Drive says to slow down.
+
+  private lastOrganizeCall = 0;
+  private organizeQueue: Promise<unknown> = Promise.resolve();
+
+  /** Runs one Drive request for the organizer: throttled, retried on rate limits and 5xx. */
+  private organizeCall<T>(run: () => Promise<T>): Promise<T> {
+    const result = this.organizeQueue.then(async () => {
+      for (let attempt = 0; ; attempt++) {
+        const wait = this.lastOrganizeCall + ORGANIZE_MIN_INTERVAL_MS - Date.now();
+        if (wait > 0) await sleep(wait);
+        this.lastOrganizeCall = Date.now();
+        try {
+          return await run();
+        } catch (err) {
+          if (attempt >= ORGANIZE_RETRIES || !isRetryableDriveError(err)) throw err;
+          await sleep(1000 * 2 ** attempt + Math.random() * 500);
+        }
+      }
+    });
+    // The next call waits for this one, whether it worked or not.
+    this.organizeQueue = result.catch(() => undefined);
+    return result;
+  }
+
+  /** Where a file is: its name, parents and whether it's trashed; null if Drive doesn't know it. */
+  async fileLocation(fileId: string): Promise<{ name: string; parents: string[]; trashed: boolean; isFolder: boolean } | null> {
+    try {
+      const res = await this.organizeCall(() =>
+        this.drive.files.get({ fileId, fields: "name, parents, trashed, mimeType" }),
+      );
+      return {
+        name: res.data.name ?? "",
+        parents: res.data.parents ?? [],
+        trashed: !!res.data.trashed,
+        isFolder: res.data.mimeType === FOLDER_MIME,
+      };
+    } catch (err: any) {
+      const status = Number(err?.response?.status ?? err?.code);
+      if (status === 404 || status === 400) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * The folder with this name directly inside `parentId` (the oldest one if
+   * there are several). With `create`, makes it when missing; without, answers
+   * null (a dry run).
+   */
+  async findOrCreateFolder(name: string, parentId: string, create: boolean): Promise<string | null> {
+    // Drive's query syntax: backslashes and single quotes are escaped with a backslash.
+    const escaped = name.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    const res = await this.organizeCall(() =>
+      this.drive.files.list({
+        q: `name = '${escaped}' and '${parentId}' in parents and mimeType = '${FOLDER_MIME}' and trashed = false`,
+        fields: "files(id, createdTime)",
+        orderBy: "createdTime",
+        pageSize: 10,
+      }),
+    );
+    const existing = res.data.files?.[0]?.id;
+    if (existing) return existing;
+    if (!create) return null;
+    const created = await this.organizeCall(() =>
+      this.drive.files.create({
+        requestBody: { name, mimeType: FOLDER_MIME, parents: [parentId] },
+        fields: "id",
+      }),
+    );
+    // A folder made under a team folder is inside the team folders.
+    this.teamFolderCache.set(created.data.id!, true);
+    return created.data.id!;
+  }
+
+  /** Moves a file into `toFolderId`, out of `fromFolderIds`. Its ID and links don't change. */
+  async moveFile(fileId: string, toFolderId: string, fromFolderIds: string[]): Promise<void> {
+    await this.organizeCall(() =>
+      this.drive.files.update({
+        fileId,
+        addParents: toFolderId,
+        removeParents: fromFolderIds.join(","),
+        fields: "id, parents",
+      }),
+    );
   }
 
   private assertImageFolderConfigured() {
