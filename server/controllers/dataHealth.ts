@@ -9,7 +9,13 @@
  *   util/bomTree.ts catalogTree builds it (bought items exempt);
  * - clashes that block republishing: controllers/bomNameClash.ts;
  * - made parts' material and engineer: the extension's workOrderProblems.ts.
- * Only items used in an assembly are checked (parts in no BOM are skipped).
+ * Severity, as the user defined it:
+ * - "warning": data the team must fix before the item can go into a work
+ *   order (numbers, material, engineer, image, files, parts in no assembly);
+ * - "error": data the code should have made impossible (a BOM pointing at a
+ *   record that isn't saved, clashes the publish block refuses).
+ * Parts in no assembly are reported once (they should be deleted) and not
+ * checked further.
  */
 import type { NextFunction, Request, Response } from "express";
 import Bom from "../models/Bom";
@@ -21,7 +27,7 @@ import { topLevelBoms } from "../services/driveFolderPlan";
 type Rec = Record<string, any>;
 
 export const HEALTH_CODES = {
-    CATALOG_NUMBER_INVALID: { title: "Catalog number breaks the numbering rules", severity: "error" },
+    CATALOG_NUMBER_INVALID: { title: "Catalog number breaks the numbering rules", severity: "warning" },
     CATALOG_NUMBER_DUPLICATE: { title: "Catalog number used by several assemblies", severity: "error" },
     ASSEMBLY_NAME_DUPLICATE: { title: "Same-name assemblies without a catalog number", severity: "error" },
     ASSEMBLY_IN_TWO_WORKSPACES: { title: "Assembly saved from several workspaces", severity: "error" },
@@ -32,6 +38,7 @@ export const HEALTH_CODES = {
     MISSING_IMAGE: { title: "Missing image", severity: "warning" },
     MISSING_STL: { title: "Missing STL file", severity: "warning" },
     MISSING_PARASOLID: { title: "Missing Parasolid file", severity: "warning" },
+    NOT_IN_ANY_ASSEMBLY: { title: "Part not in any assembly", severity: "warning" },
 } as const;
 export type HealthCode = keyof typeof HEALTH_CODES;
 
@@ -150,7 +157,12 @@ export function findProblems(boms: Rec[], parts: Rec[]): HealthProblem[] {
     for (const id of missingParts) add("PART_MISSING", "A BOM lists this part, but it isn't saved. Publish the BOM again.", [recordOf("part", id)]);
     for (const id of missingBoms) add("SUB_ASSEMBLY_MISSING", "A BOM lists this sub-assembly, but it isn't saved. Publish the BOM again.", [recordOf("bom", id)]);
 
-    // 4. Made parts (used in an assembly): what work orders and the files need.
+    // 4. Parts no BOM lists: they shouldn't exist (the user's rule). Not checked further.
+    for (const part of parts) {
+        if (!parentsOf.has(part.id)) add("NOT_IN_ANY_ASSEMBLY", "Not in any assembly: should be deleted.", [recordOf("part", part.id)]);
+    }
+
+    // 5. Made parts (used in an assembly): what work orders and the files need.
     for (const part of parts) {
         if (!parentsOf.has(part.id) || isPurchasedPart(part)) continue;
         const record = () => [recordOf("part", part.id)];

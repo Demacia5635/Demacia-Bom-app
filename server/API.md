@@ -58,11 +58,17 @@ Every problem in the database. It reads all BOMs and all parts in two queries an
 - **`parents`** lists the BOMs that list the record directly, at most 10.
 - **`codeTitles`** holds a short, stable title for every code.
 
-Only items used in an assembly are checked; parts in no BOM are skipped. "Made" means not bought: not Standard Content, not marked standard, and with no vendor. The checks use the same rules that publishing and work orders use.
+"Made" means not bought: not Standard Content, not marked standard, and with no vendor. The checks use the same rules that publishing and work orders use.
+
+Severity follows the user's definitions:
+- **`warning`:** data the team must fix before the item can go into a work order.
+- **`error`:** data the code should have made impossible, such as a BOM pointing at a record that isn't saved, or a clash that saving refuses.
+
+A part that no BOM lists is reported once, as `NOT_IN_ANY_ASSEMBLY`, and isn't checked further.
 
 | Code | Severity | What |
 |---|---|---|
-| `CATALOG_NUMBER_INVALID` | error | Breaks the numbering rules (`src/util/catalogNumbers.ts`, as in the extension and "Create work order"), checked on each top-level assembly's tree. Bought items are exempt. The message is the rule's own text. |
+| `CATALOG_NUMBER_INVALID` | warning | Breaks the numbering rules (`src/util/catalogNumbers.ts`, as in the extension and "Create work order"), checked on each top-level assembly's tree. Bought items are exempt. The message is the rule's own text. |
 | `CATALOG_NUMBER_DUPLICATE` | error | Several assemblies have the same catalog number (republishing them is refused). |
 | `ASSEMBLY_NAME_DUPLICATE` | error | Assemblies with no catalog number and the same name under one parent. |
 | `ASSEMBLY_IN_TWO_WORKSPACES` | error | The same Onshape assembly saved from several workspaces or versions (with short IDs in the message). |
@@ -70,6 +76,7 @@ Only items used in an assembly are checked; parts in no BOM are skipped. "Made" 
 | `MISSING_MATERIAL`, `MISSING_ENGINEER` | warning | A made part without them (work orders need them; "Standard Part" doesn't count as an engineer). |
 | `MISSING_IMAGE` | warning | A made part or assembly without an image. |
 | `MISSING_STL`, `MISSING_PARASOLID` | warning | A made part set to export the file (`wantStl` / `wantParasolid`) that has none. |
+| `NOT_IN_ANY_ASSEMBLY` | warning | A part no BOM lists. It shouldn't exist and should be deleted (there's no delete from here). |
 
 ## Parts: `/api/db/part`
 
