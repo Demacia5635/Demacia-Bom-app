@@ -19,8 +19,8 @@ export function useDocumentTitle(title: string | null | undefined): void {
   }, [title]);
 }
 
-/** "<catalog number> - <kind>", or the name when there's no catalog number. */
-export function recordTitle(kind: string, catalogNumber?: string | null, name?: string | null): string | null {
-  const label = catalogNumber?.trim() || name?.trim();
+/** "<name> - <kind>", or the catalog number when there's no name (null with neither). */
+export function recordTitle(kind: string, name?: string | null, catalogNumber?: string | null): string | null {
+  const label = name?.trim() || catalogNumber?.trim();
   return label ? `${label} - ${kind}` : null;
 }
