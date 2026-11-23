@@ -108,7 +108,8 @@ Every work order, oldest first, with its progress counted from its assembly's **
   "id": "...", "name": "...", "owner": "...", "createdAt": "...", "updatedAt": "...", "bomID": "...",
   "lines": 40, "trackedParts": 35, "madeParts": 28, "finishedParts": 12,
   "madeQty": 90, "finishedQty": 31, "totalQty": 120,
-  "byStatus": { "In Planning": 10, "Finished Manufacturing": 12, "Untracked": 5 }
+  "byStatus": { "In Planning": 10, "In manufacturing": 6, "Finished Manufacturing": 12 },
+  "purchased": { "lines": 9, "toBuy": 4, "finished": 3, "untracked": 2 }
 }]
 ```
 
@@ -118,7 +119,13 @@ Every work order, oldest first, with its progress counted from its assembly's **
 - **`madeParts`:** lines the team makes, which the bar divides by. A line is excluded if it's purchased (Standard Content, marked standard, has a vendor, or its method is "Purchased") or "Untracked".
 - **`finishedParts`:** made lines whose status is "Finished Manufacturing" or whose priority is "Finished".
 - **`*Qty`:** the same counts, as total quantities.
-- **`byStatus`:** counts all lines.
+- **`byStatus`:** counts made lines only (the same lines as `madeParts`), by status.
+- **`purchased`:** the bought lines (purchased, as above), by their bought status:
+  - `finished`: status "Finished Manufacturing" or "Finished", or priority "Finished".
+  - `untracked`: status "Untracked". A bought sub-assembly with no stored entry is also untracked.
+  - `toBuy`: anything else, including "To buy" and a line with no stored entry.
+
+  A line that isn't purchased but is "Untracked" (made outside the team) is in neither `byStatus` nor `purchased`.
 - **Errors:** a work order whose tree can't be built (no assembly, a missing assembly, an assembly that contains itself) has `error` with the page's message and no counts.
 
 The whole list costs one query for the work orders, one per BOM level for all of them together, and one for the parts.
