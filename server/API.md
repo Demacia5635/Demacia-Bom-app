@@ -88,9 +88,9 @@ A part that no BOM lists is reported once, as `NOT_IN_ANY_ASSEMBLY`, and isn't c
 | `POST /orphans/delete` | `{ ids: string[] }` (1-200) | **Admin** (the `x-admin-secret` header as well, like the Drive sort; a missing or wrong one gets `404`). Deletes those parts if no BOM uses them, re-checking each one right before deleting it. Returns `200 { deleted: [{ id, name, catalogNumber, filesTrashed }], refused: [{ id, reason }] }`; a partial success is still `200`. A deleted part's Drive files that no other record points at go to Drive's trash, for 30 days; shared files stay. There's no undo: each delete is one server-log line with who (`X-Updated-By`), the trashed files and the whole record, so it can be restored by hand. |
 | `GET /id/:id` | | The part (`onshapeID` and `onshapeURL` filled in from the id when missing), or `404`. |
 | `POST /id/:id` | The part's fields | Creates or updates it: `201` created, `200` updated, with the record. A new part without a usable `name` gets one from `title`, `catalogNumber` or its Onshape part ID. An empty `name` never overwrites a saved one. |
-| `DELETE /id/:id` | | `204`, or `404`. |
+| `DELETE /id/:id` | | `204`, or `404`. Refused with `409 PART_IN_USE` while a BOM lists the part, or while it is the part record of an assembly marked standard. An assembly's leftover part record, once its mark is removed, may go, even if its parent still lists it (the extension deletes it during a publish). Drive files are left alone. Each delete is logged with the whole record. |
 | `GET /d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/p/:partID` | | The part with this Onshape identity, or `404`. Read-only. |
-| `DELETE` (same path) | | Deletes it: `204`, or `404`. |
+| `DELETE` (same path) | | **Turned off:** `405`. |
 
 ## BOMs (assemblies): `/api/db/bom`
 

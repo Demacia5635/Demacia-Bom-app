@@ -59,7 +59,7 @@ export async function partInUse(id: string, allowUnmarkedLeftover = false): Prom
     if (own?.markedStandard) return `is the part record of the standard assembly ${own.name || own.id}`;
     if (own && allowUnmarkedLeftover) return null;
     const parent = await Bom.findOne({ "parts.partID": id }, { id: 1, name: 1 }).lean<Rec>();
-    return parent ? `used by assembly ${parent.name || parent.id} (${parent.id})` : null;
+    return parent ? `is used by assembly ${parent.name || parent.id} (${parent.id})` : null;
 }
 
 /** fileId -> how many records (parts and BOMs) point at it. */
