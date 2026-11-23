@@ -42,6 +42,22 @@ export function explainPublishError(err: unknown): PublishErrorExplanation {
   }
 
   const status = typeof e.statusCode === "number" ? e.statusCode : 0;
+  // The server refused the save for a reason it explains (5.0.0+): show its words.
+  const code = typeof (e as { code?: unknown }).code === "string" ? (e as { code: string }).code : "";
+  if (status === 409 && (code === "ASSEMBLY_PUBLISHED_ELSEWHERE" || /already published from another/i.test(detail))) {
+    return {
+      cause: detail,
+      next: "Publish it from the workspace it was first published from.",
+      detail: "ASSEMBLY_PUBLISHED_ELSEWHERE",
+    };
+  }
+  if (status === 409 && (code === "CATALOG_NUMBER_TAKEN" || /catalog number .* already used/i.test(detail))) {
+    return {
+      cause: detail,
+      next: "Give it its own catalog number in Onshape, press Refresh BOM, then publish again.",
+      detail: "CATALOG_NUMBER_TAKEN",
+    };
+  }
   if (status === 0) {
     // A request to our server that never got an answer (fetchFromApi throws an
     // ApiRequestError without a status) is the server being unreachable; any
