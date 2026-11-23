@@ -178,10 +178,21 @@ export async function upsertBomByID(
         // Each assembly needs its own folder name in the sorted Drive folders.
         const clash = await bomSaveClash(id, fields);
         if (clash) return res.status(409).json(clash);
+        // The parts this save drops (listed before, not in the new list),
+        // worked out before saving.
+        let dropped: string[] = [];
+        if (Array.isArray(fields.parts)) {
+            const before = await Bom.findOne({ id }, { parts: 1 }).lean<Record<string, any>>();
+            const listed = new Set((fields.parts as Record<string, any>[]).map((p) => p?.partID));
+            dropped = [...new Set(((before?.parts ?? []) as Record<string, any>[]).map((p) => p?.partID))]
+                .filter((partID): partID is string => typeof partID === "string" && partID !== "" && !listed.has(partID));
+        }
+        const { updatedBy } = updatedByOf(req);
         const { doc: bom, created } = await upsertByID(Bom, id, { $set: { ...fields, ...updatedByOf(req), id: id } });
-        // Sorts its assembly's Drive files into folders a minute after the
-        // publish's last save (in the background; never fails this save).
-        scheduleOrganizeAfterSave(id);
+        // A minute after the publish's last save, in the background (never
+        // fails this save): deletes the dropped parts no BOM uses by then,
+        // and sorts its assembly's Drive files into folders.
+        scheduleOrganizeAfterSave(id, dropped, updatedBy ?? "");
 
         return res.status(created ? 201 : 200).json(bom);
     } catch (err) {

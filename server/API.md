@@ -221,7 +221,9 @@ Inside each type folder (Images, STL, Parasolid), the files are sorted into one 
 - **Files no assembly reaches** (parts in no BOM) stay where they are.
 - **Files are moved, never copied or deleted:** their IDs and links stay, and the database doesn't change. Folders are found or created by name, never twice. Emptied folders are left alone.
 
-The server sorts an assembly's tree by itself after a publish: 60 s after the last BOM save in that tree, in the background (it never delays or fails a save). The first full sort is started by hand with the admin routes below.
+The server sorts an assembly's tree by itself after a publish: 60 s after the last BOM save in that tree, in the background (it never delays or fails a save).
+
+Just before that sort, the same background run deletes the parts the publish dropped from its BOMs that no BOM uses by then, under the same rules as `POST /api/db/part/orphans/delete`: it re-checks each part, moves unshared Drive files to Drive's trash, and writes one log line per part. A part moved between sub-assemblies within one publish is listed again by then, so it stays. Only parts a publish dropped are considered; other orphans are left to the `/orphans` page. If the cleanup fails, the sort still runs. The first full sort is started by hand with the admin routes below.
 
 ### Admin: `/api/drive/organize`
 
@@ -247,9 +249,12 @@ A job:
     "names": [],
     "workspaces": [{ "documentID": "...", "elementID": "...", "boms": [{ "id": "...", "name": "...", "catalogNumber": "...", "wvmType": "w", "wvmID": "..." }] }]
   },
+  "cleanup": { "candidates": 2, "deleted": [{ "id": "...", "name": "...", "filesTrashed": ["..."] }], "kept": [{ "id": "...", "reason": "is used by assembly Base (...)" }], "error": "..." },
   "error": "..."
 }
 ```
+
+- **`cleanup`** (publish runs only) covers the dropped parts: those deleted, and those kept because something uses them again. The log line ends with, for example, `cleanup: 1 deleted, 1 kept (...)`.
 
 - **In a dry run,** `moved` and `foldersCreated` mean "would move" and "would create".
 - **`clashes`** lists the existing records that will be refused when they're published again, so they can be fixed first:
