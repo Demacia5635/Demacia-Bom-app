@@ -12,6 +12,7 @@ const WorkOrdersPage = lazy(() => import('./Pages/WorkOrdersPage/WorkOrderPage')
 const TelemetryPage = lazy(() => import('./Pages/Telemetry/TelemetryPage'));
 const WhatsNewPage = lazy(() => import('./Pages/WhatsNew/WhatsNewPage'));
 const OrphansPage = lazy(() => import('./Pages/Orphans/OrphansPage'));
+const HealthPage = lazy(() => import('./Pages/Health/HealthPage'));
 
 // A new id in the address is a new page (key): nothing of the previous BOM or
 // work order stays in its state, so the pages don't reset it by hand.
@@ -43,6 +44,8 @@ export default function App() {
           <Route path="/tele" element={<TelemetryPage />} />
           {/* Parts no assembly uses, with Delete (admin) - unlisted too. */}
           <Route path="/orphans" element={<OrphansPage />} />
+          {/* Data health: problems in the saved parts and BOMs - unlisted too. */}
+          <Route path="/health" element={<HealthPage />} />
           <Route path="/whatsnew" element={<WhatsNewPage />} />
           {/* A mistyped address goes to Home, and the address bar says so. */}
           <Route path="*" element={<Navigate to="/home" replace />} />
