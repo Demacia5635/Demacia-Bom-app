@@ -54,6 +54,7 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /all` | | Every BOM, by `id`. See [Lists](#lists). |
 | `POST /ids` | `{ ids: string[] }` (at most 500) | The BOMs that exist. |
 | `GET /tree/:id` | | The whole tree in one request (below). |
+| `GET /publishedElsewhere?documentID=&elementID=&wvmType=&wvmID=` | | Read-only: whether this Onshape assembly is already saved from another workspace or version, in which case saving it from this one is refused with `ASSEMBLY_PUBLISHED_ELSEWHERE`. Returns `{ elsewhere: false }` or `{ elsewhere: true, bom: { id, name, catalogNumber, onshapeURL, onshapeID: { documentID, wvmType, wvmID, elementID } } }`. Missing or malformed parameters give `400`. |
 | `GET /usedIn/:id` | | The BOMs that use this one as a sub-assembly, by name: `[{ id, name, catalogNumber, quantity, driveFileId, avatarID, imageUrl, thumbnailURL }]`. `quantity` is how many of it each one lists; the image fields appear only when set. An empty list when nothing uses it. |
 | `GET /id/:id` | | The BOM, or `404`. |
 | `POST /id/:id` | The BOM's fields | Creates or updates it: `201` or `200`, with the record. Refused with `409` when its folder name would clash (below). |

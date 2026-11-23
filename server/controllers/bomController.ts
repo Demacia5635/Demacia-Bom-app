@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import Bom from '../models/Bom';
 import Part from '../models/Part';
 import { loadBoms, partIDsOf } from './bomTree';
-import { bomSaveClash } from './bomNameClash';
+import { bomSaveClash, publishedElsewhere } from './bomNameClash';
 import { scheduleOrganizeAfterSave } from '../services/driveOrganizer';
 import { cleanUpdateBody, updatedByOf, upsertByID } from './upsert';
 import { makeGetByIds } from './getByIds';
@@ -91,6 +91,30 @@ export async function getBomUsedIn(
             }))
             .sort((a, b) => String(a.name ?? a.id).localeCompare(String(b.name ?? b.id)));
         return res.status(200).json(usedIn);
+    } catch (err) {
+        return next(err);
+    }
+}
+
+const ONSHAPE_ID = /^[0-9a-f]{24}$/;
+
+/**
+ * GET /publishedElsewhere?documentID=&elementID=&wvmType=&wvmID=: whether
+ * this Onshape assembly is already saved from another workspace or version
+ * (then saving it from this one is refused), so the extension can warn
+ * before anyone edits. Read-only.
+ */
+export async function getBomPublishedElsewhere(req: Request, res: Response, next: NextFunction) {
+    try {
+        const { documentID, elementID, wvmType, wvmID } = req.query;
+        const bad = [["documentID", documentID], ["elementID", elementID], ["wvmID", wvmID]]
+            .filter(([, value]) => typeof value !== "string" || !ONSHAPE_ID.test(value))
+            .map(([field]) => field as string);
+        if (typeof wvmType !== "string" || !/^[wvm]$/.test(wvmType)) bad.push("wvmType");
+        if (bad.length) return res.status(400).json({ message: "documentID, elementID and wvmID must be Onshape IDs, and wvmType w, v or m", fields: bad });
+        return res.status(200).json(await publishedElsewhere({
+            documentID: documentID as string, elementID: elementID as string, wvmType, wvmID: wvmID as string,
+        }));
     } catch (err) {
         return next(err);
     }
