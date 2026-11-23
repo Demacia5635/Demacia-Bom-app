@@ -8,6 +8,7 @@
  * Telemetry never breaks the panel: every failure here is swallowed.
  */
 import { apiUrl } from "../util/backendHost";
+import { telemetryAllowedNow } from "./telemetryConsent";
 
 export type OnshapeCallKind =
   | "bom"
@@ -187,6 +188,11 @@ function scheduleFlush(): void {
 export async function flush(keepalive = false): Promise<void> {
   drainAmbient();
   if (queue.length === 0) return;
+  // Firefox: only once the user allowed usage statistics (telemetryConsent.ts).
+  if (!telemetryAllowedNow()) {
+    queue.length = 0;
+    return;
+  }
   const batch = queue.splice(0, MAX_BATCH);
   try {
     const res = await fetch(apiUrl("/telemetry/events"), {

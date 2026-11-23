@@ -55,7 +55,20 @@ function toFirefoxManifest(manifest: Record<string, unknown>): Record<string, un
       open_at_install: false,
     },
     browser_specific_settings: {
-      gecko: { id: FIREFOX_ADDON_ID, strict_min_version: '128.0' },
+      gecko: {
+        id: FIREFOX_ADDON_ID,
+        // Firefox 140 brought the built-in data-collection consent the key below uses.
+        strict_min_version: '140.0',
+        // What the extension sends to the team's server (the user's decision):
+        // the Onshape name / email, the BOM read from Onshape, and, only if the
+        // user allows it, usage statistics (/tele; telemetryConsent.ts).
+        data_collection_permissions: {
+          required: ['personallyIdentifyingInfo', 'websiteContent'],
+          optional: ['technicalAndInteraction'],
+        },
+      },
+      // Firefox for Android has the data-collection key from 142.
+      gecko_android: { strict_min_version: '142.0' },
     },
   };
 }

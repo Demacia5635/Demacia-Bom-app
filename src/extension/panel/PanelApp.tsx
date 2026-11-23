@@ -10,6 +10,7 @@ import OnshapeLocationProvider from "../OnshapeLocationProvider";
 import { setOnshapeServer } from "../onshapeDirect";
 import { useOwnOnshapeTab, type OnshapeLocation } from "../onshapeTab";
 import OnshapeSignInCheck from "./OnshapeSignInCheck";
+import TelemetryConsentPrompt from "./TelemetryConsentPrompt";
 import { Toasts } from "./toast";
 import { setOnshapeImageCache, setOnshapeImageListener } from "../../util/ApiService";
 import { recordOnshapeCall } from "../telemetry";
@@ -51,6 +52,7 @@ export default function PanelApp() {
     <PanelThemeContext.Provider value={theme}>
     <OnshapeLocationProvider location={location}>
       <main className="min-h-screen bg-zinc-950 text-zinc-100">
+        <TelemetryConsentPrompt />
         <OnshapeSignInCheck>
           <BomForActiveTab loading={loading} location={location} />
         </OnshapeSignInCheck>
