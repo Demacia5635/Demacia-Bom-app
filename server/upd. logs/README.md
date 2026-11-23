@@ -13,6 +13,7 @@ One file per version: `v<version>.md`, listing what changed in the server (`serv
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [4.1.1](v4.1.1.md) | Unreleased | Work-order summary counts bought items separately |
 | [4.1.0](v4.1.0.md) | 2026-11-21 | Health info, whole-tree route, who-saved-it, Drive trash, BOM delete off |
 | [4.0.0](v4.0.0.md) | 2026-11-21 | Safer uploads and inputs; CNC merge for parts added later; cleanup |
 | [3.0.0](v3.0.0.md) | 2026-11-17 23:18 | Part size field; work-order CNC jobs |
