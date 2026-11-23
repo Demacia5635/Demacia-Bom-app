@@ -22,6 +22,8 @@ import WorkOrderFilters from "./WorkOrderFilters";
 import { madeStatus } from "./workOrderOptions";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { partListText } from "./copyPartList";
+import { DriveMenuItem } from "../../../components/DriveFileMenu";
+import { driveFileOfCell } from "../partColumns";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
 import ErrorBanner, { ApiErrorText } from "../../../components/ErrorBanner";
 import { useThemeClasses } from "../../../util/misc/useThemeClasses";
@@ -493,6 +495,11 @@ export default function WorkOrderDetailsPage() {
                                         )}
                                     </>
                                 );
+                            })()}
+                            {(() => {
+                                // On the image / STL / Parasolid cell: "Open … in Google Drive".
+                                const file = driveFileOfCell(contextMenu.colKey, contextMenu.row);
+                                return file && <DriveMenuItem label={file.label} fileId={file.fileId} onDone={closeContextMenu} />;
                             })()}
                         </div>
                     )}
