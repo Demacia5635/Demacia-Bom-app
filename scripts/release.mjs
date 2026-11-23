@@ -20,7 +20,9 @@
  *   3. Checks: npm run typecheck, npm test, npm run lint (errors only), then
  *        extension -> npm run package:extension (both builds, zipped into publish/<version>/)
  *        website   -> npm run build (needs VITE_CLIENT_URL)
- *        server    -> npm --prefix server run build (type check only; needs server/node_modules)
+ *        server    -> npm --prefix server ci (only when server/node_modules is missing),
+ *                     npm --prefix server run build (the server's own type check),
+ *                     and importing the app once (tsx app.ts: no server started, no database)
  *      Any failure puts the version files back and stops.
  *   4. Commits the version files: "Extension 5.0.1" / "Website 2.1.4" / "Server 5.0.1".
  *   5. Prints what's left (push / deploy / sign, and dating the log).
@@ -110,11 +112,11 @@ const git = (cmd) => execSync(`git ${cmd}`, { cwd: ROOT, encoding: "utf8" }).tri
 const say = (msg) => console.log(msg);
 const step = (msg) => console.log(`\n▶ ${msg}`);
 
-/** Runs a command in the repo, showing its output; true when it succeeded. */
-function run(cmd, env = {}) {
-  say(`  $ ${cmd}`);
+/** Runs a command (in the repo, or `dir` under it), showing its output; true when it succeeded. */
+function run(cmd, env = {}, dir = "") {
+  say(`  $ ${dir ? `(in ${dir}) ` : ""}${cmd}`);
   if (dryRun) return true;
-  const r = spawnSync(cmd, { cwd: ROOT, stdio: "inherit", shell: true, env: { ...process.env, ...env } });
+  const r = spawnSync(cmd, { cwd: join(ROOT, dir), stdio: "inherit", shell: true, env: { ...process.env, ...env } });
   return r.status === 0;
 }
 
@@ -201,8 +203,16 @@ if (noChecks) {
     if (!run("npm run package:extension")) undo("Building or zipping the extension failed.");
   } else if (target === "website") {
     if (!run("npm run build")) undo("The website build failed (is VITE_CLIENT_URL set in .env.local?).");
-  } else if (!run("npm --prefix server run build")) {
-    undo("The server type check failed (run `npm --prefix server install` once if server/node_modules is missing).");
+  } else {
+    // The server has its own packages (typescript, @types, tsx): installed once.
+    if (!existsSync(join(ROOT, "server", "node_modules")) && !run("npm --prefix server ci")) {
+      undo("Installing the server's packages failed.");
+    }
+    if (!run("npm --prefix server run build")) undo("The server type check failed.");
+    // Imports the app without starting it (no port, no database): catches import and config errors.
+    if (!run("npx tsx app.ts", { CLIENT_SECRET: "release-check" }, "server")) {
+      undo("The server app failed to load (import or config error).");
+    }
   }
 }
 
