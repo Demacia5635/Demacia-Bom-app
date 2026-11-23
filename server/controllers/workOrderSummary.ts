@@ -82,8 +82,14 @@ export interface WorkOrderSummary {
     madeQty?: number;
     finishedQty?: number;
     totalQty?: number;
-    /** Lines per status name, over all lines. */
+    /** Made lines per status name (the same lines as madeParts). */
     byStatus?: Record<string, number>;
+    /**
+     * Bought lines (isPurchasedRow) by their bought status: finished = status
+     * "Finished Manufacturing" or "Finished", or priority "Finished";
+     * untracked = "Untracked"; toBuy = anything else.
+     */
+    purchased?: { lines: number; toBuy: number; finished: number; untracked: number };
     /** Why there are no counts (the page would show the same error). */
     error?: string;
 }
@@ -132,6 +138,7 @@ export async function getWorkOrderSummary(req: Request, res: Response, next: Nex
             const stored = new Map<string, Record_>((wo.parts ?? []).map((p: Record_) => [p.partID, p]));
             const counts = { lines: 0, trackedParts: 0, madeParts: 0, finishedParts: 0, madeQty: 0, finishedQty: 0, totalQty: 0 };
             const byStatus: Record<string, number> = {};
+            const bought = { lines: 0, toBuy: 0, finished: 0, untracked: 0 };
 
             for (const [partID, quantity] of c.totals) {
                 const entry = stored.get(partID);
@@ -149,9 +156,15 @@ export async function getWorkOrderSummary(req: Request, res: Response, next: Nex
 
                 counts.lines++;
                 counts.totalQty += quantity;
-                byStatus[status] = (byStatus[status] || 0) + 1;
                 if (status !== "Untracked") counts.trackedParts++;
+                if (purchased) {
+                    bought.lines++;
+                    if (status === "Finished Manufacturing" || status === "Finished" || priority === "Finished") bought.finished++;
+                    else if (status === "Untracked") bought.untracked++;
+                    else bought.toBuy++;
+                }
                 if (made) {
+                    byStatus[status] = (byStatus[status] || 0) + 1;
                     counts.madeParts++;
                     counts.madeQty += quantity;
                     if (finished) {
@@ -160,7 +173,7 @@ export async function getWorkOrderSummary(req: Request, res: Response, next: Nex
                     }
                 }
             }
-            return { ...base, ...counts, byStatus };
+            return { ...base, ...counts, byStatus, purchased: bought };
         });
 
         return res.status(200).json(summaries);
