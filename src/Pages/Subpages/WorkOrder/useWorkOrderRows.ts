@@ -61,8 +61,8 @@ export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (wor
   const [workOrderData, setWorkOrderData] = useState<WorkOrderModel | null>(null);
   /** The part each row is for (row ids include the work order id). */
   const rowPartMapRef = useRef<Map<string, string>>(new Map());
-  // The assembly's name, from the BOM loaded for the rows (work orders don't store it).
-  const [bomName, setBomName] = useState<{ workOrderID: string; name: string } | null>(null);
+  // The assembly's name and catalog number, from the BOM loaded for the rows (work orders don't store them).
+  const [bomName, setBomName] = useState<{ workOrderID: string; name: string; catalogNumber: string } | null>(null);
 
   useEffect(() => {
     if (!workOrderID) return;
@@ -101,7 +101,7 @@ export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (wor
         // The live BOM (util/bomTree.ts, as when the work order was made): its
         // parts with their totals, a bought sub-assembly as one purchased row.
         const tree = await loadBomTree(workOrderData!.bomID!, (root) => {
-            if (!cancelled && root?.name) setBomName({ workOrderID: workOrderID!, name: root.name });
+            if (!cancelled && root) setBomName({ workOrderID: workOrderID!, name: root.name || "", catalogNumber: root.catalogNumber || "" });
         });
         const { totals: aggregatedQuantities, bought: boughtAssemblies } = workOrderLines(tree);
         const collectedRows: WorkOrderTableRow[] = [];
