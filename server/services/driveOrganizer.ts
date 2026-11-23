@@ -76,7 +76,7 @@ const TYPE_NAMES: Record<string, string> = {
 async function loadRecords() {
     const fileFields = Object.fromEntries(FILE_FIELDS.map((field) => [field, 1]));
     const boms = await Bom.find({}, {
-        id: 1, name: 1, catalogNumber: 1, createdAt: 1, parts: 1, subAssemblies: 1, markedStandard: 1, vendor: 1, ...fileFields,
+        id: 1, name: 1, catalogNumber: 1, createdAt: 1, parts: 1, subAssemblies: 1, markedStandard: 1, vendor: 1, onshapeID: 1, ...fileFields,
     }).lean<Record<string, any>[]>();
     // All parts, so files of parts in no assembly are counted (and left alone).
     const parts = await Part.find({}, {

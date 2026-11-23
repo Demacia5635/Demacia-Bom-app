@@ -187,6 +187,12 @@ export interface BomClashReport {
     catalogNumbers: { catalogNumber: string; boms: { id: string; name?: string }[] }[];
     /** Parents with sub-assemblies that have no catalog number and the same name. */
     names: { parent: { id: string; name?: string }; name: string; boms: { id: string; name?: string }[] }[];
+    /** Onshape assemblies (document + element) saved from more than one workspace or version. */
+    workspaces: {
+        documentID: string;
+        elementID: string;
+        boms: { id: string; name?: string; catalogNumber?: string; wvmType: string; wvmID: string }[];
+    }[];
 }
 
 /** Every existing clash (read-only), from all the BOMs. */
@@ -217,5 +223,20 @@ export function bomClashes(boms: BomRecord[]): BomClashReport {
             if (group.length > 1) names.push({ parent: brief(parent), name, boms: group.map(brief) });
         }
     }
-    return { catalogNumbers, names };
+    const byAssembly = new Map<string, { key: OnshapeKey; bom: BomRecord }[]>();
+    for (const bom of boms) {
+        const key = onshapeKeyOf(bom);
+        if (!key) continue;
+        const assembly = `${key.documentID}/${key.elementID}`;
+        byAssembly.set(assembly, [...(byAssembly.get(assembly) ?? []), { key, bom }]);
+    }
+    const workspaces = [...byAssembly.values()]
+        .filter((group) => new Set(group.map(({ key }) => `${key.wvmType}/${key.wvmID}`)).size > 1)
+        .map((group) => ({
+            documentID: group[0].key.documentID,
+            elementID: group[0].key.elementID,
+            boms: group.map(({ key, bom }) => ({ id: bom.id, name: bom.name, catalogNumber: bom.catalogNumber, wvmType: key.wvmType, wvmID: key.wvmID })),
+        }));
+
+    return { catalogNumbers, names, workspaces };
 }

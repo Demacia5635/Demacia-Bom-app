@@ -197,13 +197,20 @@ A job:
   "summary": { "moved": 300, "alreadyInPlace": 150, "notInAnyAssembly": 12, "skipped": { "not found in Drive": 3 }, "foldersCreated": 40 },
   "moves": [{ "fileId": "...", "record": { "kind": "part", "id": "...", "name": "Plate" }, "field": "stlLink", "from": "STL", "to": "STL/2714-0000/2714-1000" }],
   "skipped": [{ "fileId": "...", "record": { "kind": "part", "id": "..." }, "reason": "in Drive's trash" }],
-  "clashes": { "catalogNumbers": [{ "catalogNumber": "2714-1000", "boms": [{ "id": "...", "name": "..." }] }], "names": [] },
+  "clashes": {
+    "catalogNumbers": [{ "catalogNumber": "2714-1000", "boms": [{ "id": "...", "name": "..." }] }],
+    "names": [],
+    "workspaces": [{ "documentID": "...", "elementID": "...", "boms": [{ "id": "...", "name": "...", "catalogNumber": "...", "wvmType": "w", "wvmID": "..." }] }]
+  },
   "error": "..."
 }
 ```
 
 - **In a dry run,** `moved` and `foldersCreated` mean "would move" and "would create".
-- **`clashes`** lists existing BOMs that share a catalog number, or that have no catalog number and the same name under one parent. They share a folder until they're fixed, and they can't be published again until then.
+- **`clashes`** lists the existing records that will be refused when they're published again, so they can be fixed first:
+  - `catalogNumbers`: assemblies sharing a catalog number. They also share a folder until fixed.
+  - `names`: assemblies with no catalog number and the same name under one parent.
+  - `workspaces`: the same Onshape assembly saved from more than one workspace or version.
 - **Skip reasons:** `not found in Drive`, `in Drive's trash`, `not in a team folder`, `is a folder`, or `error: ...`.
 - **Lists:** `moves` and `skipped` keep at most 5000 entries each, while the counts are always complete.
 - **Repeat runs:** running a sort again moves nothing.
