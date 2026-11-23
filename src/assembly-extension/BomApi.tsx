@@ -104,6 +104,32 @@ export function getBomsByIds(ids: string[]): Promise<BomModel[]> {
   return recordsByIds<BomModel>("/db/bom/ids", ids);
 }
 
+/** The server's answer: is this assembly saved under another workspace / version of its document? */
+export interface PublishedElsewhere {
+  elsewhere: boolean;
+  /** The record saved from the other workspace / version (when elsewhere). */
+  bom?: BomModel;
+}
+
+/**
+ * Asks the server (5.0.0+) whether this assembly was already published from
+ * another workspace or version of the same Onshape document. null when the
+ * server doesn't know the route (older server) or can't be asked.
+ */
+export async function getPublishedElsewhere(key: OnshapeKey): Promise<PublishedElsewhere | null> {
+  const q = new URLSearchParams({
+    documentID: key.documentID,
+    elementID: key.elementID,
+    wvmType: key.wvmType,
+    wvmID: key.wvmID,
+  });
+  try {
+    return await requestJson<PublishedElsewhere>("GET", `/db/bom/publishedElsewhere?${q}`);
+  } catch {
+    return null; // 404 on an older server, or unreachable: the panel works as before
+  }
+}
+
 /** Every saved part and assembly (Publish BOM's check for catalog numbers already in use; once per publish). */
 export function getAllRecords(): Promise<{ parts: PartModel[]; boms: BomModel[] }> {
   return Promise.all([requestJson<PartModel[]>("GET", "/db/part/all"), requestJson<BomModel[]>("GET", "/db/bom/all")]).then(

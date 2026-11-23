@@ -9,6 +9,7 @@ import {
   type OnshapeKey,
   syncBomThumbnailToDrive,
   setUpdatedBy,
+  getPublishedElsewhere,
   getAllRecords,
   getBomsByIds,
   getPartsByIds
@@ -33,7 +34,7 @@ import PublishBomModal, {
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
 import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
-import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, keyOf, recordId } from "./onshapeKeys";
+import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, keyOf, keyString, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
 import ProgressBar from "./ProgressBar";
 import {
@@ -58,6 +59,7 @@ import BomHeader from "./BomHeader";
 import { bomPageUrl, partPageUrl } from "./websiteLinks";
 import { useRowContextMenu } from "../components/useRowContextMenu";
 import RowMenu from "./RowMenu";
+import PublishedElsewhereCover from "./PublishedElsewhereCover";
 import SelectionEditBar, { type BulkField } from "./SelectionEditBar";
 import { suggestFix } from "./problemFixes";
 import { openExternal } from "../util/openExternal";
@@ -227,6 +229,32 @@ export default function AssemblyBomPage() {
   const currentRows = useCallback(() => currentTreeRef.current.rows, []);
   const history = useEditHistory(currentRows, saveRows);
   const { record: recordEdit, clear: clearHistory } = history;
+
+  /**
+   * The server keeps one BOM per assembly: when this one was already published
+   * from another workspace / version of its document, the whole panel is
+   * covered (PublishedElsewhereCover). Asked once per assembly; an older
+   * server (no such route) changes nothing.
+   */
+  const [publishedElsewhere, setPublishedElsewhere] = useState<{ key: string; bom: BomModel } | null>(null);
+  useEffect(() => {
+    if (!rootKey) return;
+    let cancelled = false;
+    const asked = keyString(rootKey);
+    getPublishedElsewhere(rootKey).then((answer) => {
+      if (cancelled) return;
+      setPublishedElsewhere(answer?.elsewhere && answer.bom ? { key: asked, bom: answer.bom } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rootKey]);
+  /** Only for the assembly it was asked about (the panel can switch to another one). */
+  const elsewhereBom = publishedElsewhere && rootKey && publishedElsewhere.key === keyString(rootKey) ? publishedElsewhere.bom : null;
+  const elsewhereUrl = elsewhereBom
+    ? elsewhereBom.onshapeURL ||
+      (elsewhereBom.onshapeID ? buildOnshapeElementURL(context.server, elsewhereBom.onshapeID) : null)
+    : null;
 
   /** "Onshape changed since loaded": watched while a tree from Onshape is on screen and idle. */
   const { changed: onshapeChanged, restart: restartChangeWatch } = useOnshapeChangeWatch({
@@ -1218,6 +1246,13 @@ export default function AssemblyBomPage() {
           onShowShortcuts={() => setShowShortcuts(true)}
         />
         {showShortcuts && <ShortcutsHelp onClose={closeShortcuts} />}
+        {elsewhereBom && (
+          <PublishedElsewhereCover
+            bom={elsewhereBom}
+            publishedUrl={elsewhereUrl}
+            onOpen={() => openExternal(elsewhereUrl)}
+          />
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
