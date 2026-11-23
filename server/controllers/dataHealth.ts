@@ -158,9 +158,12 @@ export function findProblems(boms: Rec[], parts: Rec[]): HealthProblem[] {
     for (const id of missingParts) add("PART_MISSING", "A BOM lists this part, but it isn't saved. Publish the BOM again.", [recordOf("part", id)]);
     for (const id of missingBoms) add("SUB_ASSEMBLY_MISSING", "A BOM lists this sub-assembly, but it isn't saved. Publish the BOM again.", [recordOf("bom", id)]);
 
-    // 4. Parts no BOM lists: they shouldn't exist (the user's rule). Not checked further.
+    // 4. Parts no BOM uses: they shouldn't exist (the user's rule). Not checked
+    // further. A part record with a BOM's ID is that assembly's own (a marked
+    // sub-assembly is also saved as a part), so it's used. Same rule as
+    // GET /db/part/orphans (controllers/orphanParts.ts).
     for (const part of parts) {
-        if (!parentsOf.has(part.id)) add("NOT_IN_ANY_ASSEMBLY", "Not in any assembly: should be deleted.", [recordOf("part", part.id)]);
+        if (!parentsOf.has(part.id) && !bomsByID.has(part.id)) add("NOT_IN_ANY_ASSEMBLY", "Not in any assembly: should be deleted.", [recordOf("part", part.id)]);
     }
 
     // 5. Made parts (used in an assembly): what work orders and the files need.
