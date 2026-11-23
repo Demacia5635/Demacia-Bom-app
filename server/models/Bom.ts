@@ -68,6 +68,10 @@ const bomSchema = new mongoose.Schema(
 
 // GET /usedIn/:id finds the BOMs that list a given sub-assembly.
 bomSchema.index({ "subAssemblies.bomID": 1 });
+// Saving checks that no other BOM has the same catalog number.
+bomSchema.index({ catalogNumber: 1 });
+// Saving checks for the same Onshape assembly saved from another workspace/version.
+bomSchema.index({ "onshapeID.documentID": 1, "onshapeID.elementID": 1 });
 
 const Bom = mongoose.model("Bom", bomSchema);
 

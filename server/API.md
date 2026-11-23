@@ -19,7 +19,7 @@ Every error reply has this shape:
 { "code": "BAD_REQUEST", "message": "partID is required", "fields": ["partID"], "requestId": "..." }
 ```
 
-- `code` follows the status: `BAD_REQUEST` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403, origin not allowed), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405), `CONFLICT` (409), `TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `INTERNAL` (500), `UNAVAILABLE` (503).
+- `code` follows the status: `BAD_REQUEST` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403, origin not allowed), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405), `CONFLICT` (409; a BOM save's clashes have their own codes, see the BOM routes), `TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `INTERNAL` (500), `UNAVAILABLE` (503).
 - `fields` (only when known) lists the input fields that were wrong.
 - `message` is safe to show. For a 500 it is just "Internal server error"; the details are in the log under the `requestId`.
 
@@ -56,11 +56,23 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /tree/:id` | | The whole tree in one request (below). |
 | `GET /usedIn/:id` | | The BOMs that use this one as a sub-assembly, by name: `[{ id, name, catalogNumber, quantity, driveFileId, avatarID, imageUrl, thumbnailURL }]`. `quantity` is how many of it each one lists; the image fields appear only when set. An empty list when nothing uses it. |
 | `GET /id/:id` | | The BOM, or `404`. |
-| `POST /id/:id` | The BOM's fields | Creates or updates it: `201` or `200`, with the record. |
+| `POST /id/:id` | The BOM's fields | Creates or updates it: `201` or `200`, with the record. Refused with `409` when its folder name would clash (below). |
 | `DELETE /id/:id` | | **Turned off:** `405` "Deleting BOMs is turned off". |
 | `GET /d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/b/:bomID` | | The BOM with this Onshape identity, or `404`. |
 | `POST` (same path) | The BOM's fields | Creates or updates it; `onshapeID` is taken from the path. |
 | `DELETE` (same path) | | **Turned off:** `405`. |
+
+### Saving a BOM: clashes (`409`)
+
+In the sorted Drive folders, every assembly has its own folder, named by its catalog number (or its name). So saving a BOM is refused with `409`, and nothing is saved, when:
+
+| `code` | When | Extra fields |
+|---|---|---|
+| `ASSEMBLY_PUBLISHED_ELSEWHERE` | The same Onshape assembly (document + element) is already saved from another workspace or version. Its BOM is kept for one workspace only. | `publishedFrom: { documentID, wvmType, wvmID, elementID, onshapeURL }` |
+| `CATALOG_NUMBER_TAKEN` | Another assembly has this catalog number. | `fields: ["catalogNumber"]` |
+| `ASSEMBLY_NAME_TAKEN` | It has no catalog number, and another sub-assembly of the same parent has no catalog number and the same name. | `fields: ["name", "catalogNumber"]` |
+
+Each reply also has `conflictsWith: { id, name }` (the other record) and a `message` to show as is. For example: "Catalog number 2714-1000 is already used by another assembly, "Arm". Give this assembly its own catalog number in Onshape, then publish again. Nothing was saved." Saving the same record again is fine, and so is a record of the same Onshape assembly and workspace (if its BOM table ID changed).
 
 A BOM lists its parts as `parts: [{ partID, quantity }]` and its sub-assemblies as `subAssemblies: [{ bomID, quantity }]`.
 

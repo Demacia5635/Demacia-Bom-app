@@ -1,11 +1,13 @@
 /**
  * Assemblies must have folder names that can't clash in the sorted Drive
  * folders (services/driveOrganizer.ts), where an assembly's folder is named by
- * its catalog number, or by its name when it has none. The user's rule:
- * - a non-empty catalog number belongs to one BOM record in the whole database;
+ * its catalog number, or by its name when it has none. The user's rules:
+ * - an Onshape assembly's BOM is kept for one workspace/version only: the same
+ *   assembly (document + element) published from another one is refused;
+ * - a non-empty catalog number belongs to one assembly in the whole database;
  * - BOMs without a catalog number in the same parent need different names.
- * Saving a BOM that breaks either is refused (409); the dry run of the Drive
- * sort lists the existing clashes so they can be fixed first.
+ * Saving a BOM that breaks one is refused (409) and nothing is saved; the dry
+ * run of the Drive sort lists the existing clashes so they can be fixed first.
  */
 import Bom from "../models/Bom";
 
@@ -13,15 +15,72 @@ type BomRecord = Record<string, any>;
 
 const label = (bom: BomRecord) => `${bom.name || bom.id} (${bom.id})`;
 
+/** Where an assembly is in Onshape. */
+export interface OnshapeKey {
+    documentID: string;
+    wvmType: string;
+    wvmID: string;
+    elementID: string;
+}
+
 /** A refused save: the 409 reply's body. */
 export interface BomClash {
-    code: "CATALOG_NUMBER_TAKEN" | "ASSEMBLY_NAME_TAKEN";
+    code: "CATALOG_NUMBER_TAKEN" | "ASSEMBLY_NAME_TAKEN" | "ASSEMBLY_PUBLISHED_ELSEWHERE";
     message: string;
     fields: string[];
-    /** The other assembly that has the catalog number or name. */
+    /** The other assembly record that has the catalog number, name or Onshape assembly. */
     conflictsWith: { id: string; name?: string };
+    /** ASSEMBLY_PUBLISHED_ELSEWHERE: where it was published (the record's Onshape key and link). */
+    publishedFrom?: OnshapeKey & { onshapeURL: string };
 }
 const trimmed = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+/** A BOM ID is documentID_wvmType_wvmID_elementID_bomID (Onshape IDs are 24 hex digits). */
+const COMPOUND_ID = /^([0-9a-f]{24})_([wvm])_([0-9a-f]{24})_([0-9a-f]{24})_/;
+
+/** A BOM record's Onshape key: its onshapeID, or read from its ID. */
+export function onshapeKeyOf(record: BomRecord | null | undefined, id = record?.id): OnshapeKey | null {
+    const stored = record?.onshapeID;
+    if (stored?.documentID && stored?.elementID && stored?.wvmType && stored?.wvmID) {
+        return { documentID: stored.documentID, wvmType: stored.wvmType, wvmID: stored.wvmID, elementID: stored.elementID };
+    }
+    const match = typeof id === "string" ? COMPOUND_ID.exec(id) : null;
+    return match ? { documentID: match[1], wvmType: match[2], wvmID: match[3], elementID: match[4] } : null;
+}
+
+const onshapeURLOf = (record: BomRecord, key: OnshapeKey) =>
+    trimmed(record.onshapeURL) || `https://cad.onshape.com/documents/${key.documentID}/${key.wvmType}/${key.wvmID}/e/${key.elementID}`;
+
+/**
+ * A BOM of the same Onshape assembly (document + element) saved from a
+ * different workspace or version than `key`, if any (the oldest one).
+ */
+export async function findPublishedElsewhere(key: OnshapeKey): Promise<{ record: BomRecord; key: OnshapeKey } | null> {
+    const prefix = new RegExp(`^${key.documentID}_[wvm]_[0-9a-f]{24}_${key.elementID}_`);
+    const candidates = await Bom.find(
+        { $or: [{ "onshapeID.documentID": key.documentID, "onshapeID.elementID": key.elementID }, { id: prefix }] },
+        { id: 1, name: 1, catalogNumber: 1, onshapeID: 1, onshapeURL: 1, createdAt: 1 },
+    ).sort({ createdAt: 1, id: 1 }).lean<BomRecord[]>();
+    for (const record of candidates) {
+        const other = onshapeKeyOf(record);
+        if (other && other.documentID === key.documentID && other.elementID === key.elementID
+            && (other.wvmType !== key.wvmType || other.wvmID !== key.wvmID)) {
+            return { record, key: other };
+        }
+    }
+    return null;
+}
+
+/** The read-only answer of GET /bom/publishedElsewhere. */
+export async function publishedElsewhere(key: OnshapeKey) {
+    const found = await findPublishedElsewhere(key);
+    if (!found) return { elsewhere: false as const };
+    const { record, key: other } = found;
+    return {
+        elsewhere: true as const,
+        bom: { id: record.id, name: record.name, catalogNumber: record.catalogNumber, onshapeURL: onshapeURLOf(record, other), onshapeID: other },
+    };
+}
 
 /** Two sub-assemblies of `parent` without a catalog number and with the same name, if any. */
 function nameClashIn(parent: BomRecord, subs: BomRecord[], self?: string): BomClash | null {
@@ -36,7 +95,7 @@ function nameClashIn(parent: BomRecord, subs: BomRecord[], self?: string): BomCl
             return {
                 code: "ASSEMBLY_NAME_TAKEN",
                 message: `Assemblies ${label(other)} and ${label(sub)} in ${label(parent)} both have no catalog number and the same name "${name}". `
-                    + "Give them catalog numbers in Onshape, then publish again.",
+                    + "Give them catalog numbers in Onshape, then publish again. Nothing was saved.",
                 fields: ["name", "catalogNumber"],
                 conflictsWith: { id: theOther.id, name: theOther.name },
             };
@@ -51,18 +110,43 @@ function nameClashIn(parent: BomRecord, subs: BomRecord[], self?: string): BomCl
  * leaves out keep their saved values. Saving the same record again is fine.
  */
 export async function bomSaveClash(id: string, body: BomRecord): Promise<BomClash | null> {
-    const saved = await Bom.findOne({ id }, { name: 1, catalogNumber: 1, subAssemblies: 1 }).lean<BomRecord>();
+    const saved = await Bom.findOne({ id }, { name: 1, catalogNumber: 1, subAssemblies: 1, onshapeID: 1 }).lean<BomRecord>();
     const catalogNumber = trimmed("catalogNumber" in body ? body.catalogNumber : saved?.catalogNumber);
     const name = trimmed("name" in body ? body.name : saved?.name);
+    const key = onshapeKeyOf({ onshapeID: body.onshapeID ?? saved?.onshapeID }, id);
 
-    // 1. The catalog number is used by another BOM.
+    // 0. The same Onshape assembly was published from another workspace or version.
+    if (key) {
+        const found = await findPublishedElsewhere(key);
+        if (found) {
+            const { record, key: other } = found;
+            const what = trimmed(record.catalogNumber) ? `${trimmed(record.catalogNumber)} (${record.name || record.id})` : String(record.name || record.id);
+            return {
+                code: "ASSEMBLY_PUBLISHED_ELSEWHERE",
+                message: `${what} was already published from another workspace or version of this Onshape document. `
+                    + "Its BOM is kept for one workspace only: publish it from the workspace it was first published from. Nothing was saved.",
+                fields: [],
+                conflictsWith: { id: record.id, name: record.name },
+                publishedFrom: { ...other, onshapeURL: onshapeURLOf(record, other) },
+            };
+        }
+    }
+
+    // 1. The catalog number is used by another assembly. (A record of the
+    // same Onshape assembly and workspace, e.g. after its BOM table ID
+    // changed, is the same assembly.)
     if (catalogNumber) {
-        const other = await Bom.findOne({ catalogNumber, id: { $ne: id } }, { id: 1, name: 1 }).lean<BomRecord>();
+        const others = await Bom.find({ catalogNumber, id: { $ne: id } }, { id: 1, name: 1, onshapeID: 1 }).lean<BomRecord[]>();
+        const other = others.find((record) => {
+            const otherKey = onshapeKeyOf(record);
+            return !(key && otherKey && otherKey.documentID === key.documentID && otherKey.elementID === key.elementID
+                && otherKey.wvmType === key.wvmType && otherKey.wvmID === key.wvmID);
+        });
         if (other) {
             return {
                 code: "CATALOG_NUMBER_TAKEN",
-                message: `Catalog number ${catalogNumber} is already used by assembly ${label(other)}. `
-                    + "Give this assembly its own catalog number in Onshape, then publish again.",
+                message: `Catalog number ${catalogNumber} is already used by another assembly, "${other.name || other.id}". `
+                    + "Give this assembly its own catalog number in Onshape, then publish again. Nothing was saved.",
                 fields: ["catalogNumber"],
                 conflictsWith: { id: other.id, name: other.name },
             };
