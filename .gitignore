@@ -37,3 +37,6 @@ publish/**
 
 # Local review checklist for Claude sessions
 REVIEW_CHECKLIST.md
+
+# Local list of unlisted pages and admin routes (no secrets inside)
+secretRoutes.txt
