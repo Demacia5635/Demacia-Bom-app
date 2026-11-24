@@ -31,7 +31,7 @@ import PublishBomModal, {
   type PublishProgress,
 } from "./PublishBomModel";
 import { describeAge, readTreeCache, treeCacheKey, writeTreeCache, writeTreeCacheSoon } from "./treeCache";
-import { setTelemetryAssembly, withOperation } from "../extension/telemetry";
+import { errorCodeOf, reportOperation, setTelemetryAssembly, withOperation } from "../extension/telemetry";
 import { describePublishError, lowerFirst } from "./publishErrors";
 import { assemblyKeyId, bomIdOf, buildOnshapeElementURL, keyOf, keyString, recordId } from "./onshapeKeys";
 import ConfirmModal from "./ConfirmModal";
@@ -376,7 +376,11 @@ export default function AssemblyBomPage() {
       return { rows: freshRows, rootBomDB: dbBom, rootOnshapeBom: rootNode.onshapeBom ?? null };
     } catch (err: any) {
       // A replaced load just stops: the newer load (or page) owns the screen and the image check.
-      if (stale()) return null;
+      if (stale()) {
+        reportOperation({ failed: true, errorCode: "CANCELLED", error: "Replaced by a newer load" });
+        return null;
+      }
+      reportOperation({ failed: true, errorCode: errorCodeOf(err), error: String((err as ApiError)?.message ?? err) });
       setError(err as ApiError);
       cancelImageVersionCheck(); // don't keep images waiting for a check that won't come
       return null;
@@ -890,6 +894,7 @@ export default function AssemblyBomPage() {
           setPublishError(message);
           client.showMessageBubble(message);
           notifyPublishEnded(startedAt, `Publish BOM of "${values.name}" stopped`, message);
+          reportOperation({ failed: true, errorCode: "NEWER_PUBLISHED", error: message, items: total });
           return null; // marks the operation failed on /tele
         }
 
@@ -1005,6 +1010,7 @@ export default function AssemblyBomPage() {
           setPublishError(message);
           client.showMessageBubble(message);
           notifyPublishEnded(startedAt, `Publish BOM of "${values.name}" stopped`, message);
+          reportOperation({ failed: true, errorCode: "ITEMS_NOT_SAVED", error: message, items: total, problems: problems.length });
           return null; // marks the operation failed on /tele
         }
         rootTrack.step(isUpdate ? "Replacing the saved assembly" : "Saving the assembly");
@@ -1061,6 +1067,7 @@ export default function AssemblyBomPage() {
             ? `${problems.length} item${problems.length === 1 ? "" : "s"} could not be fully saved; see the panel.`
             : "Everything was saved to the database."
         );
+        reportOperation({ items: total, problems: problems.length });
         setPublishOpen(false);
         return true;
       } catch (err: unknown) {
@@ -1073,6 +1080,7 @@ export default function AssemblyBomPage() {
         setPublishError(message);
         client.showMessageBubble(message);
         notifyPublishEnded(startedAt, `Publish BOM of "${values.name}" failed`, message);
+        reportOperation({ failed: true, errorCode: errorCodeOf(err), error: message, items: total, problems: problems.length });
         return null; // marks the operation failed on /tele
       } finally {
         setPublishing(false);
