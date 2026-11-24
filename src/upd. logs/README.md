@@ -18,6 +18,7 @@ One file per website version: `v<version>.md`, listing what that deploy changed 
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [next](vNEXT.md) | Unreleased | Phones: parts as cards |
 | [2.2.0](v2.2.0.md) | 2026-11-23 | Copy list, Open in Google Drive, #/health and #/orphans |
 | [2.1.3](v2.1.3.md) | 2026-11-23 | Error codes kept for the extension (no visible change) |
 | [2.1.2](v2.1.2.md) | 2026-11-23 | Bought items: Untracked / To buy / Finished |
