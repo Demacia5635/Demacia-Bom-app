@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { revisionChange, revisionLabel } from "./rowRules";
+import { hasNoRevision, revisionChange, revisionLabel } from "./rowRules";
 import { testRow } from "./testRows";
+
+describe("hasNoRevision", () => {
+  it("is true for Standard Content, marked standard and vendor parts, like the server", () => {
+    expect(hasNoRevision({ isStandardContent: true })).toBe(true);
+    expect(hasNoRevision({ markedStandard: true })).toBe(true);
+    expect(hasNoRevision({ vendor: "McMaster" })).toBe(true);
+    expect(hasNoRevision({ vendor: "  " })).toBe(false);
+    expect(hasNoRevision({ vendor: "" })).toBe(false);
+  });
+});
 
 describe("revisionLabel", () => {
   it("shows the server's number, none for standard parts, new for unsaved ones", () => {
@@ -31,6 +41,7 @@ describe("revisionChange", () => {
     expect(revisionChange(saved({ source: "onshape-only" }))).toBeNull();
     expect(revisionChange(saved({ markedStandard: true }))).toBeNull();
     expect(revisionChange(saved({ vendor: "McMaster" }))).toBeNull();
+    expect(revisionChange(saved({ isStandardContent: true }))).toBeNull();
     expect(revisionChange(saved({ isAssembly: true }))).toBeNull();
   });
 

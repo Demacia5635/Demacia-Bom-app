@@ -15,6 +15,7 @@ import {
   stampOf,
   STANDARD_PART_ENGINEER,
   withChangeTracking,
+  hasNoRevision,
   revisionLabel,
   type FieldValues,
 } from "./rowRules";
@@ -225,7 +226,7 @@ export async function resolvePartRow(
     name: parsedItem.name || dbPart?.name || partID,
     catalogNumber: pickText("partNumber", dbPart?.catalogNumber),
     // Set by the server on each save that changes the part (not Onshape's Revision property).
-    revision: revisionLabel(dbPart, standard),
+    revision: revisionLabel(dbPart, hasNoRevision({ isStandardContent: standard, vendor })),
     description: pickText("description", dbPart?.description),
     engineer: standard ? STANDARD_PART_ENGINEER : pickText("engineer", dbPart?.engineer),
     material,
