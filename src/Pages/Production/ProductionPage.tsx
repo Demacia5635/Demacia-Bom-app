@@ -15,6 +15,7 @@ import ErrorBanner from "../../components/ErrorBanner";
 import { adminFetch } from "../../util/adminUnlock";
 import { valueColour } from "../Subpages/WorkOrder/workOrderOptions";
 import { blockedCount, sortedCounts, splitOrders, type ProductionOrder, type ProductionReply } from "./productionData";
+import { progressOfSummary } from "../../util/workOrderProgress";
 
 /** Status chips in the work-order table's colours. */
 const TONES: Record<string, [light: string, dark: string]> = {
@@ -155,7 +156,9 @@ export default function ProductionPage() {
 function OrderCard({ order: o }: { order: ProductionOrder }) {
   const theme = useThemeClasses();
   const { isLight } = useThemeSync();
-  const percent = Math.max(0, Math.min(100, Math.round(o.percent ?? 0)));
+  // Made and bought lines alike, untracked left out (workOrderProgress.ts).
+  const progress = progressOfSummary(o);
+  const percent = Math.max(0, Math.min(100, progress.percent));
   const blocked = blockedCount(o) > 0;
   return (
     <Link
@@ -172,12 +175,12 @@ function OrderCard({ order: o }: { order: ProductionOrder }) {
         <p className="text-sm text-red-500">Couldn&apos;t read its BOM: {o.error}</p>
       ) : (
         <>
-          <div className="h-2 rounded-full bg-zinc-500/20 overflow-hidden" title={`${o.finishedParts ?? 0} of ${o.madeParts ?? 0} made parts finished`}>
+          <div className="h-2 rounded-full bg-zinc-500/20 overflow-hidden" title={`${progress.finished} of ${progress.total} parts finished`}>
             <div className="h-full rounded-full bg-green-500" style={{ width: `${percent}%` }} />
           </div>
           <div className={`text-xs ${theme.textMuted}`}>
-            {o.finishedParts ?? 0} of {o.madeParts ?? 0} made parts finished
-            {o.purchased && o.purchased.lines > 0 ? ` · bought: ${o.purchased.finished} of ${o.purchased.lines} in` : ""}
+            {progress.finished} of {progress.total} parts finished · made {o.finishedParts ?? 0} of {o.madeParts ?? 0}
+            {o.purchased && o.purchased.lines > 0 ? ` · bought ${o.purchased.finished} of ${o.purchased.lines - o.purchased.untracked}` : ""}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {sortedCounts(o.byStatus).map(([status, n]) => (

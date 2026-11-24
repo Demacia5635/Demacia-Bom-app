@@ -6,11 +6,12 @@ import RecordHeaderCard from "../../../components/RecordHeaderCard";
 import { CatalogNumber } from "../../../components/CopyButton";
 import HeaderTotals from "../../../components/HeaderTotals";
 import { Link } from "react-router-dom";
+import type { Progress } from "../../../util/workOrderProgress";
 
 interface WorkOrderDataUIProps {
     workOrder: WorkOrderModel;
-    /** The rows' totals (once loaded): lines, pieces, and finished of the made parts. */
-    totals?: { parts: number; quantity: number; made: number; finished: number };
+    /** The rows' totals (once loaded): lines, pieces, and the finished progress (workOrderProgress.ts). */
+    totals?: { parts: number; quantity: number; progress: Progress };
 }
 
 /** The work-order page's header: the work order, with its assembly's image and catalog number. */
@@ -51,9 +52,9 @@ const WorkOrderDataUI: React.FC<WorkOrderDataUIProps> = ({ workOrder, totals }) 
                         { value: totals.parts, label: totals.parts === 1 ? "part" : "parts" },
                         { value: totals.quantity, label: "pieces" },
                         {
-                            value: `${totals.finished}/${totals.made}${totals.made > 0 ? ` (${Math.round((totals.finished / totals.made) * 100)}%)` : ""}`,
+                            value: `${totals.progress.finished}/${totals.progress.total}${totals.progress.total > 0 ? ` (${totals.progress.percent}%)` : ""}`,
                             label: "finished",
-                            title: "Finished parts of the parts the team makes (purchased and untracked parts left out)",
+                            title: "Finished parts, made and bought (bought ones when their status is Finished); untracked parts left out",
                         },
                     ]}
                 />

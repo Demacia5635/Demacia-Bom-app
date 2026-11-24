@@ -1,3 +1,5 @@
+import { progressOfSummary, type Progress } from "../../util/workOrderProgress";
+
 /** The production board's data (server: GET /api/admin/production) and how it's ordered. */
 
 export interface ProductionOrder {
@@ -15,6 +17,8 @@ export interface ProductionOrder {
   /** Its made lines, by status. */
   byStatus?: Record<string, number>;
   purchased?: { lines: number; toBuy: number; finished: number; untracked: number };
+  /** Finished of every followed line, made and bought (newer servers; else worked out: workOrderProgress.ts). */
+  progress?: Progress;
   /** Set when its BOM tree couldn't be built. */
   error?: string;
 }
@@ -44,7 +48,7 @@ export function splitOrders(orders: ProductionOrder[]): { open: ProductionOrder[
     (a, b) =>
       Number(!!b.error) - Number(!!a.error) ||
       Number(blockedCount(b) > 0) - Number(blockedCount(a) > 0) ||
-      (a.percent ?? 0) - (b.percent ?? 0) ||
+      progressOfSummary(a).percent - progressOfSummary(b).percent ||
       (a.name ?? "").localeCompare(b.name ?? "")
   );
   done.sort((a, b) => (b.updatedAt ?? b.createdAt ?? "").localeCompare(a.updatedAt ?? a.createdAt ?? ""));

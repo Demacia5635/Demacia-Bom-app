@@ -1,9 +1,10 @@
 import { fetchFromApi } from "../../util/ApiService";
+import { progressOfSummary, type Progress } from "../../util/workOrderProgress";
 
 /**
  * One work order's progress, from GET /db/workOrder/summary (server/API.md).
- * It counts the same way as the work-order page: made = not purchased and
- * not untracked; finished = "Finished Manufacturing" or priority "Finished".
+ * Its finished progress counts made and bought lines (`progress`, or the same
+ * numbers from the older fields: workOrderProgress.ts), as the page does.
  */
 export interface WorkOrderSummary {
   id: string;
@@ -15,6 +16,9 @@ export interface WorkOrderSummary {
   finishedQty?: number;
   totalQty?: number;
   byStatus?: Record<string, number>;
+  purchased?: { lines: number; toBuy: number; finished: number; untracked: number };
+  /** Finished of every followed line, made and bought (newer servers). */
+  progress?: Progress;
   updatedAt?: string;
   /** Why the counts couldn't be made (the work-order page's message). */
   error?: string;
@@ -30,6 +34,9 @@ export async function loadWorkOrderSummaries(): Promise<Map<string, WorkOrderSum
   }
 }
 
-/** Whether a work order still has parts to make (unknown: false). */
-export const hasUnfinishedParts = (summary: WorkOrderSummary | undefined): boolean =>
-  !!summary && !summary.error && (summary.finishedParts ?? 0) < (summary.madeParts ?? 0);
+/** Whether a work order still has parts to make or buy (unknown: false). */
+export const hasUnfinishedParts = (summary: WorkOrderSummary | undefined): boolean => {
+  if (!summary || summary.error) return false;
+  const p = progressOfSummary(summary);
+  return p.finished < p.total;
+};
