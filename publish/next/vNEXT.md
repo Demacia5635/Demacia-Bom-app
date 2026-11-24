@@ -13,6 +13,8 @@
 
 - **"Update available: X" tag** after the panel title when a newer version has been announced. Hover says "You have Y. Click to get X."; clicking opens the team's Drive folder of builds. It checks when the panel opens and every 6 hours (at most once an hour). (`71879c8`)
 
+- **Revision is now the server's number, read-only** in the panel: a whole number that goes up when a part's data changes; "—" for standard parts. The panel no longer reads or writes Onshape's Revision property. (`81e8348`)
+
 ## For the team
 
 - **Release script:** `npm run release -- <extension|website|server> <patch|minor|major>` (`--dry-run` shows what it would do; `--no-checks` skips the checks). It bumps the right version file, runs typecheck, tests, lint and the builds (for the server, its own packages and a load test), puts the version back if anything fails, commits only the version files, and never pushes. It prints what's left to do. (`58ddebd`, `132b4cc`)
