@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { lazy } from 'react';
 import MainLayout from './components/MainLayout';
+import AdminGate from './components/AdminGate';
 
 // Each page is loaded when first opened (MainLayout shows "Loading..." meanwhile),
 // so opening one page doesn't download the others, /tele included.
@@ -14,6 +15,12 @@ const WhatsNewPage = lazy(() => import('./Pages/WhatsNew/WhatsNewPage'));
 const OrphansPage = lazy(() => import('./Pages/Orphans/OrphansPage'));
 const HealthPage = lazy(() => import('./Pages/Health/HealthPage'));
 const AdminPage = lazy(() => import('./Pages/Admin/AdminPage'));
+const ServerPage = lazy(() => import('./Pages/Server/ServerPage'));
+const ProductionPage = lazy(() => import('./Pages/Production/ProductionPage'));
+const FilesPage = lazy(() => import('./Pages/Files/FilesPage'));
+const ActivityPage = lazy(() => import('./Pages/Activity/ActivityPage'));
+const RevisionsPage = lazy(() => import('./Pages/Revisions/RevisionsPage'));
+const StalePage = lazy(() => import('./Pages/Stale/StalePage'));
 
 // A new id in the address is a new page (key): nothing of the previous BOM or
 // work order stays in its state, so the pages don't reset it by hand.
@@ -42,13 +49,20 @@ export default function App() {
           <Route path="/partSearch" element={<PartsSearchPage key="made" />} />
           <Route path="/standardParts" element={<PartsSearchPage key="standard" standard />} />
           {/* Onshape footprint - unlisted on purpose (not in the sidebar). */}
-          <Route path="/tele" element={<TelemetryPage />} />
+          <Route path="/tele" element={<AdminGate><TelemetryPage /></AdminGate>} />
           {/* Parts no assembly uses, with Delete (admin) - unlisted too. */}
-          <Route path="/orphans" element={<OrphansPage />} />
+          <Route path="/orphans" element={<AdminGate><OrphansPage /></AdminGate>} />
           {/* Data health: problems in the saved parts and BOMs - unlisted too. */}
-          <Route path="/health" element={<HealthPage />} />
+          <Route path="/health" element={<AdminGate><HealthPage /></AdminGate>} />
           {/* Unlocks the admin pages in this browser's sidebar - unlisted until then. */}
           <Route path="/admin" element={<AdminPage />} />
+          {/* Admin pages (sidebar's ADMIN section); their data needs the admin secret. */}
+          <Route path="/server" element={<AdminGate needsSecret><ServerPage /></AdminGate>} />
+          <Route path="/production" element={<AdminGate needsSecret><ProductionPage /></AdminGate>} />
+          <Route path="/files" element={<AdminGate needsSecret><FilesPage /></AdminGate>} />
+          <Route path="/activity" element={<AdminGate needsSecret><ActivityPage /></AdminGate>} />
+          <Route path="/revisions" element={<AdminGate needsSecret><RevisionsPage /></AdminGate>} />
+          <Route path="/stale" element={<AdminGate needsSecret><StalePage /></AdminGate>} />
           <Route path="/whatsnew" element={<WhatsNewPage />} />
           {/* A mistyped address goes to Home, and the address bar says so. */}
           <Route path="*" element={<Navigate to="/home" replace />} />

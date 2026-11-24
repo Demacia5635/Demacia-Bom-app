@@ -1,4 +1,4 @@
-import { HomeIcon, SearchIcon, ClipboardList, Package, X, Activity, HeartPulse, PackageX, ShieldCheck, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, Package, X, Activity, HeartPulse, PackageX, ShieldCheck, Server, Factory, HardDrive, History, GitCompareArrows, ClockAlert, type LucideProps } from "lucide-react";
 import { type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -10,9 +10,15 @@ type NavIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttribute
 
 /** The unlisted pages, at the bottom of the sidebar once this browser is unlocked (#/admin). */
 const ADMIN_ITEMS: { label: string; path: string; icon: NavIcon }[] = [
+    { label: 'Activity', path: '/activity', icon: History },
+    { label: 'Production', path: '/production', icon: Factory },
+    { label: 'Revisions', path: '/revisions', icon: GitCompareArrows },
+    { label: 'Stale Orders', path: '/stale', icon: ClockAlert },
+    { label: 'Files', path: '/files', icon: HardDrive },
     { label: 'Onshape Footprint', path: '/tele', icon: Activity },
     { label: 'Data Health', path: '/health', icon: HeartPulse },
     { label: 'Parts in No Assembly', path: '/orphans', icon: PackageX },
+    { label: 'Server', path: '/server', icon: Server },
     { label: 'Admin', path: '/admin', icon: ShieldCheck },
 ];
 
@@ -67,7 +73,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                             ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}
             />
             {/* inert while closed: its buttons can't be reached with Tab off-screen. */}
-            <aside inert={!isOpen} className={`h-full fixed top-0 left-0 bottom-0 w-64 border-r shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${asideBg} ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <aside inert={!isOpen} className={`h-full fixed top-0 left-0 bottom-0 w-64 border-r shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col overflow-y-auto ${asideBg} ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                 
                 {/* Header */}
                 <div className={`h-12 flex items-center justify-between px-4 border-b ${headerBg}`}>

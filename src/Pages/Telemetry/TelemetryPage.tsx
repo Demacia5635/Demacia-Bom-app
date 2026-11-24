@@ -11,6 +11,7 @@ import { useThemeSync } from "../../util/misc/useThemeSync";
 import ErrorBanner from "../../components/ErrorBanner";
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import TelemetryCharts from "./TelemetryCharts";
+import ExtensionStatsCards from "./ExtensionStatsCards";
 
 interface TelemetryEvent {
   _id: string;
@@ -26,6 +27,11 @@ interface TelemetryEvent {
   ok: boolean;
   error: string;
   version: string;
+  /** Newer extension versions only: a stable error code, items saved, non-fatal problems, "chrome" / "firefox". */
+  errorCode?: string;
+  items?: number;
+  problems?: number;
+  browser?: string;
 }
 
 /** Onshape request kinds, in display order. */
@@ -170,6 +176,9 @@ export default function TelemetryPage() {
         </div>
 
         {error && <ErrorBanner className="p-3 rounded-lg text-sm">{error}</ErrorBanner>}
+
+        {/* The extension itself: versions in use, Publish BOM success and time, common errors. */}
+        <ExtensionStatsCards allEvents={events} events={shown} />
 
         {/* Totals per kind of Onshape request */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
