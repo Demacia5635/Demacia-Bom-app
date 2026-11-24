@@ -17,6 +17,7 @@ import RecordDialog from "../../components/RecordDialog";
 import PartPortal from "../SearchPartsPage/PartPortal";
 import { useDocumentTitle } from "../../components/useDocumentTitle";
 import DeleteOrphanDialog from "./DeleteOrphanDialog";
+import { revisionLabel } from "../../util/partRevision";
 
 export interface OrphanPart extends PartModel {
   /** How many of its Drive files no other record points at (they go to the Drive trash on delete). */
@@ -153,7 +154,7 @@ function OrphanCard({ part, onOpen, onDelete }: { part: OrphanPart; onOpen: () =
   const name = part.name || part.catalogNumber || part.id;
 
   const fields: [string, React.ReactNode][] = [
-    ["Revision", part.revision],
+    ["Revision", revisionLabel(part)],
     ["Engineer", part.engineer],
     ["Material", part.material],
     ["Mass", part.mass != null && part.mass !== 0 ? `${part.mass} kg` : ""],

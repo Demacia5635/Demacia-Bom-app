@@ -10,7 +10,8 @@ const BomColumns: ColumnConfig<BomTableRow>[] = [
   { key: "size", label: "Size", type: "string", isDisabled: () => true },
   { key: "description", label: "Description", type: "string", isDisabled: isReadOnlyBomRow },
   { key: "catalogNumber", label: "Catalog No.", type: "string", isDisabled: isReadOnlyBomRow },
-  { key: "revision", label: "Revision", type: "string", isDisabled: isReadOnlyBomRow },
+  // Kept by the server (raised on each change); "—" for standard parts.
+  { key: "revision", label: "Revision", type: "string", isDisabled: () => true },
   { key: "engineer", label: "Engineer", type: "string", isDisabled: isReadOnlyBomRow },
   { key: "quantity", label: "Quantity", type: "number", isDisabled: () => true },
   { key: "material", label: "Material", type: "string", isDisabled: isReadOnlyBomRow },
