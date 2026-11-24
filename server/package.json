@@ -1,6 +1,6 @@
 {
   "name": "bom-app-server",
-  "version": "5.4.1",
+  "version": "5.4.2",
   "description": "a server for the bom app",
   "main": "server.ts",
   "scripts": {
