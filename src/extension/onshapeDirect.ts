@@ -162,7 +162,6 @@ export async function getBom(key: OnshapeElementKey, multiLevel = true): Promise
 export const PART_PROPERTY_ID_MAP: Record<string, string> = {
   name: "57f3fb8efa3416c06701d60d",
   catalogNumber: "57f3fb8efa3416c06701d60f",
-  revision: "57f3fb8efa3416c06701d610",
   description: "57f3fb8efa3416c06701d60e",
   engineer: "57f3fb8efa3416c06701d619",
   material: "57f3fb8efa3416c06701d615",
