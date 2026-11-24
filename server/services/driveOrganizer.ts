@@ -76,7 +76,8 @@ let running: Promise<void> | null = null;
 
 export const listJobs = () => jobs.map(brief);
 export const getJob = (id: string) => jobs.find((job) => job.id === id);
-const brief = ({ moves, skipped, clashes, ...rest }: OrganizeJob) => rest;
+// The job without its long lists (for GET /organize).
+const brief = ({ moves: _moves, skipped: _skipped, clashes: _clashes, ...rest }: OrganizeJob) => rest;
 
 const TYPE_NAMES: Record<string, string> = {
     [googleConfig.imageFolderId]: "Images",

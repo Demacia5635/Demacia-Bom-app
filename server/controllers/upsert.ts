@@ -41,6 +41,8 @@ export function updatedByOf(req: Request): { updatedBy?: string } {
     } catch {
         // Not URL-encoded: use it as sent.
     }
+    // Control characters are removed on purpose (a header can carry them).
+    // oxlint-disable-next-line no-control-regex
     const value = decoded.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 100);
     return value ? { updatedBy: value } : {};
 }
