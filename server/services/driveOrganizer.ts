@@ -18,6 +18,7 @@ import { drive } from "./driveClient";
 import { FILE_FIELDS, planFolders, type Placement } from "./driveFolderPlan";
 import { isTeamFolder } from "./driveService";
 import { deleteUnusedParts } from "../controllers/orphanParts";
+import { recordEvent, whoOf } from "./events";
 
 /** Most moves / skips one job keeps for its report (the counts are always complete). */
 const MAX_LISTED = 5000;
@@ -119,8 +120,28 @@ async function cleanUp(job: OrganizeJob): Promise<void> {
     }
 }
 
+/** One bom.publish event per top-level assembly of a publish run. */
+async function recordPublishes(job: OrganizeJob): Promise<void> {
+    const tops = job.topIDs ?? [];
+    const names = new Map((await Bom.find({ id: { $in: tops } }, { id: 1, name: 1 }).lean<Record<string, any>[]>()).map((b) => [b.id, b.name]));
+    for (const top of tops) {
+        const saves = savesByTop.get(top);
+        savesByTop.delete(top);
+        const who = [...(saves?.who ?? [])].join(", ");
+        const name = names.get(top) || top;
+        recordEvent({
+            kind: "bom.publish", who, record: { kind: "bom", id: top, name },
+            message: `${whoOf(who)} published ${name} (${saves?.count ?? 0} assembly save(s))`,
+            details: { bomSaves: saves?.count ?? 0 },
+        });
+    }
+}
+
 async function run(job: OrganizeJob): Promise<void> {
-    if (job.trigger === "publish") await cleanUp(job);
+    if (job.trigger === "publish") {
+        await recordPublishes(job).catch((err) => console.error("[events] couldn't record the publish:", err));
+        await cleanUp(job);
+    }
     // Without the type folders configured there's nothing to sort.
     if (!googleConfig.imageFolderId && !googleConfig.stlFolderId && !googleConfig.parasolidFolderId) return;
     const { boms, parts } = await loadRecords();
@@ -265,6 +286,13 @@ function launch(job: OrganizeJob): void {
             console.log(`${label} ${job.status}: ${job.dryRun ? "would move" : "moved"} ${moved}, already in place ${alreadyInPlace}, `
                 + `not in any assembly ${notInAnyAssembly}, folders ${job.dryRun ? "to create" : "created"} ${foldersCreated}, `
                 + `skipped ${JSON.stringify(skipped)}${cleanup}`);
+            if (job.trigger === "manual" || job.summary.moved > 0 || job.cleanup) {
+                recordEvent({
+                    kind: job.trigger === "manual" ? "drive.organize" : "parts.cleanup",
+                    message: `Drive sort ${job.dryRun ? "dry run" : "run"} ${job.status}: ${job.dryRun ? "would move" : "moved"} ${job.summary.moved} file(s)${cleanup}`,
+                    details: { jobId: job.id, trigger: job.trigger, dryRun: job.dryRun, summary: job.summary, ...(job.cleanup ? { cleanup: { deleted: job.cleanup.deleted.length, kept: job.cleanup.kept.length } } : {}) },
+                });
+            }
             running = null;
             startPending();
         });
@@ -287,6 +315,8 @@ const timers = new Map<string, NodeJS.Timeout>();
 const pendingTops = new Set<string>();
 /** Top-level assembly -> parts a publish dropped from a BOM in its tree (partID -> who saved). */
 const droppedByTop = new Map<string, Map<string, string>>();
+/** Top-level assembly -> the BOM saves of the publish that's settling (for its bom.publish event). */
+const savesByTop = new Map<string, { count: number; who: Set<string> }>();
 
 function startPending(): void {
     if (running || pendingTops.size === 0) return;
@@ -323,6 +353,10 @@ export function scheduleOrganizeAfterSave(bomID: string, droppedPartIDs: string[
     topsAbove(bomID)
         .then((tops) => {
             for (const top of tops) {
+                const saves = savesByTop.get(top) ?? { count: 0, who: new Set<string>() };
+                saves.count++;
+                if (who) saves.who.add(who);
+                savesByTop.set(top, saves);
                 if (droppedPartIDs.length) {
                     const dropped = droppedByTop.get(top) ?? new Map<string, string>();
                     for (const id of droppedPartIDs) dropped.set(id, who);

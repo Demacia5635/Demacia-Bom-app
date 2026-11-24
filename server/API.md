@@ -36,6 +36,8 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /api/admin/check` | **Admin:** `204` when `x-admin-secret` is right; `404` when it's missing or wrong, as for every admin route. For the website's admin unlock (below). |
 | `GET /api/admin/status` | **Admin.** How the server is doing (the website's `#/server`), described below. |
 | `GET /api/admin/production` | **Admin.** Work orders' progress for `#/production`, described below. |
+| `GET /api/admin/events?limit=&before=&kind=` | **Admin.** What happened, newest first (`#/activity`), described below. |
+| `GET /api/admin/revisions?limit=&before=` | **Admin.** Revision bumps for `#/revisions`, each with the open work orders that contain the part, described below. |
 | `GET /api/admin/files[?refresh=1]` | **Admin.** The team's Drive files for `#/files`, described below. |
 | `POST /api/admin/files/delete` | **Admin.** `{ ids }` (1-200 Drive file IDs): moves unused files to Drive's trash. Each file is re-checked first and refused if a part or BOM uses it, if it isn't in the team folders, or if it's not found. Returns `200 { deleted: [{ fileId, name }], refused: [{ fileId, reason }] }`, with one log line per file. |
 | `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
@@ -98,6 +100,38 @@ Against guessing:
 - **Lock:** after 10 wrong tries from one IP within 15 minutes, or 100 overall, every admin call answers `429 TOO_MANY_REQUESTS`, even one with the right secret, until 15 minutes pass with no tries.
 - **IP:** it's the first `X-Forwarded-For` entry, which Render's proxy adds. Everyone behind one network address shares a counter, so 10 typos at school lock the admin pages there for 15 minutes.
 - **Memory:** the counts are kept in memory, and a restart clears them.
+
+### Events: `GET /api/admin/events`
+
+An `events` collection, capped so that MongoDB keeps the last 5000, records what happened. Recording never delays or fails the action.
+
+`{ events: [{ id, at, kind, who?, record?: { kind: "part" | "bom" | "workOrder", id, name }, message, details? }], next }`, newest first.
+- **Paging:** `limit` is 1-200 (default 50). For the next page, pass `before=<next>`; `next` is `null` on the last page.
+- **Filtering:** `kind=` keeps only one kind.
+- **`message`:** one line ready to show.
+
+| `kind` | When | `details` |
+|---|---|---|
+| `part.create` | A new part is saved. | |
+| `part.revision` | A part's revision went up. | `{ from, to, fields }` |
+| `part.delete` | A part was deleted (`/orphans`, the cleanup after a publish, or `DELETE /part/id`). | `{ filesTrashed, source }` when unused |
+| `bom.publish` | A publish settled: one per top-level assembly, with the Drive sort run. | `{ bomSaves }` |
+| `workOrder.create`, `workOrder.save` | A work order was created or saved whole. | |
+| `workOrder.part` | One line of a work order changed. | `{ partID, fields }` |
+| `workOrder.cncGroup` | A CNC job was set, changed or dissolved. | `{ groupID, partIDs?, links? }` |
+| `drive.organize` | A manual Drive sort or dry run ended. | `{ jobId, summary, ... }` |
+| `parts.cleanup` | A publish's run moved files or deleted dropped parts. | `{ jobId, summary, cleanup }` |
+| `drive.fileDelete` | An unused Drive file went to the trash. | `{ fileId, name }` |
+| `revisions.init` | The one-time revision start ran. | `{ setTo1, standardCleared, overwrittenCount }` |
+| `admin.locked` | An IP was locked out of the admin routes. | `{ ip }` |
+
+Part saves that don't change the revision aren't recorded: a publish saves every part, so recording them would keep only the last few publishes.
+
+### `GET /api/admin/revisions`
+
+`{ items: [{ event, part: { id, name, catalogNumber, revisionNow }, openWorkOrders: [{ id, name, status, method }] }], next }`
+- **`event`:** a `part.revision` event, newest first, paged like `/events`.
+- **`openWorkOrders`:** the work orders open now (not 100% finished, as in `#/production`) that contain the part, with its status and method in each, whatever that status is.
 
 ### `GET /api/admin/files`
 

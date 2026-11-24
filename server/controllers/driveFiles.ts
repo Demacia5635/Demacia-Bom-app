@@ -10,6 +10,7 @@ import { drive } from "../services/driveClient";
 import { FILE_FIELDS } from "../services/driveFolderPlan";
 import { driveFilesOf } from "./orphanParts";
 import { updatedByOf } from "./upsert";
+import { recordEvent, whoOf } from "../services/events";
 
 type Rec = Record<string, any>;
 
@@ -157,6 +158,7 @@ export async function deleteUnusedFiles(req: Request, res: Response, next: NextF
                 await drive.deleteFile(fileId); // to Drive's trash
                 deleted.push({ fileId, name: location.name });
                 console.log(`[file delete ${res.locals.requestId}] by ${who}: moved unused Drive file ${fileId} "${location.name}" to Drive's trash`);
+                recordEvent({ kind: "drive.fileDelete", who, message: `${whoOf(who)} moved unused file ${location.name} to Drive's trash`, details: { fileId, name: location.name } });
             } catch (err: any) {
                 refused.push({ fileId, reason: `error: ${err?.message ?? err}` });
             }

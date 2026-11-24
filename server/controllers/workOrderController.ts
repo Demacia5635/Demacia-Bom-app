@@ -3,6 +3,7 @@ import { NextFunction, Request, Response } from "express";
 import WorkOrder from "../models/WorkOrder";
 import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
 import { makeListAll } from "./listAll";
+import { recordEvent, whoOf } from "../services/events";
 
 interface SubPartBody {
   partID: string;
@@ -91,6 +92,12 @@ export async function upsertWorkOrderByID(
 
     const { doc: workOrder, created } = await upsertByID(WorkOrder, id, update);
 
+    const who = updatedByOf(req).updatedBy;
+    const name = (workOrder as Record<string, any> | null)?.name || id;
+    recordEvent({
+      kind: created ? "workOrder.create" : "workOrder.save", who, record: { kind: "workOrder", id, name },
+      message: `${whoOf(who)} ${created ? "created" : "saved"} work order ${name}`,
+    });
     return res.status(created ? 201 : 200).json(workOrder);
   } catch (err) {
     return next(err);
@@ -160,6 +167,12 @@ export async function updateWorkOrderPart(
     }
 
     const part = (result.parts as unknown as { partID: string }[]).find((p) => p.partID === partID);
+    const woName = (result as Record<string, any>).name || id;
+    recordEvent({
+      kind: "workOrder.part", who: by.updatedBy, record: { kind: "workOrder", id, name: woName },
+      message: `${whoOf(by.updatedBy)} changed ${Object.keys(changes).join(", ")} of ${partID} in work order ${woName}`,
+      details: { partID, fields: Object.keys(changes) },
+    });
     return res.status(200).json(part ?? null);
   } catch (err) {
     return next(err);
@@ -294,6 +307,12 @@ export async function updateCncGroup(
     // A links-only change for a group someone removed meanwhile wasn't saved: say so.
     if (keepParts && !cncGroups.some((g) => g.id === groupID))
       return res.status(409).json({ message: "This CNC group was changed or removed by someone else; reload the page" });
+    const woName = (result as Record<string, any>).name || id;
+    recordEvent({
+      kind: "workOrder.cncGroup", who: updatedBy, record: { kind: "workOrder", id, name: woName },
+      message: `${whoOf(updatedBy)} ${keepParts ? "changed the G-code links of" : partIDs.length >= 2 ? "set" : "dissolved"} a CNC job in work order ${woName}`,
+      details: { groupID, ...(keepParts ? {} : { partIDs }), ...(links !== undefined ? { links } : {}) },
+    });
     return res.status(200).json({ groupID, cncGroups });
   } catch (err) {
     return next(err);
