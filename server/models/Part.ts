@@ -19,7 +19,8 @@ const partSchema = new mongoose.Schema(
 
     name: { type: String },
     catalogNumber: { type: String },
-    revision: { type: String },
+    // Set only by the server (controllers/partRevision.ts); none on standard parts.
+    revision: { type: Number },
     description: { type: String },
     engineer: { type: String },
 

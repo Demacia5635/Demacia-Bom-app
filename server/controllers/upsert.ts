@@ -5,7 +5,7 @@ import type { Request } from "express";
 import type { Model } from "mongoose";
 
 /** Fields the server owns: never taken from a request body. */
-const SERVER_OWNED = new Set(["_id", "__v", "id", "createdAt", "updatedAt", "updatedBy"]);
+const SERVER_OWNED = new Set(["_id", "__v", "id", "createdAt", "updatedAt", "updatedBy", "revision"]);
 
 /**
  * The request body as plain field values for a `$set`. Mongoose already drops
