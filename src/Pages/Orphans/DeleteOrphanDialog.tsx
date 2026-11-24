@@ -3,25 +3,7 @@ import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import RecordDialog from "../../components/RecordDialog";
 import type { OrphanPart } from "./OrphansPage";
 import { deleteOrphans, isSecretRejected, type DeleteOutcome } from "./orphanDelete";
-
-/** The admin secret, kept for this tab only (sessionStorage) once it worked. */
-const SECRET_KEY = "bom-admin-secret";
-
-function readSecret(): string {
-  try {
-    return sessionStorage.getItem(SECRET_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-function writeSecret(secret: string | null): void {
-  try {
-    if (secret) sessionStorage.setItem(SECRET_KEY, secret);
-    else sessionStorage.removeItem(SECRET_KEY);
-  } catch {
-    // Storage blocked: the secret is typed again next time.
-  }
-}
+import { readTabSecret as readSecret, writeTabSecret as writeSecret } from "../../util/adminUnlock";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const partName = (p: OrphanPart) => p.name || p.catalogNumber || p.id;

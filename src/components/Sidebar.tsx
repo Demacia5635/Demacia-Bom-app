@@ -1,16 +1,28 @@
-import { HomeIcon, SearchIcon, ClipboardList, Package, X, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, Package, X, Activity, HeartPulse, PackageX, ShieldCheck, type LucideProps } from "lucide-react";
 import { type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
 import { hasUnsavedEdits } from "../util/saveTracker";
 import { LEAVE_WITH_UNSAVED_EDITS } from "./useUnsavedEditsGuard";
+import { useAdminUnlocked } from "../util/adminUnlock";
+
+type NavIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
+
+/** The unlisted pages, at the bottom of the sidebar once this browser is unlocked (#/admin). */
+const ADMIN_ITEMS: { label: string; path: string; icon: NavIcon }[] = [
+    { label: 'Onshape Footprint', path: '/tele', icon: Activity },
+    { label: 'Data Health', path: '/health', icon: HeartPulse },
+    { label: 'Parts in No Assembly', path: '/orphans', icon: PackageX },
+    { label: 'Admin', path: '/admin', icon: ShieldCheck },
+];
 
 export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const { isLight } = useThemeSync();
+    const adminUnlocked = useAdminUnlocked();
 
-    const navItems: { label: string; path: string; icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>> }[] = [
+    const navItems: { label: string; path: string; icon: NavIcon }[] = [
         { label: 'Home', path: '/home', icon: HomeIcon },
         { label: 'Search Parts', path: '/partSearch', icon: SearchIcon },
         { label: 'Standard Parts', path: '/standardParts', icon: Package },
@@ -87,6 +99,26 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ is
                         );
                     })}
                 </nav>
+
+                {/* Admin pages (this browser unlocked them at #/admin): at the bottom. */}
+                {adminUnlocked && (
+                    <nav aria-label="Admin pages" className={`px-2 pt-2 pb-3 space-y-1 border-t ${isLight ? "border-zinc-200" : "border-gray-800"}`}>
+                        <div className={`px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider ${isLight ? "text-zinc-400" : "text-gray-500"}`}>Admin</div>
+                        {ADMIN_ITEMS.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = location.pathname === item.path;
+                            return (
+                                <button
+                                    key={item.path}
+                                    onClick={() => handleNavigation(item.path)}
+                                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-colors ${isActive ? navActive : navInactive}`}>
+                                    <Icon className={`w-4 h-4 ${iconColor}`} />
+                                    <span>{item.label}</span>
+                                </button>
+                            );
+                        })}
+                    </nav>
+                )}
 
             </aside>
         </div>
