@@ -1,0 +1,1 @@
+import{i as e,s as t}from"./useThemeClasses-BShFo365.js";var n=t(e(),1),r=`Demacia BOM`;function i(e){(0,n.useEffect)(()=>{if(e)return document.title=e,()=>{document.title=r}},[e])}function a(e,t,n){let r=t?.trim()||n?.trim();return r?`${r} - ${e}`:null}export{i as n,a as t};
