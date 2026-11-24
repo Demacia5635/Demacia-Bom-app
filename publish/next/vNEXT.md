@@ -14,3 +14,9 @@
 ## For the team
 
 - **Release script:** `npm run release -- <extension|website|server> <patch|minor|major>` (`--dry-run` shows what it would do; `--no-checks` skips the checks). It bumps the right version file, runs typecheck, tests, lint and the builds (for the server, its own packages and a load test), puts the version back if anything fails, commits only the version files, and never pushes. It prints what's left to do. (`58ddebd`, `132b4cc`)
+- Unit tests for the panel's logic (publish errors, part sizes, same-part matching, copying rows, Onshape BOM parsing, suggested fixes): 32 new, 88 in all. (`8303166`)
+- The extension and website now share one "who saved it" header, sent only on saves. No visible change. (`f78c172`)
+
+## Not tested yet
+
+- The frozen Avatar / Name columns in Firefox's narrow sidebar were checked against the code only (at 320 px Name narrows to about 94 px); worth a glance in the real sidebar.
