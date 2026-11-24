@@ -18,7 +18,7 @@ One file per website version: `v<version>.md`, listing what that deploy changed 
 
 | Version | Pushed | Highlights |
 |---|---|---|
-| [next](vNEXT.md) | Unreleased | Bulk delete on #/orphans, admin section in the sidebar |
+| [2.3.0](v2.3.0.md) | 2026-11-24 | Bulk delete on #/orphans, admin section in the sidebar |
 | [2.2.3](v2.2.3.md) | 2026-11-24 | Revision read-only, work-order Revision column |
 | [2.2.2](v2.2.2.md) | 2026-11-24 | Extension version file (no visible change) |
 | [2.2.1](v2.2.1.md) | 2026-11-24 | Phones: parts as cards |
