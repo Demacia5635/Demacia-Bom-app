@@ -17,7 +17,7 @@ import RecordDialog from "../../../components/RecordDialog";
 import { useRowContextMenu } from "../../../components/useRowContextMenu";
 import { useDebouncedFieldSave } from "../../../components/useDebouncedFieldSave";
 import { useCncGroups } from "./useCncGroups";
-import { isFinishedRow, isPurchasedRow, toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
+import { isPurchasedRow, toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
 import WorkOrderFilters from "./WorkOrderFilters";
 import { madeStatus } from "./workOrderOptions";
 import { linkFinished } from "./finishedLink";
@@ -37,6 +37,7 @@ import SaveStatus from "../../../components/SaveStatus";
 import { SkeletonTable } from "../../../components/Skeleton";
 import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
 import { revisionLabel } from "../../../util/partRevision";
+import { progressOfLines } from "../../../util/workOrderProgress";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -215,16 +216,13 @@ export default function WorkOrderDetailsPage() {
 
     // ---- Filters for the people making the parts (remembered in this browser) ----
     const filters = useWorkOrderFilters();
-    // The header's totals (QW11): made = not purchased and tracked, as the filters count them.
-    const rowTotals = useMemo(() => {
-        const made = rows.filter((r) => !isPurchasedRow(r) && r.statusCode !== "Untracked");
-        return {
-            parts: rows.length,
-            quantity: rows.reduce((sum, r) => sum + (r.quantityTotal || 0), 0),
-            made: made.length,
-            finished: made.filter(isFinishedRow).length,
-        };
-    }, [rows]);
+    // The header's totals (QW11); finished counts made and bought lines alike,
+    // leaving "Untracked" ones out (workOrderProgress.ts, as the server counts it).
+    const rowTotals = useMemo(() => ({
+        parts: rows.length,
+        quantity: rows.reduce((sum, r) => sum + (r.quantityTotal || 0), 0),
+        progress: progressOfLines(rows),
+    }), [rows]);
     const { rowFilter } = filters;
     // Phones: cards instead of the table (unless "Table view" was picked), in the
     // table's own order (CNC groups together), filtered like it.

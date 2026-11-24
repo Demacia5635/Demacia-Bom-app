@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { sortedCounts, splitOrders, type ProductionOrder } from "./productionData";
 
-const o = (id: string, over: Partial<ProductionOrder>): ProductionOrder => ({ id, name: id, open: true, percent: 50, blocked: { toBuy: 0, noMaterial: 0 }, ...over });
+const o = (id: string, over: Partial<ProductionOrder> & { percent?: number }): ProductionOrder => {
+  const percent = over.percent ?? 50;
+  return { id, name: id, open: true, blocked: { toBuy: 0, noMaterial: 0 }, ...over, progress: { finished: percent, total: 100, percent } };
+};
 
 describe("splitOrders", () => {
   it("puts failed, then blocked, then furthest behind first; done apart, newest first", () => {
