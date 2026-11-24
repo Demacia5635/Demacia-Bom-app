@@ -23,7 +23,7 @@ import { keyOf, keyString } from "./onshapeKeys";
 import { isSavedSizeStale, needsSize, readPartSize } from "./partSize";
 import { describePublishError } from "./publishErrors";
 import type { linkArrays } from "./publishPlan";
-import { changedFields, DATABASE_ONLY_FIELDS, isStandardRow, revisionLabel, stampOf, STANDARD_PART_ENGINEER } from "./rowRules";
+import { changedFields, DATABASE_ONLY_FIELDS, hasNoRevision, isStandardRow, revisionLabel, stampOf, STANDARD_PART_ENGINEER } from "./rowRules";
 
 /**
  * Items (parts / sub-assemblies) published at once. Each part exports its
@@ -343,7 +343,7 @@ async function publishPart(
     ...(size ? { size, sizeVersion: undefined } : {}),
     ...(standard ? { onshapeURL: "", engineer } : {}),
     // The server's revision after this save (bumped if the part's data changed).
-    revision: revisionLabel(savedPart, standard),
+    revision: revisionLabel(savedPart, hasNoRevision(row)),
   });
 }
 
