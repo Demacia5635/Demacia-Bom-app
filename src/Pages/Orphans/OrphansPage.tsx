@@ -40,6 +40,12 @@ function boughtLabel(part: PartModel): string {
   return kinds.length > 0 ? kinds.join(" · ") : "No (made)";
 }
 
+/** Whether the filter box text matches a part (name, catalog #, material, engineer, vendor). */
+function matchesFilter(p: OrphanPart, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return !q || [p.name, p.catalogNumber, p.material, p.engineer, p.vendor].some((v) => v?.toLowerCase().includes(q));
+}
+
 export default function OrphansPage() {
   const theme = useThemeClasses();
   useDocumentTitle("Parts in no assembly");
@@ -48,7 +54,11 @@ export default function OrphansPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [openPart, setOpenPart] = useState<PartModel | null>(null);
-  const [deleting, setDeleting] = useState<OrphanPart | null>(null);
+  /** The parts in the Delete dialog: one (its card's Delete) or several (Bulk delete). */
+  const [deleting, setDeleting] = useState<OrphanPart[] | null>(null);
+  /** Bulk delete: checkboxes show on the cards; only parts the filter shows can be selected. */
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
 
   // Loads on open and on each Reload (which sets `loading` first).
   const [reloads, setReloads] = useState(0);
@@ -63,11 +73,30 @@ export default function OrphansPage() {
     };
   }, [reloads]);
 
-  const shown = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!parts || !q) return parts ?? [];
-    return parts.filter((p) => [p.name, p.catalogNumber, p.material, p.engineer, p.vendor].some((v) => v?.toLowerCase().includes(q)));
-  }, [parts, search]);
+  const shown = useMemo(() => (parts ?? []).filter((p) => matchesFilter(p, search)), [parts, search]);
+  const selectedShown = shown.filter((p) => selected.has(p.id));
+
+  // A part the filter hides is unselected, so nothing hidden is ever deleted.
+  const changeSearch = (value: string) => {
+    setSearch(value);
+    setSelected((prev) => new Set([...prev].filter((id) => parts?.some((p) => p.id === id && matchesFilter(p, value)))));
+  };
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const leaveSelectMode = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+  const handleDeleted = (ids: string[]) => {
+    const gone = new Set(ids);
+    setParts((list) => list?.filter((p) => !gone.has(p.id)) ?? list);
+    setSelected((prev) => new Set([...prev].filter((id) => !gone.has(id))));
+  };
 
   return (
     <div className={`min-h-screen p-4 sm:p-6 transition-colors duration-200 ${theme.page}`}>
@@ -83,7 +112,7 @@ export default function OrphansPage() {
             <input
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => changeSearch(e.target.value)}
               placeholder="Filter by name, catalog #, material…"
               className={`border rounded-lg px-3 py-2 text-sm w-full sm:w-64 ${theme.input}`}
             />
@@ -99,6 +128,17 @@ export default function OrphansPage() {
             >
               {loading ? "Loading..." : "Reload"}
             </button>
+            {!selectMode && (
+              <button
+                type="button"
+                onClick={() => setSelectMode(true)}
+                disabled={shown.length === 0}
+                title="Pick several parts (or all shown) to delete at once"
+                className="px-4 py-2 rounded-lg border border-red-500/60 text-red-500 hover:bg-red-500/10 disabled:opacity-50 text-xs font-semibold"
+              >
+                Bulk delete
+              </button>
+            )}
           </div>
         </div>
 
@@ -120,9 +160,42 @@ export default function OrphansPage() {
 
         {loading && !parts && <p className={`text-sm ${theme.textMuted}`}>Loading...</p>}
 
+        {selectMode && (
+          <div className={`sticky top-2 z-10 flex flex-wrap items-center gap-2 border rounded-xl p-3 shadow-lg ${theme.cardWithText}`}>
+            <span className={`text-sm mr-auto ${theme.textLabel}`}>
+              {selectedShown.length > 0 ? `${selectedShown.length} selected` : "Tick the parts to delete, or delete all shown."}
+            </span>
+            <button
+              type="button"
+              onClick={() => setDeleting(shown)}
+              disabled={shown.length === 0}
+              className="px-3 py-1.5 rounded-lg border border-red-500/60 text-red-500 hover:bg-red-500/10 disabled:opacity-50 text-xs font-semibold"
+            >
+              Delete all shown ({shown.length})…
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleting(selectedShown)}
+              disabled={selectedShown.length === 0}
+              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-semibold"
+            >
+              Delete selected ({selectedShown.length})…
+            </button>
+            <button type="button" onClick={leaveSelectMode} className={`px-3 py-1.5 rounded-lg border text-xs font-semibold ${theme.border}`}>
+              Cancel
+            </button>
+          </div>
+        )}
+
         <ul className="space-y-3">
           {shown.map((part) => (
-            <OrphanCard key={part.id} part={part} onOpen={() => setOpenPart(part)} onDelete={() => setDeleting(part)} />
+            <OrphanCard
+              key={part.id}
+              part={part}
+              onOpen={() => setOpenPart(part)}
+              onDelete={() => setDeleting([part])}
+              selection={selectMode ? { checked: selected.has(part.id), onToggle: () => toggleSelected(part.id) } : undefined}
+            />
           ))}
         </ul>
       </div>
@@ -139,16 +212,22 @@ export default function OrphansPage() {
 
       {deleting && (
         <DeleteOrphanDialog
-          part={deleting}
+          parts={deleting}
           onClose={() => setDeleting(null)}
-          onDeleted={(id) => setParts((list) => list?.filter((p) => p.id !== id) ?? list)}
+          onDeleted={handleDeleted}
         />
       )}
     </div>
   );
 }
 
-function OrphanCard({ part, onOpen, onDelete }: { part: OrphanPart; onOpen: () => void; onDelete: () => void }) {
+function OrphanCard({ part, onOpen, onDelete, selection }: {
+  part: OrphanPart;
+  onOpen: () => void;
+  onDelete: () => void;
+  /** Bulk delete's checkbox (only in its selection mode). */
+  selection?: { checked: boolean; onToggle: () => void };
+}) {
   const theme = useThemeClasses();
   const imageSrc = recordImageSrc(part);
   const name = part.name || part.catalogNumber || part.id;
@@ -171,8 +250,17 @@ function OrphanCard({ part, onOpen, onDelete }: { part: OrphanPart; onOpen: () =
 
   const fileButton = "px-3 py-1 rounded text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 disabled:cursor-not-allowed";
   return (
-    <li className={`border rounded-xl p-4 ${theme.cardWithText}`}>
+    <li className={`border rounded-xl p-4 ${theme.cardWithText} ${selection?.checked ? "ring-2 ring-red-500/60" : ""}`}>
       <div className="flex gap-4">
+        {selection && (
+          <input
+            type="checkbox"
+            checked={selection.checked}
+            onChange={selection.onToggle}
+            aria-label={`Select ${name} for deleting`}
+            className="w-5 h-5 mt-1 shrink-0 accent-red-600 cursor-pointer"
+          />
+        )}
         <button
           type="button"
           onClick={onOpen}
