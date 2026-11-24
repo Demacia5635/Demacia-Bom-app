@@ -1,21 +1,21 @@
 import { useThemeClasses } from "../../util/misc/useThemeClasses";
 import type { WorkOrderSummary } from "./workOrderSummary";
+import { progressOfSummary } from "../../util/workOrderProgress";
 
 /** The statuses shown in the summary line, in workflow order (others after). */
 const STATUS_ORDER = ["In Planning", "Manufacturing approved", "In manufacturing", "Finished Manufacturing"];
 
 /**
- * A work order's progress in the list (QW14): a bar of finished / made parts
- * and a status summary line, from the server's work-order summary.
+ * A work order's progress in the list (QW14): a bar of finished parts (made
+ * and bought, untracked left out) and a status summary line of the made parts,
+ * from the server's work-order summary.
  */
 export default function WorkOrderProgress({ summary }: { summary: WorkOrderSummary }) {
   const theme = useThemeClasses();
   if (summary.error) {
     return <p className="text-xs text-amber-600" title={summary.error}>⚠ Progress unavailable: {summary.error}</p>;
   }
-  const made = summary.madeParts ?? 0;
-  const finished = summary.finishedParts ?? 0;
-  const percent = made > 0 ? Math.round((finished / made) * 100) : 0;
+  const { finished, total, percent } = progressOfSummary(summary);
   const statuses = Object.entries(summary.byStatus ?? {})
     .filter(([status, count]) => status !== "Untracked" && count > 0)
     .sort(([a], [b]) => {
@@ -26,24 +26,24 @@ export default function WorkOrderProgress({ summary }: { summary: WorkOrderSumma
 
   return (
     <div className="mt-1.5 space-y-1">
-      {made > 0 ? (
+      {total > 0 ? (
         <div className="flex items-center gap-2" title={qty}>
           <div
             role="progressbar"
             aria-label="Finished parts"
             aria-valuemin={0}
-            aria-valuemax={made}
+            aria-valuemax={total}
             aria-valuenow={finished}
             className={`h-1.5 w-40 max-w-full rounded-full overflow-hidden ${theme.imageBox}`}
           >
             <div className={`h-full rounded-full ${percent === 100 ? "bg-emerald-500" : "bg-blue-500"}`} style={{ width: `${percent}%` }} />
           </div>
           <span className={`text-xs tabular-nums ${theme.textMuted}`}>
-            {finished}/{made} finished ({percent}%)
+            {finished}/{total} finished ({percent}%)
           </span>
         </div>
       ) : (
-        <p className={`text-xs ${theme.textMuted}`}>No parts to make (all bought or untracked)</p>
+        <p className={`text-xs ${theme.textMuted}`}>No parts to follow (all untracked)</p>
       )}
       {statuses.length > 0 && (
         <p className={`text-xs ${theme.textMuted}`}>{statuses.map(([status, count]) => `${count} ${status.toLowerCase()}`).join(" · ")}</p>

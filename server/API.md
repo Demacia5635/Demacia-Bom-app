@@ -169,8 +169,9 @@ Lists the whole Drive once, at about one request per 1000 files, and reuses the 
 
 `{ orders: [...], totals: { open, blockedOrders, byStatus, byMethodOpen, byOwner } }`
 
-Each order is `{ id, name, owner, createdAt, updatedAt, bomID, madeParts, finishedParts, percent, open, blocked: { toBuy, noMaterial }, byStatus, purchased }`, or `{ ..., error }` when its tree can't be built. Lines are counted exactly as in `GET /db/workOrder/summary`.
-- **`open`:** not 100% finished, meaning a made line isn't finished or a bought line is still to buy.
+Each order is `{ id, name, owner, createdAt, updatedAt, bomID, madeParts, finishedParts, progress, percent, open, blocked: { toBuy, noMaterial }, byStatus, purchased }`, or `{ ..., error }` when its tree can't be built. Lines are counted exactly as in `GET /db/workOrder/summary`.
+- **`progress`** and **`percent`:** over all lines, made and bought, except Untracked ones; the same as on the summary.
+- **`open`:** not 100% finished by `progress`, which is also the rule `#/revisions` and `#/stale` use.
 - **`blocked`:** bought lines still to buy, and unfinished made lines whose part has no material.
 
 `totals` covers the open orders:
@@ -311,6 +312,7 @@ Every work order, oldest first, with its progress counted from its assembly's **
 - **`finishedParts`:** made lines whose status is "Finished Manufacturing" or whose priority is "Finished".
 - **`*Qty`:** the same counts, as total quantities.
 - **`byStatus`:** counts made lines only (the same lines as `madeParts`), by status.
+- **`progress`** `{ finished, total, percent }`: over ALL lines, made and bought, as the work-order page counts them. `total` is every line that isn't `"Untracked"`. A line is finished when its status is `"Finished Manufacturing"` or `"Finished"`, or its priority is `"Finished"`. `percent` is 100 when `total` is 0.
 - **`purchased`:** the bought lines (purchased, as above), by their bought status:
   - `finished`: status "Finished Manufacturing" or "Finished", or priority "Finished".
   - `untracked`: status "Untracked". A bought sub-assembly with no stored entry is also untracked.
