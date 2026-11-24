@@ -14,9 +14,13 @@ import CopyButton from "../../components/CopyButton";
 import { copyToClipboard, partLink } from "../../util/clipboard";
 import { Link2 } from "lucide-react";
 import { driveFileAttrs } from "../../util/driveLinks";
+import { revisionLabel } from "../../util/partRevision";
 
-/** The fields this form edits. Everything else (files, Onshape IDs, …) belongs to the extension's publish. */
-const EDITABLE_FIELDS = ["name", "catalogNumber", "revision", "engineer", "material", "mass", "price", "description", "comments"] as const;
+/**
+ * The fields this form edits. Everything else (files, Onshape IDs, …) belongs to
+ * the extension's publish; the revision is the server's (raised on each change).
+ */
+const EDITABLE_FIELDS = ["name", "catalogNumber", "engineer", "material", "mass", "price", "description", "comments"] as const;
 
 /** `onSaved`: called with the part as saved, so the page behind can show the new values. */
 const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => void }> = ({ part, onSaved }) => {
@@ -71,11 +75,14 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
             );
             if (Object.keys(changes).length > 0) {
                 // Same server as every other request (localhost:5050 when run locally).
-                await fetchFromApi(`/db/part/id/${encodeURIComponent(part.id)}`, {
+                const reply = await fetchFromApi<PartModel | null>(`/db/part/id/${encodeURIComponent(part.id)}`, {
                     method: "POST",
                     body: JSON.stringify(changes),
                 });
-                savedValuesRef.current = { ...savedValuesRef.current, ...changes };
+                // The server raises the revision on a change: show the new one.
+                const revision = reply && "revision" in reply ? { revision: reply.revision } : {};
+                savedValuesRef.current = { ...savedValuesRef.current, ...changes, ...revision };
+                setFormData((prev) => ({ ...prev, ...revision }));
                 onSaved?.(savedValuesRef.current);
             }
             setSaved(true);
@@ -192,15 +199,13 @@ const PartPortal: React.FC<{ part: PartModel; onSaved?: (part: PartModel) => voi
                         <label className={`text-[10px] font-semibold uppercase tracking-wider block ${labelColor}`}>
                             Revision
                         </label>
-                        <input
-                            type="text"
-                            name="revision"
-                            value={formData.revision || ""}
-                            disabled={locked}
-                            onChange={handleChange}
-                            placeholder="e.g. Rev A"
-                            className={`w-full border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 ${subInputBg}`}
-                        />
+                        {/* Kept by the server: raised each time the part's data changes. */}
+                        <div
+                            title="Set by the server: it goes up by one each time this part's data changes."
+                            className={`px-3 py-1.5 text-xs font-semibold tabular-nums ${theme.textValue}`}
+                        >
+                            {revisionLabel(formData) || "—"}
+                        </div>
                     </div>
 
                     <div className={`border rounded-xl p-3.5 space-y-1.5 ${cardBg}`}>

@@ -38,7 +38,12 @@ export interface PartModel {
   id: string;
   name?: string;
   catalogNumber?: string;
-  revision?: string;
+  /**
+   * Kept by the server: a whole number from 1, raised on every save that
+   * changes a made part. None on standard parts; older records may hold a
+   * manual text until converted. Never sent in saves.
+   */
+  revision?: number | string;
   description?: string;
   engineer?: string;
   material?: string;

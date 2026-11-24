@@ -7,6 +7,8 @@ export interface RecordCardItem {
   image: string;
   name: string;
   catalogNumber?: string;
+  /** Shown as "Rev 3" after the catalog number; nothing for "—" (standard parts) or "". */
+  revision?: string;
   quantity?: number;
   /** A small note after the name ("Sub-assembly", "Bought"). */
   tag?: string;
@@ -40,9 +42,14 @@ export default function RecordCardList<Row>({ rows, item, onOpen, extra, empty =
               <span className="min-w-0 flex-1">
                 <span className="block font-semibold break-words leading-snug">{it.name || "(no name)"}</span>
                 <span className={`block text-xs ${theme.textMuted}`}>
-                  {it.catalogNumber && <span className="font-mono">{it.catalogNumber}</span>}
-                  {it.catalogNumber && it.tag && " · "}
-                  {it.tag}
+                  {/* "5635-25-100 · Rev 3 · Bought" */}
+                  {[
+                    it.catalogNumber && <span key="cat" className="font-mono">{it.catalogNumber}</span>,
+                    it.revision && it.revision !== "—" && <span key="rev">Rev {it.revision}</span>,
+                    it.tag && <span key="tag">{it.tag}</span>,
+                  ]
+                    .filter(Boolean)
+                    .flatMap((part, i) => (i > 0 ? [" · ", part] : [part]))}
                 </span>
               </span>
               {it.quantity != null && (
