@@ -13,6 +13,7 @@ One file per version: `v<version>.md`, listing what changed in the server (`serv
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [5.1.2](v5.1.2.md) | 2026-11-24 | Fix: Delete on #/orphans ("Failed to fetch") |
 | [5.1.1](v5.1.1.md) | 2026-11-24 | Lint cleanup (no behaviour change) |
 | [5.1.0](v5.1.0.md) | 2026-11-23 | Data health, deleting parts in no assembly, cleanup after publish |
 | [5.0.0](v5.0.0.md) | 2026-11-23 | Drive files sorted into assembly folders; duplicate catalog numbers blocked |
