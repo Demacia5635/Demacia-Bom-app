@@ -6,6 +6,7 @@
  *   npm run release -- website   patch|minor|major
  *   npm run release -- server    patch|minor|major
  *   npm run release -- firefox-update <signed .xpi>
+ *   npm run release -- extension-announce
  *
  * Flags:
  *   --dry-run     show what it would do; changes nothing
@@ -63,6 +64,25 @@ const BUMPS = ["patch", "minor", "major"];
 const args = process.argv.slice(2);
 
 /**
+ * Tells installed panels a new version is out: writes package.json's version
+ * to the website's public/extension-version.json, which the panel's "Update
+ * available" tag reads (it links to the team's Drive folder of builds). Run
+ * once the new builds are in that folder; firefox-update runs it too.
+ */
+function announceExtension() {
+  const version = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+  writeFileSync(join(ROOT, "public", "extension-version.json"), JSON.stringify({ version }, null, 2) + "\n");
+  console.log(`public/extension-version.json now says ${version}: panels on older versions show "Update available".`);
+  return version;
+}
+
+if (args[0] === "extension-announce") {
+  announceExtension();
+  console.log("Left to do: commit public/extension-version.json, then push MASTER (the website deploy publishes it).");
+  process.exit(0);
+}
+
+/**
  * After Mozilla signed a Firefox version: copies the signed .xpi to
  * public/firefox/demacia-bom-<version>.xpi and adds it to
  * public/firefox/updates.json (with its sha256 update_hash), where installed
@@ -90,9 +110,11 @@ if (args[0] === "firefox-update") {
   else list.push(entry);
   copyFileSync(xpi, target);
   writeFileSync(updatesPath, JSON.stringify(updates, null, 2) + "\n");
+  announceExtension();
   console.log(`Firefox ${version}: copied to public/firefox/${name}, updates.json now lists:`);
   console.log(JSON.stringify(entry, null, 2));
-  console.log("\nLeft to do: commit public/firefox/, then push MASTER (the website deploy publishes it).");
+  console.log("\nLeft to do: put the builds in the team's Drive folder, commit public/firefox/ and");
+  console.log("public/extension-version.json, then push MASTER (the website deploy publishes them).");
   console.log("Copies installed from 5.0.0 or earlier have no update_url: install this version once by hand.");
   process.exit(0);
 }
@@ -234,6 +256,8 @@ const todo = {
     `Share the zips in publish/${to}/ (they contain the client secret: team only).`,
     "Firefox: upload the Firefox zip to addons.mozilla.org to have it signed, then run",
     "  npm run release -- firefox-update <the signed .xpi>  (adds it to the website's updates.json).",
+    "Put both builds in the team's Drive folder. Then installed panels are told by",
+    "  firefox-update, or by  npm run release -- extension-announce  when nothing is signed.",
   ],
   website: ["Push MASTER: GitHub Pages deploys the website from it."],
   server: ["Push MASTER, then redeploy the server on Render."],

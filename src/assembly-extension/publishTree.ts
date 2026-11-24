@@ -314,7 +314,6 @@ async function publishPart(
     name: row.name,
     description: row.description,
     catalogNumber: row.catalogNumber,
-    revision: row.revision,
     material: row.material,
     mass: row.mass,
     price: row.price,

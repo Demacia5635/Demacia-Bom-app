@@ -107,7 +107,6 @@ export interface OnshapeBomTable {
 export type OptionalBomField =
   | "description"
   | "partNumber"
-  | "revision"
   | "material"
   | "vendor"
   | "engineer"
@@ -126,7 +125,7 @@ const OPTIONAL_FIELD_PROPERTY_IDS: Partial<Record<OptionalBomField, string>> = {
 export function bomFieldColumns(table: OnshapeBomTable): Map<OptionalBomField, string> {
   const columns = new Map<OptionalBomField, string>();
   const headers = Array.isArray(table?.headers) ? table.headers : [];
-  for (const field of ["description", "partNumber", "revision", "material", "vendor"] as const) {
+  for (const field of ["description", "partNumber", "material", "vendor"] as const) {
     const h = headers.find((x) => x.propertyName === field);
     if (h) columns.set(field, h.propertyName);
   }
@@ -165,7 +164,6 @@ export interface ParsedOnshapeBomRow {
   name: string;
   description: string;
   partNumber: string;
-  revision: string;
   quantity: number;
   material: string;
   vendor: string;
@@ -202,7 +200,6 @@ function toParsedRow(
     name: item.name || "",
     description: item.description || "",
     partNumber: item.partNumber || "",
-    revision: item.revision || "",
     quantity,
     material: materialToString(item.material),
     vendor: item.vendor || "",

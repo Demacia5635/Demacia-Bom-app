@@ -1,5 +1,6 @@
 import type { usePanelThemeSetting } from "../extension/panel/theme";
 import { openExternal } from "../util/openExternal";
+import { DOWNLOADS_URL, useUpdateAvailable } from "./latestVersion";
 import { describeAge } from "./treeCache";
 import { useNow } from "./useNow";
 import { SHORTCUTS } from "./shortcuts";
@@ -57,12 +58,27 @@ export default function BomHeader({
   onShowShortcuts: () => void;
 }) {
   const now = useNow(30_000);
+  /** A newer extension version is in the team's Drive folder (latestVersion.ts). */
+  const update = useUpdateAvailable();
   return (
     <div className="assembly-bom-header flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
       <div>
         <h1 className="assembly-bom-title text-2xl font-bold">
           {displayName}
           <ServerStatusDot status={serverStatus} onCheck={onCheckServer} />
+          {update && (
+            <a
+              href={DOWNLOADS_URL}
+              className="assembly-bom-update-tag ml-2 align-middle rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white hover:bg-blue-500"
+              title={`You have ${update.current}. Click to get ${update.latest}.`}
+              onClick={(e) => {
+                e.preventDefault();
+                openExternal(DOWNLOADS_URL);
+              }}
+            >
+              Update available: {update.latest}
+            </a>
+          )}
         </h1>
         {description && (
           <p className="assembly-bom-subtitle text-zinc-500 text-sm mt-1">{description}</p>
