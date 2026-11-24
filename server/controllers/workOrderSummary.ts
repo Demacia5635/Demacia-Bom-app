@@ -90,6 +90,8 @@ export interface WorkOrderSummary {
      * untracked = "Untracked"; toBuy = anything else.
      */
     purchased?: { lines: number; toBuy: number; finished: number; untracked: number };
+    /** Over all lines, made and bought, except Untracked ones (progressOf). */
+    progress?: { finished: number; total: number; percent: number };
     /** Why there are no counts (the page would show the same error). */
     error?: string;
 }
@@ -223,12 +225,31 @@ export function countLines(lines: OrderLine[]) {
             }
         }
     }
-    return { ...counts, byStatus, purchased: bought };
+    return { ...counts, byStatus, purchased: bought, progress: progressOf(lines) };
 }
 
-/** Open: not 100% finished (a made line not finished, or a bought line still to buy). */
-export const isOpenOrder = (lines: OrderLine[]) =>
-    lines.some((line) => (line.made && !line.finished) || (line.purchased && boughtStatus(line) === "toBuy"));
+/**
+ * A work order's progress over all its lines, made and bought (the user's
+ * rule), as the work-order page counts it: every line that isn't "Untracked"
+ * (not followed: the bar could never reach 100%), finished when its status
+ * is "Finished Manufacturing" or "Finished" or its priority "Finished".
+ */
+export function progressOf(lines: OrderLine[]) {
+    let total = 0;
+    let finished = 0;
+    for (const line of lines) {
+        if (line.status === "Untracked") continue;
+        total++;
+        if (line.status === "Finished Manufacturing" || line.status === "Finished" || line.priority === "Finished") finished++;
+    }
+    return { finished, total, percent: total ? Math.round((finished / total) * 100) : 100 };
+}
+
+/** Open: not 100% finished (by progressOf: a line that isn't Untracked isn't finished yet). */
+export const isOpenOrder = (lines: OrderLine[]) => {
+    const { finished, total } = progressOf(lines);
+    return finished < total;
+};
 
 const baseOf = (wo: Record_): WorkOrderSummary => ({
     id: wo.id,
@@ -291,7 +312,8 @@ export async function getProduction(req: Request, res: Response, next: NextFunct
                 ...baseOf(wo),
                 madeParts: counts.madeParts,
                 finishedParts: counts.finishedParts,
-                percent: counts.madeParts ? Math.round((counts.finishedParts / counts.madeParts) * 100) : 100,
+                progress: counts.progress,
+                percent: counts.progress.percent,
                 open,
                 blocked,
                 byStatus: counts.byStatus,
