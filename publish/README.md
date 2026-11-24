@@ -16,7 +16,7 @@ Website changes are logged in `src/upd. logs/`, server changes in `server/upd. l
 | Version | Built | Highlights |
 |---|---|---|
 | [next](next/vNEXT.md) | Not built yet | Firefox automatic updates; release script |
-| [5.0.0](5.0.0/v5.0.0.md) | 2026-11-23 23:07 (Firefox) | Excel-style editing, undo, right-click 💡 fixes, changes list, notifications, shortcuts, branch-publish cover |
+| [5.0.0](5.0.0/v5.0.0.md) | 2026-11-23 23:07 (Firefox; signed by Mozilla 2026-11-24) | Excel-style editing, undo, right-click 💡 fixes, changes list, notifications, shortcuts, branch-publish cover |
 | [4.0.0](4.0.0/v4.0.0.md) | 2026-11-21 18:33 | Same name + catalog number = same part (asks before combining); light mode |
 | [3.0.0](3.0.0/v3.0.0.md) | 2026-11-17 23:17 | Show part sizes; panel toggle; polycarbonate → Parasolid; redder problem cells |
 | [2.0.0](2.0.0/v2.0.0.md) | 2026-11-15 20:13 | Safe Publish BOM, correct sub-assembly quantities, vendor parts always standard, no ghost rows |
