@@ -312,7 +312,7 @@ The extension's record of the Onshape calls it made, shown on the website's unli
 
 | Route | Body | Reply |
 |---|---|---|
-| `POST /events` | `{ events: [...] }` (1-200) | `201 { saved }`. Unknown fields are dropped. Each event has `at`, `user`, `action`, `assembly`, `documentID`, `elementID`, `counts: { kind: number }`, `failed`, `durationMs`, `ok`, `error` and `version`. |
+| `POST /events` | `{ events: [...] }` (1-200) | `201 { saved }`. Unknown fields are dropped. Each event has `at`, `user`, `action`, `assembly`, `documentID`, `elementID`, `counts: { kind: number }`, `failed`, `durationMs`, `ok`, `error` and `version`. Optional fields: `errorCode` (a stable code such as `CATALOG_NUMBER_TAKEN`, `HTTP_500` or `ONSHAPE_429`: upper snake case, at most 64 characters, `""` on success), `items`, `problems`, and `browser` (`chrome` or `firefox`). |
 | `GET /events?limit=&since=` | | The newest events first: up to `limit` (default 500, at most 2000), from `since` (an ISO date) onward. |
 | `GET /stats?from=&to=` | | Totals for charts, aggregated in MongoDB (below). |
 
