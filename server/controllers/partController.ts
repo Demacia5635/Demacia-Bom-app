@@ -2,7 +2,8 @@ import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
 import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
 import { partInUse } from "./orphanParts";
-import { revisionUpdate } from "./partRevision";
+import { changedFields, isStandardPart, revisionUpdate } from "./partRevision";
+import { recordEvent, whoOf } from "../services/events";
 import { makeGetByIds } from "./getByIds";
 import { makeListAll } from "./listAll";
 
@@ -89,6 +90,23 @@ export async function upsertPartByID(
       $set: { ...updateData, ...updatedByOf(req), ...(revision.$set ?? {}) },
     });
 
+    // #/activity and #/revisions: a new part, or a revision bump (from -> to and what changed).
+    const saved = part as Record<string, any> | null;
+    const who = updatedByOf(req).updatedBy;
+    const name = saved?.name || id;
+    if (created) {
+      recordEvent({ kind: "part.create", who, record: { kind: "part", id, name }, message: `${whoOf(who)} added part ${name}` });
+    } else if (existing && !isStandardPart(existing) && Number.isInteger(saved?.revision)) {
+      const from = Number.isInteger(existing.revision) ? existing.revision : 1;
+      if (saved!.revision > from) {
+        const fields = changedFields(existing, updateData);
+        recordEvent({
+          kind: "part.revision", who, record: { kind: "part", id, name },
+          message: `${whoOf(who)} changed ${name}: rev ${from} \u2192 ${saved!.revision} (${fields.join(", ")})`,
+          details: { from, to: saved!.revision, fields },
+        });
+      }
+    }
     return res.status(created ? 201 : 200).json(part);
   } catch (err) {
     return next(err);
@@ -109,7 +127,9 @@ export async function deletePartByID(req: Request<{ id: string }>, res: Response
     const deleted = await Part.findOneAndDelete({ id: id }).lean<Record<string, any>>();
     if (!deleted) return res.status(404).json({ message: `Part ${id} not found` });
     const { _id, __v, ...record } = deleted;
-    console.log(`[part delete ${res.locals.requestId}] by ${updatedByOf(req).updatedBy || "unknown"}: deleted part ${id} "${deleted.name ?? ""}"; record: ${JSON.stringify(record)}`);
+    const who = updatedByOf(req).updatedBy;
+    console.log(`[part delete ${res.locals.requestId}] by ${who || "unknown"}: deleted part ${id} "${deleted.name ?? ""}"; record: ${JSON.stringify(record)}`);
+    recordEvent({ kind: "part.delete", who, record: { kind: "part", id, name: deleted.name }, message: `${whoOf(who)} deleted part ${deleted.name || id}` });
     return res.status(204).send();
   } catch (err) {
     return next(err);

@@ -8,7 +8,7 @@
  * Telemetry never breaks the panel: every failure here is swallowed.
  */
 import { apiUrl } from "../util/backendHost";
-import { telemetryAllowedNow } from "./telemetryConsent";
+import { isFirefox, telemetryAllowedNow } from "./telemetryConsent";
 
 export type OnshapeCallKind =
   | "bom"
@@ -47,6 +47,23 @@ interface TelemetryEventData {
   ok: boolean;
   error: string;
   version: string;
+  /** Why it failed, as a short stable code (errorCodeOf); absent on success. */
+  errorCode?: string;
+  /** How many items it handled (Publish: the top assembly + each distinct sub-assembly and part). */
+  items?: number;
+  /** Non-fatal problems in a successful operation (e.g. a thumbnail that failed). */
+  problems?: number;
+  browser: "chrome" | "firefox";
+}
+
+/** What an operation tells telemetry about itself (reportOperation). */
+interface OperationReport {
+  /** It failed without throwing (e.g. Publish stopped and showed a message). */
+  failed?: boolean;
+  errorCode?: string;
+  error?: string;
+  items?: number;
+  problems?: number;
 }
 
 interface Operation {
@@ -57,6 +74,7 @@ interface Operation {
   counts: Partial<Record<OnshapeCallKind, number>>;
   failed: number;
   startedAt: number;
+  report: OperationReport;
 }
 
 const FLUSH_INTERVAL_MS = 15_000;
@@ -108,7 +126,36 @@ function newOperation(action: string): Operation {
     counts: {},
     failed: 0,
     startedAt: Date.now(),
+    report: {},
   };
+}
+
+/**
+ * Tells the operation running now (the newest one) how it went: why it failed
+ * when it didn't throw, how many items it handled, its non-fatal problems.
+ */
+export function reportOperation(report: OperationReport): void {
+  const op = active[active.length - 1];
+  if (op) op.report = { ...op.report, ...report };
+}
+
+/**
+ * A short, stable code for an error (upper snake case), for the /tele page's
+ * "most common errors": the server's own code when it sends one, else
+ * HTTP_<status> / SERVER_UNREACHABLE; ONSHAPE_<status> / ONSHAPE_UNREACHABLE
+ * for Onshape; CANCELLED for a replaced load; EXTENSION_ERROR otherwise.
+ */
+export function errorCodeOf(err: unknown): string {
+  const e = (err ?? {}) as { source?: unknown; onshapeStatus?: unknown; statusCode?: unknown; code?: unknown; cancelled?: unknown; name?: unknown };
+  if (e.cancelled === true) return "CANCELLED";
+  if (e.source === "onshape") {
+    return typeof e.onshapeStatus === "number" && e.onshapeStatus > 0 ? `ONSHAPE_${e.onshapeStatus}` : "ONSHAPE_UNREACHABLE";
+  }
+  if (typeof e.code === "string" && /^[A-Z][A-Z0-9_]*$/.test(e.code)) return e.code;
+  if (typeof e.statusCode === "number" && e.statusCode > 0) return `HTTP_${e.statusCode}`;
+  // fetchFromApi's error without a status, or a plain { message } from the server helpers: no answer.
+  if (e.name === "ApiRequestError" || !(err instanceof Error)) return "SERVER_UNREACHABLE";
+  return "EXTENSION_ERROR";
 }
 
 /** Counts one Onshape request (call it for every request, success or not). */
@@ -123,7 +170,8 @@ export function recordOnshapeCall(method: string, pathOrUrl: string, ok = true):
   }
 }
 
-function toEvent(op: Operation, ok: boolean, error: string): TelemetryEventData {
+function toEvent(op: Operation, ok: boolean, error: string, errorCode = ""): TelemetryEventData {
+  const { items, problems } = op.report;
   return {
     at: new Date(op.startedAt).toISOString(),
     user,
@@ -137,6 +185,10 @@ function toEvent(op: Operation, ok: boolean, error: string): TelemetryEventData 
     ok,
     error,
     version: version(),
+    ...(errorCode ? { errorCode } : {}),
+    ...(items !== undefined ? { items } : {}),
+    ...(problems !== undefined ? { problems } : {}),
+    browser: isFirefox() ? "firefox" : "chrome",
   };
 }
 
@@ -149,17 +201,25 @@ export async function withOperation<T>(action: string, fn: () => Promise<T>): Pr
   active.push(op);
   let ok = true;
   let error = "";
+  let errorCode = "";
   try {
     const result = await fn();
-    if (result === null) ok = false; // loadTree returns null on failure
+    if (result === null) ok = false; // loadTree / Publish return null on failure
     return result;
   } catch (err: any) {
     ok = false;
     error = String(err?.message || err).slice(0, 500);
+    errorCode = errorCodeOf(err);
     throw err;
   } finally {
     active.splice(active.indexOf(op), 1);
-    if (Object.keys(op.counts).length > 0 || !ok) queue.push(toEvent(op, ok, error));
+    // A failure the operation reported itself (it showed a message instead of throwing).
+    if (op.report.failed) ok = false;
+    if (!ok) {
+      error ||= String(op.report.error ?? "").slice(0, 500);
+      errorCode ||= op.report.errorCode ?? "";
+    }
+    if (Object.keys(op.counts).length > 0 || !ok) queue.push(toEvent(op, ok, error, ok ? "" : errorCode));
     scheduleFlush();
   }
 }

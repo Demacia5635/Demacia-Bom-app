@@ -2,6 +2,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextFunction, Request, Response } from "express";
 import { ADMIN_SECRET, isAllowedOrigin, CLIENT_SECRET as CLIENT_SECRET_KEY } from "./config";
+import { recordEvent } from "./services/events";
 
 const SECRET = Buffer.from(CLIENT_SECRET_KEY);
 const ADMIN = Buffer.from(ADMIN_SECRET);
@@ -65,6 +66,9 @@ export function checkAdmin(req: Request, res: Response, next: NextFunction) {
   }
   recordWrongTry(ip, now);
   recordWrongTry(OVERALL, now);
+  if (triesOf(ip, now) === MAX_WRONG_PER_IP) {
+    recordEvent({ kind: "admin.locked", message: `Admin pages locked for 15 minutes for IP ${ip} after ${MAX_WRONG_PER_IP} wrong admin secrets`, details: { ip } });
+  }
   if (locked) {
     console.warn(`>>> [ADMIN LOCKED] Too many wrong admin secrets (IP ${ip}): ${req.method} ${req.originalUrl}`);
     return res.status(429).json({ message: "Too many wrong admin secrets. Try again in 15 minutes." });
@@ -72,6 +76,19 @@ export function checkAdmin(req: Request, res: Response, next: NextFunction) {
   setTimeout(() => {
     res.status(404).json({ message: `Route ${req.method} ${req.originalUrl} not found` });
   }, WRONG_TRY_DELAY_MS);
+}
+
+/** The IPs with wrong admin secrets in the current 15 minutes (for #/server). */
+export function adminLockouts() {
+  const now = Date.now();
+  return [...wrongTries]
+    .filter(([key]) => key !== OVERALL && triesOf(key, now) > 0)
+    .map(([ip, { count, last }]) => ({
+      ip,
+      wrongTries: count,
+      lastAt: new Date(last).toISOString(),
+      ...(count >= MAX_WRONG_PER_IP ? { lockedUntil: new Date(last + LOCK_WINDOW_MS).toISOString() } : {}),
+    }));
 }
 
 /** GET /api/admin/check: 204 when x-admin-secret is right (after checkAdmin); for the website's admin unlock. */

@@ -28,6 +28,14 @@ const telemetryEventSchema = new mongoose.Schema(
     error: { type: String, default: "" },
     /** Extension version that sent it. */
     version: { type: String, default: "" },
+    /** Why it failed, as a stable code (CATALOG_NUMBER_TAKEN, HTTP_500, ONSHAPE_429, ...); "" on success. */
+    errorCode: { type: String, default: "" },
+    /** How many items the operation handled (Publish: the top assembly + each distinct item). */
+    items: { type: Number },
+    /** Non-fatal problems in a successful operation (e.g. a failed thumbnail). */
+    problems: { type: Number },
+    /** "chrome" or "firefox". */
+    browser: { type: String, default: "" },
   },
   { timestamps: false },
 );

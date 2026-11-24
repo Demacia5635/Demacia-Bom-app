@@ -303,6 +303,37 @@ export class GoogleDriveService {
     return created.data.id!;
   }
 
+  /**
+   * Every file and folder the Drive account can see that isn't trashed (the
+   * fields the #/files overview needs), 1000 per request.
+   */
+  async listAllFiles(): Promise<{ id: string; name: string; mimeType: string; size: number; parents: string[]; modifiedTime?: string }[]> {
+    const files: { id: string; name: string; mimeType: string; size: number; parents: string[]; modifiedTime?: string }[] = [];
+    let pageToken: string | undefined;
+    do {
+      const res = await this.organizeCall(() =>
+        this.drive.files.list({
+          q: "trashed = false",
+          fields: "nextPageToken, files(id, name, mimeType, size, parents, modifiedTime)",
+          pageSize: 1000,
+          pageToken,
+        }),
+      );
+      for (const f of res.data.files ?? []) {
+        files.push({
+          id: f.id!,
+          name: f.name ?? "",
+          mimeType: f.mimeType ?? "",
+          size: Number(f.size ?? 0) || 0,
+          parents: f.parents ?? [],
+          modifiedTime: f.modifiedTime ?? undefined,
+        });
+      }
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+    return files;
+  }
+
   /** Moves a file into `toFolderId`, out of `fromFolderIds`. Its ID and links don't change. */
   async moveFile(fileId: string, toFolderId: string, fromFolderIds: string[]): Promise<void> {
     await this.organizeCall(() =>

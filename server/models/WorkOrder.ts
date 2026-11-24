@@ -16,6 +16,10 @@ const subPartSchema = new mongoose.Schema(
     links: { type: String },                 // Added Links schema definition
     approxArrivalDate: { type: String },     // Added Arrival Date schema definition
     updatedBy: { type: String },
+    // Set by the server when the work order is created (#/stale): the part's
+    // revision then, and its total quantity through the BOM then.
+    revisionAtCreation: { type: Number },
+    quantityAtCreation: { type: Number },
     updatedAt: { type: Date },
     createdAt: { type: Date },
   },

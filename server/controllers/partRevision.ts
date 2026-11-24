@@ -12,6 +12,7 @@
 import type { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
 import { updatedByOf } from "./upsert";
+import { recordEvent, whoOf } from "../services/events";
 
 type Rec = Record<string, any>;
 
@@ -121,6 +122,12 @@ export async function initRevisions(req: Request, res: Response, next: NextFunct
         const updated = { setTo1: set?.modifiedCount ?? 0, standardCleared: cleared?.modifiedCount ?? 0 };
         console.log(`[revisions init ${res.locals.requestId}] by ${updatedByOf(req).updatedBy || "unknown"}: set to 1 ${updated.setTo1}, `
             + `cleared on standard parts ${updated.standardCleared}, overwritten manual values ${overwrittenCount}`);
+        const who = updatedByOf(req).updatedBy;
+        recordEvent({
+            kind: "revisions.init", who,
+            message: `${whoOf(who)} started revisions: ${updated.setTo1} part(s) set to 1, ${updated.standardCleared} standard part(s) cleared, ${overwrittenCount} manual value(s) overwritten`,
+            details: { ...updated, overwrittenCount },
+        });
         return res.status(200).json({ ...report, updated });
     } catch (err) {
         return next(err);

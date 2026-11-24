@@ -34,6 +34,13 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /api` | `200 { status: "online", version, startedAt, database: "connected" \| "disconnected" }`. Public. |
 | `GET /api/db` | `200 { connected: true }`, or `503 { connected: false }`. |
 | `GET /api/admin/check` | **Admin:** `204` when `x-admin-secret` is right; `404` when it's missing or wrong, as for every admin route. For the website's admin unlock (below). |
+| `GET /api/admin/status` | **Admin.** How the server is doing (the website's `#/server`), described below. |
+| `GET /api/admin/production` | **Admin.** Work orders' progress for `#/production`, described below. |
+| `GET /api/admin/events?limit=&before=&kind=` | **Admin.** What happened, newest first (`#/activity`), described below. |
+| `GET /api/admin/revisions?limit=&before=` | **Admin.** Revision bumps for `#/revisions`, each with the open work orders that contain the part, described below. |
+| `GET /api/admin/stale` | **Admin.** Work orders whose parts changed since they were created (`#/stale`), described below. |
+| `GET /api/admin/files[?refresh=1]` | **Admin.** The team's Drive files for `#/files`, described below. |
+| `POST /api/admin/files/delete` | **Admin.** `{ ids }` (1-200 Drive file IDs): moves unused files to Drive's trash. Each file is re-checked first and refused if a part or BOM uses it, if it isn't in the team folders, or if it's not found. Returns `200 { deleted: [{ fileId, name }], refused: [{ fileId, reason }] }`, with one log line per file. |
 | `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
 | `GET /api/drive` | `200` when Drive answers, `503` when it doesn't: `{ connected, ... }`. |
 
@@ -94,6 +101,98 @@ Against guessing:
 - **Lock:** after 10 wrong tries from one IP within 15 minutes, or 100 overall, every admin call answers `429 TOO_MANY_REQUESTS`, even one with the right secret, until 15 minutes pass with no tries.
 - **IP:** it's the first `X-Forwarded-For` entry, which Render's proxy adds. Everyone behind one network address shares a counter, so 10 typos at school lock the admin pages there for 15 minutes.
 - **Memory:** the counts are kept in memory, and a restart clears them.
+
+### Events: `GET /api/admin/events`
+
+An `events` collection, capped so that MongoDB keeps the last 5000, records what happened. Recording never delays or fails the action.
+
+`{ events: [{ id, at, kind, who?, record?: { kind: "part" | "bom" | "workOrder", id, name }, message, details? }], next }`, newest first.
+- **Paging:** `limit` is 1-200 (default 50). For the next page, pass `before=<next>`; `next` is `null` on the last page.
+- **Filtering:** `kind=` keeps only one kind.
+- **`message`:** one line ready to show.
+
+| `kind` | When | `details` |
+|---|---|---|
+| `part.create` | A new part is saved. | |
+| `part.revision` | A part's revision went up. | `{ from, to, fields }` |
+| `part.delete` | A part was deleted (`/orphans`, the cleanup after a publish, or `DELETE /part/id`). | `{ filesTrashed, source }` when unused |
+| `bom.publish` | A publish settled: one per top-level assembly, with the Drive sort run. | `{ bomSaves }` |
+| `workOrder.create`, `workOrder.save` | A work order was created or saved whole. | |
+| `workOrder.part` | One line of a work order changed. | `{ partID, fields }` |
+| `workOrder.cncGroup` | A CNC job was set, changed or dissolved. | `{ groupID, partIDs?, links? }` |
+| `drive.organize` | A manual Drive sort or dry run ended. | `{ jobId, summary, ... }` |
+| `parts.cleanup` | A publish's run moved files or deleted dropped parts. | `{ jobId, summary, cleanup }` |
+| `drive.fileDelete` | An unused Drive file went to the trash. | `{ fileId, name }` |
+| `revisions.init` | The one-time revision start ran. | `{ setTo1, standardCleared, overwrittenCount }` |
+| `admin.locked` | An IP was locked out of the admin routes. | `{ ip }` |
+
+Part saves that don't change the revision aren't recorded: a publish saves every part, so recording them would keep only the last few publishes.
+
+### `GET /api/admin/revisions`
+
+`{ items: [{ event, part: { id, name, catalogNumber, revisionNow }, openWorkOrders: [{ id, name, status, method }] }], next }`
+- **`event`:** a `part.revision` event, newest first, paged like `/events`.
+- **`openWorkOrders`:** the work orders open now (not 100% finished, as in `#/production`) that contain the part, with its status and method in each, whatever that status is.
+
+### `GET /api/admin/stale`
+
+`[{ workOrder: { id, name, owner, bomID, createdAt }, open, snapshot, parts: [{ partID, name?, change, revisionAtCreation?, revisionNow?, quantityAtCreation?, quantityNow? }] }]`, listing only work orders with at least one change.
+
+- **`snapshot: true`:** created after snapshots existed, so they're compared exactly with the live BOM. `change` is one of:
+  - `revision`: the part's revision went up;
+  - `quantity`: its total quantity changed;
+  - `added`: the part is new in the BOM;
+  - `removed`: the part is no longer in the BOM.
+- **`snapshot: false`:** older orders, compared only approximately. `change: "edited"` means the part was saved after the order was created; the page shows it greyed as "maybe changed".
+- **`open`:** the same rule as `#/production`.
+
+### `GET /api/admin/files`
+
+Lists the whole Drive once, at about one request per 1000 files, and reuses the result for 10 minutes; `?refresh=1` lists it again.
+
+```json
+{ "generatedAt": "...", "totals": { "files": 3, "bytes": 14020000 },
+  "types": [{ "type": "STL", "folderId": "...", "files": 2, "bytes": 14000000, "folders": [{ "path": "2714-0000/2714-1000", "files": 2, "bytes": 14000000 }] }],
+  "largest": [{ "fileId": "...", "name": "old.stl", "bytes": 9000000, "type": "STL", "path": "2714-0000/2714-1000", "usedBy": { "kind": "part", "id": "...", "name": "..." } }],
+  "unused": [{ "fileId": "...", "name": "old.stl", "bytes": 9000000, "type": "STL", "path": "...", "modifiedTime": "..." }],
+  "missing": [{ "kind": "part", "id": "...", "name": "...", "field": "parasolidLink", "reason": "file not found or in trash" }] }
+```
+
+- **Scope:** only files under the three type folders count.
+- **`largest`:** the top 50 files.
+- **`unused`:** files no part or BOM points at.
+- **`missing`:** links to files that are gone or trashed (`reason: "file not found or in trash"`), and parts with `wantStl` or `wantParasolid` but no link (`reason: "no link"`).
+
+### `GET /api/admin/production`
+
+`{ orders: [...], totals: { open, blockedOrders, byStatus, byMethodOpen, byOwner } }`
+
+Each order is `{ id, name, owner, createdAt, updatedAt, bomID, madeParts, finishedParts, percent, open, blocked: { toBuy, noMaterial }, byStatus, purchased }`, or `{ ..., error }` when its tree can't be built. Lines are counted exactly as in `GET /db/workOrder/summary`.
+- **`open`:** not 100% finished, meaning a made line isn't finished or a bought line is still to buy.
+- **`blocked`:** bought lines still to buy, and unfinished made lines whose part has no material.
+
+`totals` covers the open orders:
+- **`byStatus` and `byMethodOpen`:** their unfinished made lines, by status and by method (the queue per process).
+- **`byOwner`:** the open orders per owner.
+
+### `GET /api/admin/status`
+
+```json
+{
+  "version": "5.3.0", "startedAt": "...", "uptimeSeconds": 3600,
+  "database": { "connected": true },
+  "drive": { "connected": true, "user": "...", "checkedAt": "..." },
+  "organizeJobs": [ /* the last 10 Drive sort runs, as in GET /api/drive/organize */ ],
+  "lockouts": [{ "ip": "...", "wrongTries": 3, "lastAt": "...", "lockedUntil": "..." }],
+  "requests": { "since": "...", "total": 1234, "window": 1000,
+                "routes": [{ "route": "GET /api/db/part/id/:id", "count": 40, "errors": 0, "p50": 12.5, "p95": 80.1, "maxMs": 300.2 }] }
+}
+```
+
+- **`drive`** is checked at most once a minute.
+- **`lockouts`** lists the IPs with wrong admin secrets in the current 15 minutes. `lockedUntil` is there only when the IP is locked.
+- **`requests`** covers the last 1000 requests. `errors` counts 5xx replies. Routes are the request path with IDs shown as `:id`, slowest `p95` first.
+- **Memory:** everything here is kept in memory, and a restart starts it over.
 
 ## Parts: `/api/db/part`
 
@@ -175,7 +274,7 @@ The server makes one query per level, then one for all the parts. A sub-assembly
 | `GET /all` | | Every work order, oldest first. `?bomID=` keeps only the work orders of that assembly (also with paging). See [Lists](#lists). |
 | `GET /summary` | | Every work order with its progress (below). |
 | `GET /id/:id` | | The work order, or `404`. |
-| `POST /id/:id` | The work order's fields | Creates or updates it: `201` or `200`. `parts` is used only on create (deduplicated by `partID`, first wins); `cncGroups` is ignored. Both change only through the routes below. |
+| `POST /id/:id` | The work order's fields | Creates or updates it: `201` or `200`. `parts` is used only on create (deduplicated by `partID`, first wins). On create, the server also stores each part's `revisionAtCreation` and `quantityAtCreation` (its total through the live BOM) for `#/stale`; values the client sends for them are ignored. `cncGroups` is ignored. Both change only through the routes below. |
 | `POST /id/:id/part` | `{ partID, changes: { field: value } }` | Changes one part of the work order (it is added if missing). Returns that part. Editable fields: `statusCode`, `Priority`, `manufacturingMethod`, `productionGCOwner`, `productionMakingOwner`, `comments`, `links`, `approxArrivalDate`, `quantityMade`. |
 | `POST /id/:id/cncGroup` | `{ groupID?, partIDs?, links? }` | Creates, changes or dissolves a CNC group (parts cut together that share one G-code link). Returns `{ groupID, cncGroups }`. |
 | `DELETE /id/:id` | | `204`, or `404`. |
@@ -312,7 +411,7 @@ The extension's record of the Onshape calls it made, shown on the website's unli
 
 | Route | Body | Reply |
 |---|---|---|
-| `POST /events` | `{ events: [...] }` (1-200) | `201 { saved }`. Unknown fields are dropped. Each event has `at`, `user`, `action`, `assembly`, `documentID`, `elementID`, `counts: { kind: number }`, `failed`, `durationMs`, `ok`, `error` and `version`. |
+| `POST /events` | `{ events: [...] }` (1-200) | `201 { saved }`. Unknown fields are dropped. Each event has `at`, `user`, `action`, `assembly`, `documentID`, `elementID`, `counts: { kind: number }`, `failed`, `durationMs`, `ok`, `error` and `version`. Optional fields: `errorCode` (a stable code such as `CATALOG_NUMBER_TAKEN`, `HTTP_500` or `ONSHAPE_429`: upper snake case, at most 64 characters, `""` on success), `items`, `problems`, and `browser` (`chrome` or `firefox`). |
 | `GET /events?limit=&since=` | | The newest events first: up to `limit` (default 500, at most 2000), from `since` (an ISO date) onward. |
 | `GET /stats?from=&to=` | | Totals for charts, aggregated in MongoDB (below). |
 

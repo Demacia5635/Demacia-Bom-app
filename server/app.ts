@@ -5,6 +5,7 @@ import apiRoutes from './routes';
 import { checkAuth } from "./auth";
 import morgan from "morgan";
 import { allowedOrigins, isAllowedOrigin } from "./config";
+import { recordRequestTimes } from "./services/requestStats";
 
 const app: Express = express();
 
@@ -83,6 +84,8 @@ app.use(cors({
 app.use(express.json({ limit: "2mb" }));
 // morgan's "dev" format plus the request ID.
 app.use(morgan(":method :url :status :response-time ms - :res[content-length] [:id]"));
+// Response times for the #/server admin page.
+app.use(recordRequestTimes);
 
 // Root route to handle Render health checks cleanly (fixes GET / 404)
 app.get("/", (req: Request, res: Response) => {

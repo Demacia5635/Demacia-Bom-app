@@ -5,7 +5,7 @@ import driveRoutes from './driveRoutes';
 import telemetryRoutes from './telemetryRoutes';
 import { SERVER_VERSION, STARTED_AT } from '../config';
 import { isConnected } from '../db/connection';
-import { adminCheck, checkAdmin } from '../auth';
+import adminRoutes from './adminRoutes';
 
 const router = express.Router();
 
@@ -21,8 +21,8 @@ router.get('/', (req, res) => {
     });
 });
 
-// Admin unlock on the website: 204 when x-admin-secret is right, else 404 (429 when locked).
-router.get('/admin/check', checkAdmin, adminCheck);
+// The website's admin pages (x-admin-secret on every route).
+router.use('/admin', adminRoutes);
 
 router.use('/db', dbRoutes);
 router.use('/enum', enumRoutes);
