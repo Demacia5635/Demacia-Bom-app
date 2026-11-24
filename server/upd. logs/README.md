@@ -13,6 +13,7 @@ One file per version: `v<version>.md`, listing what changed in the server (`serv
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [next](vNEXT.md) | Unreleased | Admin check route, guard against guessing the admin secret |
 | [5.2.0](v5.2.0.md) | 2026-11-24 | Part revision numbers, set by the server |
 | [5.1.2](v5.1.2.md) | 2026-11-24 | Fix: Delete on #/orphans ("Failed to fetch") |
 | [5.1.1](v5.1.1.md) | 2026-11-24 | Lint cleanup (no behaviour change) |
