@@ -13,6 +13,7 @@ const TelemetryPage = lazy(() => import('./Pages/Telemetry/TelemetryPage'));
 const WhatsNewPage = lazy(() => import('./Pages/WhatsNew/WhatsNewPage'));
 const OrphansPage = lazy(() => import('./Pages/Orphans/OrphansPage'));
 const HealthPage = lazy(() => import('./Pages/Health/HealthPage'));
+const AdminPage = lazy(() => import('./Pages/Admin/AdminPage'));
 
 // A new id in the address is a new page (key): nothing of the previous BOM or
 // work order stays in its state, so the pages don't reset it by hand.
@@ -46,6 +47,8 @@ export default function App() {
           <Route path="/orphans" element={<OrphansPage />} />
           {/* Data health: problems in the saved parts and BOMs - unlisted too. */}
           <Route path="/health" element={<HealthPage />} />
+          {/* Unlocks the admin pages in this browser's sidebar - unlisted until then. */}
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="/whatsnew" element={<WhatsNewPage />} />
           {/* A mistyped address goes to Home, and the address bar says so. */}
           <Route path="*" element={<Navigate to="/home" replace />} />
