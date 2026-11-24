@@ -31,6 +31,7 @@ const ERROR_CODES: Record<number, string> = {
     409: "CONFLICT",
     413: "TOO_LARGE",
     415: "UNSUPPORTED_TYPE",
+    429: "TOO_MANY_REQUESTS",
     500: "INTERNAL",
     503: "UNAVAILABLE",
 };
