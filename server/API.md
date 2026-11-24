@@ -19,7 +19,7 @@ Every error reply has this shape:
 { "code": "BAD_REQUEST", "message": "partID is required", "fields": ["partID"], "requestId": "..." }
 ```
 
-- `code` follows the status: `BAD_REQUEST` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403, origin not allowed), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405), `CONFLICT` (409; a BOM save's clashes have their own codes, see the BOM routes), `TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `INTERNAL` (500), `UNAVAILABLE` (503).
+- `code` follows the status: `BAD_REQUEST` (400), `UNAUTHORIZED` (401), `FORBIDDEN` (403, origin not allowed), `NOT_FOUND` (404), `METHOD_NOT_ALLOWED` (405), `CONFLICT` (409; a BOM save's clashes have their own codes, see the BOM routes), `TOO_LARGE` (413), `UNSUPPORTED_TYPE` (415), `TOO_MANY_REQUESTS` (429, admin secret locked), `INTERNAL` (500), `UNAVAILABLE` (503).
 - `fields` (only when known) lists the input fields that were wrong.
 - `message` is safe to show. For a 500 it is just "Internal server error"; the details are in the log under the `requestId`.
 
@@ -33,6 +33,7 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 |---|---|
 | `GET /api` | `200 { status: "online", version, startedAt, database: "connected" \| "disconnected" }`. Public. |
 | `GET /api/db` | `200 { connected: true }`, or `503 { connected: false }`. |
+| `GET /api/admin/check` | **Admin:** `204` when `x-admin-secret` is right; `404` when it's missing or wrong, as for every admin route. For the website's admin unlock (below). |
 | `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
 | `GET /api/drive` | `200` when Drive answers, `503` when it doesn't: `{ connected, ... }`. |
 
@@ -77,6 +78,22 @@ A part that no BOM lists is reported once, as `NOT_IN_ANY_ASSEMBLY`, and isn't c
 | `MISSING_IMAGE` | warning | A made part or assembly without an image. |
 | `MISSING_STL`, `MISSING_PARASOLID` | warning | A made part set to export the file (`wantStl` / `wantParasolid`) that has none. |
 | `NOT_IN_ANY_ASSEMBLY` | warning | A part no BOM lists. It shouldn't exist and should be deleted (there's no delete from here). |
+
+### Admin secret
+
+The admin routes take the `x-admin-secret` header (the `ADMIN_SECRET` setting) as well as `x-client-secret`. The routes are:
+- `GET /api/admin/check`
+- `POST/GET /api/drive/organize`
+- `POST /api/db/part/orphans/delete`
+- `POST /api/db/part/revisions/init`
+
+Without `ADMIN_SECRET` set, or with a wrong secret, they answer `404` as if they didn't exist.
+
+Against guessing:
+- **Delay:** every wrong try is answered after 1 s.
+- **Lock:** after 10 wrong tries from one IP within 15 minutes, or 100 overall, every admin call answers `429 TOO_MANY_REQUESTS`, even one with the right secret, until 15 minutes pass with no tries.
+- **IP:** it's the first `X-Forwarded-For` entry, which Render's proxy adds. Everyone behind one network address shares a counter, so 10 typos at school lock the admin pages there for 15 minutes.
+- **Memory:** the counts are kept in memory, and a restart clears them.
 
 ## Parts: `/api/db/part`
 
