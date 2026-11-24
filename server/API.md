@@ -38,6 +38,7 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /api/admin/production` | **Admin.** Work orders' progress for `#/production`, described below. |
 | `GET /api/admin/events?limit=&before=&kind=` | **Admin.** What happened, newest first (`#/activity`), described below. |
 | `GET /api/admin/revisions?limit=&before=` | **Admin.** Revision bumps for `#/revisions`, each with the open work orders that contain the part, described below. |
+| `POST /api/admin/workorders/repair-finished` | **Admin**, one-off. Body `{ "dryRun": true }` or `{}`. Work-order lines saved with Priority `"Finished"` but a status that isn't finished (not `"Finished Manufacturing"`, `"Finished"` or the old code `4`) counted as finished forever; this sets their Priority to `"Medium"`, leaving their `updatedAt` alone. It's one update that re-checks each line, so running it again changes nothing. Returns `{ dryRun, count, lines: [{ workOrder: { id, name }, partID, partName, status }], updated? }` (at most 1000 lines listed). The real run writes one log line and a `workOrders.repairFinished` event. |
 | `GET /api/admin/stale` | **Admin.** Work orders whose parts changed since they were created (`#/stale`), described below. |
 | `GET /api/admin/files[?refresh=1]` | **Admin.** The team's Drive files for `#/files`, described below. |
 | `POST /api/admin/files/delete` | **Admin.** `{ ids }` (1-200 Drive file IDs): moves unused files to Drive's trash. Each file is re-checked first and refused if a part or BOM uses it, if it isn't in the team folders, or if it's not found. Returns `200 { deleted: [{ fileId, name }], refused: [{ fileId, reason }] }`, with one log line per file. |
@@ -125,6 +126,7 @@ An `events` collection, capped so that MongoDB keeps the last 5000, records what
 | `drive.fileDelete` | An unused Drive file went to the trash. | `{ fileId, name }` |
 | `revisions.init` | The one-time revision start ran. | `{ setTo1, standardCleared, overwrittenCount }` |
 | `admin.locked` | An IP was locked out of the admin routes. | `{ ip }` |
+| `workOrders.repairFinished` | The one-off "stuck as finished" repair changed lines. | `{ workOrders, lines }` |
 
 Part saves that don't change the revision aren't recorded: a publish saves every part, so recording them would keep only the last few publishes.
 

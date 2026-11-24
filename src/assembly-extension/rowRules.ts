@@ -85,8 +85,16 @@ function sameValue(field: string, a: unknown, b: unknown): boolean {
 }
 
 /**
+ * Parts without a revision, the server's rule (server/controllers/partRevision.ts)
+ * and the website's: Standard Content, marked standard, or with a vendor.
+ */
+export function hasNoRevision(part: { isStandardContent?: unknown; markedStandard?: unknown; vendor?: unknown }): boolean {
+  return !!part.isStandardContent || !!part.markedStandard || (typeof part.vendor === "string" && part.vendor.trim() !== "");
+}
+
+/**
  * What the Revision column shows for a part: the server's number, "—" for a
- * standard part (none), "new" when it isn't in the database yet. A saved part
+ * part without a revision (hasNoRevision), "new" when it isn't in the database yet. A saved part
  * without a number counts as 1 (the server's rule for parts saved before
  * revisions); an old manual text value is shown as it is.
  */
@@ -106,9 +114,8 @@ export function revisionLabel(saved: { revision?: unknown } | null | undefined, 
 export function revisionChange(row: AssemblyBomRow): { from: string; to: string } | null {
   const edited = row.modified ?? [];
   if (row.isAssembly || row.source !== "db" || edited.length === 0) return null;
-  if (isExternalRow(row)) return null;
+  if (hasNoRevision(row)) return null; // becoming (or staying) standard, or a vendor part
   const wasStandard = !!(row.baseline as Record<string, unknown> | undefined)?.markedStandard;
-  if (row.markedStandard) return null; // becoming (or staying) standard: no revision
   if (wasStandard) return { from: "—", to: "1" }; // unmarked: starts again at 1
   const current = String(row.revision ?? "");
   const n = /^\d+$/.test(current) ? Number(current) : null;

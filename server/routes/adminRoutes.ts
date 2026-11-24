@@ -5,6 +5,7 @@ import { adminCheck, checkAdmin } from '../auth';
 import { getEvents, getRevisions, getServerStatus } from '../controllers/adminController';
 import { getProduction, getStale } from '../controllers/workOrderSummary';
 import { deleteUnusedFiles, getFilesOverview } from '../controllers/driveFiles';
+import { repairFinished } from '../controllers/workOrderRepair';
 
 const router = express.Router();
 router.use(checkAdmin);
@@ -24,5 +25,7 @@ router.get('/events', getEvents);
 router.get('/revisions', getRevisions);
 // #/stale: work orders whose parts changed since they were created.
 router.get('/stale', getStale);
+// One-off repair: lines with Priority "Finished" but a status that isn't (dry run first).
+router.post('/workorders/repair-finished', repairFinished);
 
 export default router;
