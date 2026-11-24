@@ -1,4 +1,4 @@
-import { HomeIcon, SearchIcon, ClipboardList, Package, X, Activity, HeartPulse, PackageX, ShieldCheck, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, Package, X, Activity, HeartPulse, PackageX, ShieldCheck, Server, type LucideProps } from "lucide-react";
 import { type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -13,6 +13,7 @@ const ADMIN_ITEMS: { label: string; path: string; icon: NavIcon }[] = [
     { label: 'Onshape Footprint', path: '/tele', icon: Activity },
     { label: 'Data Health', path: '/health', icon: HeartPulse },
     { label: 'Parts in No Assembly', path: '/orphans', icon: PackageX },
+    { label: 'Server', path: '/server', icon: Server },
     { label: 'Admin', path: '/admin', icon: ShieldCheck },
 ];
 
