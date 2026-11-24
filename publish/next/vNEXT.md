@@ -13,7 +13,8 @@
 
 - **"Update available: X" tag** after the panel title when a newer version has been announced. Hover says "You have Y. Click to get X."; clicking opens the team's Drive folder of builds. It checks when the panel opens and every 6 hours (at most once an hour). (`71879c8`)
 
-- **Revision is now the server's number, read-only** in the panel: a whole number that goes up when a part's data changes; "—" for standard parts. The panel no longer reads or writes Onshape's Revision property. (`81e8348`)
+- **Revision is now the server's number, read-only** in the panel: a whole number that goes up when a part's data changes; "—" for standard parts, "new" for parts not saved yet; after a publish it shows the new number. The panel no longer reads or writes Onshape's Revision property. (`81e8348`, `a308236`)
+- **The Publish dialog's Changes list shows the revision change** for each edited part, e.g. "Revision: 3 → 4 (if its saved data changes)"; the server decides. (`08d54f2`)
 
 ## For the team
 
@@ -23,5 +24,7 @@
 - The extension and website now share one "who saved it" header, sent only on saves. No visible change. (`f78c172`)
 
 ## Not tested yet
+
+- Revisions with the real server: publish one edited part after deploying server 5.2.0 and check that its number goes up.
 
 - The frozen Avatar / Name columns in Firefox's narrow sidebar were checked against the code only (at 320 px Name narrows to about 94 px); worth a glance in the real sidebar.
