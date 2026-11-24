@@ -40,3 +40,6 @@ REVIEW_CHECKLIST.md
 
 # Local list of unlisted pages and admin routes (no secrets inside)
 secretRoutes.txt
+
+# Local plans for upcoming work (Claude coordinator)
+claudeplans.md
