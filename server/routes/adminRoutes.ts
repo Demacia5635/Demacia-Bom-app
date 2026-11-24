@@ -3,6 +3,7 @@
 import express from 'express';
 import { adminCheck, checkAdmin } from '../auth';
 import { getServerStatus } from '../controllers/adminController';
+import { getProduction } from '../controllers/workOrderSummary';
 
 const router = express.Router();
 router.use(checkAdmin);
@@ -11,5 +12,7 @@ router.use(checkAdmin);
 router.get('/check', adminCheck);
 // #/server: version, uptime, DB and Drive, recent sort runs, lockouts, response times.
 router.get('/status', getServerStatus);
+// #/production: work orders' progress, open orders, what blocks them.
+router.get('/production', getProduction);
 
 export default router;

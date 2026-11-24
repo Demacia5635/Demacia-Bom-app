@@ -35,6 +35,7 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /api/db` | `200 { connected: true }`, or `503 { connected: false }`. |
 | `GET /api/admin/check` | **Admin:** `204` when `x-admin-secret` is right; `404` when it's missing or wrong, as for every admin route. For the website's admin unlock (below). |
 | `GET /api/admin/status` | **Admin.** How the server is doing (the website's `#/server`), described below. |
+| `GET /api/admin/production` | **Admin.** Work orders' progress for `#/production`, described below. |
 | `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
 | `GET /api/drive` | `200` when Drive answers, `503` when it doesn't: `{ connected, ... }`. |
 
@@ -95,6 +96,18 @@ Against guessing:
 - **Lock:** after 10 wrong tries from one IP within 15 minutes, or 100 overall, every admin call answers `429 TOO_MANY_REQUESTS`, even one with the right secret, until 15 minutes pass with no tries.
 - **IP:** it's the first `X-Forwarded-For` entry, which Render's proxy adds. Everyone behind one network address shares a counter, so 10 typos at school lock the admin pages there for 15 minutes.
 - **Memory:** the counts are kept in memory, and a restart clears them.
+
+### `GET /api/admin/production`
+
+`{ orders: [...], totals: { open, blockedOrders, byStatus, byMethodOpen, byOwner } }`
+
+Each order is `{ id, name, owner, createdAt, updatedAt, bomID, madeParts, finishedParts, percent, open, blocked: { toBuy, noMaterial }, byStatus, purchased }`, or `{ ..., error }` when its tree can't be built. Lines are counted exactly as in `GET /db/workOrder/summary`.
+- **`open`:** not 100% finished, meaning a made line isn't finished or a bought line is still to buy.
+- **`blocked`:** bought lines still to buy, and unfinished made lines whose part has no material.
+
+`totals` covers the open orders:
+- **`byStatus` and `byMethodOpen`:** their unfinished made lines, by status and by method (the queue per process).
+- **`byOwner`:** the open orders per owner.
 
 ### `GET /api/admin/status`
 
