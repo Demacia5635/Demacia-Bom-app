@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { lazy } from 'react';
 import MainLayout from './components/MainLayout';
+import AdminGate from './components/AdminGate';
 
 // Each page is loaded when first opened (MainLayout shows "Loading..." meanwhile),
 // so opening one page doesn't download the others, /tele included.
@@ -42,11 +43,11 @@ export default function App() {
           <Route path="/partSearch" element={<PartsSearchPage key="made" />} />
           <Route path="/standardParts" element={<PartsSearchPage key="standard" standard />} />
           {/* Onshape footprint - unlisted on purpose (not in the sidebar). */}
-          <Route path="/tele" element={<TelemetryPage />} />
+          <Route path="/tele" element={<AdminGate><TelemetryPage /></AdminGate>} />
           {/* Parts no assembly uses, with Delete (admin) - unlisted too. */}
-          <Route path="/orphans" element={<OrphansPage />} />
+          <Route path="/orphans" element={<AdminGate><OrphansPage /></AdminGate>} />
           {/* Data health: problems in the saved parts and BOMs - unlisted too. */}
-          <Route path="/health" element={<HealthPage />} />
+          <Route path="/health" element={<AdminGate><HealthPage /></AdminGate>} />
           {/* Unlocks the admin pages in this browser's sidebar - unlisted until then. */}
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/whatsnew" element={<WhatsNewPage />} />

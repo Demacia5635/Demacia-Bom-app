@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchFromApi } from "./ApiService";
+import { ApiRequestError, fetchFromApi } from "./ApiService";
 
 /**
  * "Admin pages" in this browser: after the server accepts the admin secret
@@ -63,6 +63,46 @@ export function writeTabSecret(secret: string | null): void {
   } catch {
     // Storage blocked: the secret is typed again next time.
   }
+  window.dispatchEvent(new Event(TAB_SECRET_EVENT));
+}
+
+const TAB_SECRET_EVENT = "bom-admin-tab-secret-change";
+
+/** Whether this tab has the admin secret; follows writeTabSecret. */
+export function useHasTabSecret(): boolean {
+  const [has, setHas] = useState(() => !!readTabSecret());
+  useEffect(() => {
+    const update = () => setHas(!!readTabSecret());
+    window.addEventListener(TAB_SECRET_EVENT, update);
+    return () => window.removeEventListener(TAB_SECRET_EVENT, update);
+  }, []);
+  return has;
+}
+
+/** Checks the secret with the server and keeps it for this tab (no unlock). Throws the server's error. */
+export async function enterTabSecret(secret: string): Promise<void> {
+  await fetchFromApi<null>("/admin/check", { headers: { "x-admin-secret": secret } });
+  writeTabSecret(secret);
+}
+
+/**
+ * fetchFromApi for an admin-only route: sends this tab's admin secret. A 404
+ * (wrong secret, e.g. it was changed) forgets it, so AdminGate asks again.
+ */
+export async function adminFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  try {
+    return await fetchFromApi<T>(endpoint, { ...options, headers: { ...options.headers, "x-admin-secret": readTabSecret() } });
+  } catch (err) {
+    if (err instanceof ApiRequestError && err.statusCode === 404) writeTabSecret(null);
+    throw err;
+  }
+}
+
+/** The message for a refused admin secret: wrong (404), too many tries (429, the server's text), or another failure. */
+export function adminSecretError(err: unknown): string {
+  if (err instanceof ApiRequestError && err.statusCode === 404) return "Wrong admin secret.";
+  if (err instanceof ApiRequestError && err.statusCode === 429) return err.message || "Too many wrong admin secrets. Try again in 15 minutes.";
+  return `Couldn't check it: ${(err as Error)?.message || err}`;
 }
 
 /**
