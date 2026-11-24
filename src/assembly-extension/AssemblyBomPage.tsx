@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Table from "../components/Table";
-import type { ApiError } from "../util/ApiService";
+import { setUpdatedBy, type ApiError } from "../util/ApiService";
 import type { BomModel, PartModel } from "../util/Models";
 import { useOnshapeClient, useOnshapeContext } from "../extension/onshapeHostShim";
 import "../css/AssemblyBomPage.css";
@@ -8,7 +8,6 @@ import {
   upsertBomById,
   type OnshapeKey,
   syncBomThumbnailToDrive,
-  setUpdatedBy,
   getPublishedElsewhere,
   getAllRecords,
   getBomsByIds,
@@ -145,7 +144,7 @@ export default function AssemblyBomPage() {
   useEffect(() => {
     let cancelled = false;
     getOnshapeUserName().then((name) => {
-      setUpdatedBy(name); // the server records who saved (X-Updated-By)
+      setUpdatedBy(name || null); // the server records who saved (X-Updated-By, ApiService)
       if (!cancelled) setOnshapeUserName(name);
     });
     return () => {

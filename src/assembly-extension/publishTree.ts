@@ -15,7 +15,6 @@ import {
   updateOnshapePartMetadata,
   upsertBomById,
   upsertPartById,
-  updatedByHeaders,
   type OnshapeKey,
 } from "./BomApi";
 import { membersOf } from "./copyRows";
@@ -243,7 +242,7 @@ async function publishAssembly(
   // as isn't used any more (it shares its thumbnail, which stays).
   if (row.baseline?.markedStandard) {
     progress.step("Removing its standard-part record");
-    await fetchFromApi(`/db/part/id/${encodeURIComponent(row.id)}`, { method: "DELETE", headers: updatedByHeaders() }).catch((err: any) => {
+    await fetchFromApi(`/db/part/id/${encodeURIComponent(row.id)}`, { method: "DELETE" }).catch((err: any) => {
       if (err?.statusCode !== 404) ctx.problems.push(`Removing the standard-part record of "${row.name}": ${err?.message || err}`);
     });
   }
