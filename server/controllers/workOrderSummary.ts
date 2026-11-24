@@ -40,7 +40,7 @@ const isBoughtAssembly = (bom: BomRecord | undefined) => !!bom?.markedStandard |
  * multiplied through sub-assemblies; a bought sub-assembly is one line by its
  * BOM id. Throws the website's messages for a cycle or a missing assembly.
  */
-function workOrderLines(rootID: string, boms: Map<string, BomRecord>) {
+export function workOrderLines(rootID: string, boms: Map<string, BomRecord>) {
     const totals = new Map<string, number>();
     const bought = new Map<string, BomRecord>();
     const add = (id: string, quantity: number) => totals.set(id, (totals.get(id) || 0) + quantity);
@@ -114,6 +114,8 @@ export interface OrderLine {
     catalogNumber?: string;
     /** The part's current revision (made parts). */
     revision?: number;
+    /** When the part record was last saved. */
+    partUpdatedAt?: Date;
 }
 
 export interface OrderLines {
@@ -155,7 +157,7 @@ export async function loadOrderLines(): Promise<OrderLines[]> {
     const partRecords = lineIDs.size
         ? await Part.find(
             { id: { $in: [...lineIDs] } },
-            { id: 1, name: 1, catalogNumber: 1, material: 1, revision: 1, isStandardContent: 1, markedStandard: 1, vendor: 1, manufacturingMethod: 1 },
+            { id: 1, name: 1, catalogNumber: 1, material: 1, revision: 1, updatedAt: 1, isStandardContent: 1, markedStandard: 1, vendor: 1, manufacturingMethod: 1 },
         ).lean<Record_[]>()
         : [];
     const parts = new Map(partRecords.map((p) => [p.id, p]));
@@ -184,6 +186,7 @@ export async function loadOrderLines(): Promise<OrderLines[]> {
                 name: record?.name ?? boughtBom?.name,
                 catalogNumber: record?.catalogNumber ?? boughtBom?.catalogNumber,
                 ...(Number.isInteger(record?.revision) ? { revision: record!.revision } : {}),
+                ...(record?.updatedAt ? { partUpdatedAt: record.updatedAt } : {}),
             });
         }
         return { wo: c.wo, lines };
@@ -296,6 +299,107 @@ export async function getProduction(req: Request, res: Response, next: NextFunct
             };
         });
         return res.status(200).json({ orders: result, totals });
+    } catch (err) {
+        return next(err);
+    }
+}
+
+/**
+ * A new work order's snapshot (#/stale): for each part, its revision now and
+ * its total quantity through the live BOM now. Parts whose tree can't be built
+ * get no quantity; standard parts no revision.
+ */
+export async function creationSnapshot(bomID: string | undefined, partIDs: string[]) {
+    const snapshot = new Map<string, { revisionAtCreation?: number; quantityAtCreation?: number }>();
+    if (!partIDs.length) return snapshot;
+    let totals = new Map<string, number>();
+    if (bomID) {
+        try {
+            const { boms } = await loadBoms([bomID], MAX_DEPTH, MAX_BOMS);
+            totals = workOrderLines(bomID, boms).totals;
+        } catch {
+            // A tree that can't be built: no quantities (the page shows the same error).
+        }
+    }
+    const parts = await Part.find({ id: { $in: partIDs } }, { id: 1, revision: 1 }).lean<Record_[]>();
+    const revisions = new Map(parts.map((p) => [p.id, p.revision]));
+    for (const id of partIDs) {
+        const revision = revisions.get(id);
+        const quantity = totals.get(id);
+        snapshot.set(id, {
+            ...(Number.isInteger(revision) ? { revisionAtCreation: revision } : {}),
+            ...(quantity !== undefined ? { quantityAtCreation: quantity } : {}),
+        });
+    }
+    return snapshot;
+}
+
+type StaleChange = {
+    partID: string;
+    name?: string;
+    change: "revision" | "quantity" | "added" | "removed" | "edited";
+    revisionAtCreation?: number;
+    revisionNow?: number;
+    quantityAtCreation?: number;
+    quantityNow?: number;
+};
+
+/**
+ * GET /api/admin/stale (#/stale): work orders whose parts changed since they
+ * were created. Orders with a snapshot (created after snapshots existed) are
+ * compared exactly: revision up, quantity changed, part added to or removed
+ * from the BOM. Older ones (snapshot: false) only approximately: a part saved
+ * after the order was created is "edited". Only orders with a change.
+ */
+export async function getStale(req: Request, res: Response, next: NextFunction) {
+    try {
+        const orders = await loadOrderLines();
+        const result = [];
+        for (const { wo, lines, error } of orders) {
+            if (!lines) continue;
+            const stored = new Map<string, Record_>((wo.parts ?? []).map((p: Record_) => [p.partID, p]));
+            const hasSnapshot = (entry?: Record_) => entry?.revisionAtCreation !== undefined || entry?.quantityAtCreation !== undefined;
+            const snapshot = [...stored.values()].some((entry) => hasSnapshot(entry));
+            const changes: StaleChange[] = [];
+            if (snapshot) {
+                const now = new Set(lines.map((l) => l.partID));
+                for (const line of lines) {
+                    const entry = stored.get(line.partID);
+                    if (!hasSnapshot(entry)) {
+                        changes.push({ partID: line.partID, name: line.name, change: "added", revisionNow: line.revision, quantityNow: line.quantity });
+                        continue;
+                    }
+                    if (entry!.revisionAtCreation !== undefined && line.revision !== undefined && line.revision > entry!.revisionAtCreation) {
+                        changes.push({ partID: line.partID, name: line.name, change: "revision", revisionAtCreation: entry!.revisionAtCreation, revisionNow: line.revision });
+                    }
+                    if (entry!.quantityAtCreation !== undefined && line.quantity !== entry!.quantityAtCreation) {
+                        changes.push({ partID: line.partID, name: line.name, change: "quantity", quantityAtCreation: entry!.quantityAtCreation, quantityNow: line.quantity });
+                    }
+                }
+                for (const [partID, entry] of stored) {
+                    if (hasSnapshot(entry) && !now.has(partID)) {
+                        changes.push({ partID, change: "removed", revisionAtCreation: entry.revisionAtCreation, quantityAtCreation: entry.quantityAtCreation });
+                    }
+                }
+            } else if (wo.createdAt) {
+                const created = new Date(wo.createdAt).getTime();
+                for (const line of lines) {
+                    if (line.partUpdatedAt && new Date(line.partUpdatedAt).getTime() > created) {
+                        changes.push({ partID: line.partID, name: line.name, change: "edited", revisionNow: line.revision });
+                    }
+                }
+            }
+            if (changes.length) {
+                result.push({
+                    workOrder: { id: wo.id, name: wo.name, owner: wo.workOrderOwner, bomID: wo.bomID, createdAt: wo.createdAt },
+                    open: isOpenOrder(lines),
+                    snapshot,
+                    parts: changes,
+                    ...(error ? { error } : {}),
+                });
+            }
+        }
+        return res.status(200).json(result);
     } catch (err) {
         return next(err);
     }

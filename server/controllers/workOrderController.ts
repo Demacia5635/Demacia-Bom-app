@@ -4,6 +4,7 @@ import WorkOrder from "../models/WorkOrder";
 import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
 import { makeListAll } from "./listAll";
 import { recordEvent, whoOf } from "../services/events";
+import { creationSnapshot } from "./workOrderSummary";
 
 interface SubPartBody {
   partID: string;
@@ -88,7 +89,21 @@ export async function upsertWorkOrderByID(
     // an older copy can't undo someone's merge.
     const { parts, cncGroups: _ignored, ...fields } = cleanUpdateBody(req.body);
     const update: Record<string, unknown> = { $set: { ...fields, ...updatedByOf(req), id: id } };
-    if (parts !== undefined) update.$setOnInsert = { parts: uniqueParts(parts) };
+    if (parts !== undefined) {
+      // A new work order also records each part's revision and quantity now
+      // (#/stale); worked out only when it doesn't exist yet.
+      let entries = uniqueParts(parts);
+      if (Array.isArray(entries) && !(await WorkOrder.exists({ id }))) {
+        const bomID = typeof fields.bomID === "string" ? fields.bomID : undefined;
+        const ids = entries.map((p: any) => p?.partID).filter((p: unknown): p is string => typeof p === "string");
+        const snapshot = await creationSnapshot(bomID, ids);
+        entries = entries.map((p: any) => {
+          const { revisionAtCreation: _r, quantityAtCreation: _q, ...rest } = p ?? {};
+          return { ...rest, ...(snapshot.get(p?.partID) ?? {}) };
+        });
+      }
+      update.$setOnInsert = { parts: entries };
+    }
 
     const { doc: workOrder, created } = await upsertByID(WorkOrder, id, update);
 

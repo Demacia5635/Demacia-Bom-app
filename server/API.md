@@ -38,6 +38,7 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /api/admin/production` | **Admin.** Work orders' progress for `#/production`, described below. |
 | `GET /api/admin/events?limit=&before=&kind=` | **Admin.** What happened, newest first (`#/activity`), described below. |
 | `GET /api/admin/revisions?limit=&before=` | **Admin.** Revision bumps for `#/revisions`, each with the open work orders that contain the part, described below. |
+| `GET /api/admin/stale` | **Admin.** Work orders whose parts changed since they were created (`#/stale`), described below. |
 | `GET /api/admin/files[?refresh=1]` | **Admin.** The team's Drive files for `#/files`, described below. |
 | `POST /api/admin/files/delete` | **Admin.** `{ ids }` (1-200 Drive file IDs): moves unused files to Drive's trash. Each file is re-checked first and refused if a part or BOM uses it, if it isn't in the team folders, or if it's not found. Returns `200 { deleted: [{ fileId, name }], refused: [{ fileId, reason }] }`, with one log line per file. |
 | `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
@@ -132,6 +133,18 @@ Part saves that don't change the revision aren't recorded: a publish saves every
 `{ items: [{ event, part: { id, name, catalogNumber, revisionNow }, openWorkOrders: [{ id, name, status, method }] }], next }`
 - **`event`:** a `part.revision` event, newest first, paged like `/events`.
 - **`openWorkOrders`:** the work orders open now (not 100% finished, as in `#/production`) that contain the part, with its status and method in each, whatever that status is.
+
+### `GET /api/admin/stale`
+
+`[{ workOrder: { id, name, owner, bomID, createdAt }, open, snapshot, parts: [{ partID, name?, change, revisionAtCreation?, revisionNow?, quantityAtCreation?, quantityNow? }] }]`, listing only work orders with at least one change.
+
+- **`snapshot: true`:** created after snapshots existed, so they're compared exactly with the live BOM. `change` is one of:
+  - `revision`: the part's revision went up;
+  - `quantity`: its total quantity changed;
+  - `added`: the part is new in the BOM;
+  - `removed`: the part is no longer in the BOM.
+- **`snapshot: false`:** older orders, compared only approximately. `change: "edited"` means the part was saved after the order was created; the page shows it greyed as "maybe changed".
+- **`open`:** the same rule as `#/production`.
 
 ### `GET /api/admin/files`
 
@@ -261,7 +274,7 @@ The server makes one query per level, then one for all the parts. A sub-assembly
 | `GET /all` | | Every work order, oldest first. `?bomID=` keeps only the work orders of that assembly (also with paging). See [Lists](#lists). |
 | `GET /summary` | | Every work order with its progress (below). |
 | `GET /id/:id` | | The work order, or `404`. |
-| `POST /id/:id` | The work order's fields | Creates or updates it: `201` or `200`. `parts` is used only on create (deduplicated by `partID`, first wins); `cncGroups` is ignored. Both change only through the routes below. |
+| `POST /id/:id` | The work order's fields | Creates or updates it: `201` or `200`. `parts` is used only on create (deduplicated by `partID`, first wins). On create, the server also stores each part's `revisionAtCreation` and `quantityAtCreation` (its total through the live BOM) for `#/stale`; values the client sends for them are ignored. `cncGroups` is ignored. Both change only through the routes below. |
 | `POST /id/:id/part` | `{ partID, changes: { field: value } }` | Changes one part of the work order (it is added if missing). Returns that part. Editable fields: `statusCode`, `Priority`, `manufacturingMethod`, `productionGCOwner`, `productionMakingOwner`, `comments`, `links`, `approxArrivalDate`, `quantityMade`. |
 | `POST /id/:id/cncGroup` | `{ groupID?, partIDs?, links? }` | Creates, changes or dissolves a CNC group (parts cut together that share one G-code link). Returns `{ groupID, cncGroups }`. |
 | `DELETE /id/:id` | | `204`, or `404`. |

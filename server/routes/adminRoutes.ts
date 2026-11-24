@@ -3,7 +3,7 @@
 import express from 'express';
 import { adminCheck, checkAdmin } from '../auth';
 import { getEvents, getRevisions, getServerStatus } from '../controllers/adminController';
-import { getProduction } from '../controllers/workOrderSummary';
+import { getProduction, getStale } from '../controllers/workOrderSummary';
 import { deleteUnusedFiles, getFilesOverview } from '../controllers/driveFiles';
 
 const router = express.Router();
@@ -22,5 +22,7 @@ router.post('/files/delete', deleteUnusedFiles);
 router.get('/events', getEvents);
 // #/revisions: revision bumps with the open work orders that contain each part.
 router.get('/revisions', getRevisions);
+// #/stale: work orders whose parts changed since they were created.
+router.get('/stale', getStale);
 
 export default router;
