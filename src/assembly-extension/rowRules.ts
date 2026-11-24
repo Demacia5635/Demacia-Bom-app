@@ -84,6 +84,37 @@ function sameValue(field: string, a: unknown, b: unknown): boolean {
   return String(a ?? "").trim() === String(b ?? "").trim();
 }
 
+/**
+ * What the Revision column shows for a part: the server's number, "—" for a
+ * standard part (none), "new" when it isn't in the database yet. A saved part
+ * without a number counts as 1 (the server's rule for parts saved before
+ * revisions); an old manual text value is shown as it is.
+ */
+export function revisionLabel(saved: { revision?: unknown } | null | undefined, standard: boolean): string {
+  if (standard) return "—";
+  if (!saved) return "new";
+  const r = saved.revision;
+  return r === undefined || r === null || r === "" ? "1" : String(r);
+}
+
+/**
+ * The Changes list's line for a part's revision, when Publish may change it
+ * (the server decides: +1 only if the part's saved data really changes).
+ * null when there's nothing to say: assemblies, standard parts, parts not
+ * saved yet (they start at 1), parts without edits.
+ */
+export function revisionChange(row: AssemblyBomRow): { from: string; to: string } | null {
+  const edited = row.modified ?? [];
+  if (row.isAssembly || row.source !== "db" || edited.length === 0) return null;
+  if (isExternalRow(row)) return null;
+  const wasStandard = !!(row.baseline as Record<string, unknown> | undefined)?.markedStandard;
+  if (row.markedStandard) return null; // becoming (or staying) standard: no revision
+  if (wasStandard) return { from: "—", to: "1" }; // unmarked: starts again at 1
+  const current = String(row.revision ?? "");
+  const n = /^\d+$/.test(current) ? Number(current) : null;
+  return { from: current || "1", to: `${n !== null ? n + 1 : "next"} (if its saved data changes)` };
+}
+
 /** Engineer written for Onshape Standard Content (screws, nuts, washers...) and parts marked standard. */
 export const STANDARD_PART_ENGINEER = "Standard Part";
 

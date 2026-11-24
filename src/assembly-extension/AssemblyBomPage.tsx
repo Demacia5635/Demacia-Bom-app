@@ -74,6 +74,7 @@ import {
   EDITABLE_FIELDS,
   editableValues,
   describeFieldValue,
+  revisionChange,
   FIELD_LABELS,
   fileRuleForMaterial,
   isExternalRow,
@@ -662,6 +663,9 @@ export default function AssemblyBomPage() {
           to: describeFieldValue(field, now[field]),
         });
       }
+      // The part's revision, which the server bumps when its saved data changes.
+      const revision = revisionChange(r);
+      if (revision) list.push({ item: String(r.name ?? ""), field: "Revision", ...revision });
     }
     return list;
   }, [publishOpen, rows]);
