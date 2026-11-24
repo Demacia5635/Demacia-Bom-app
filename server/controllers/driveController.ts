@@ -50,7 +50,7 @@ export async function getFileFromId(
   client: GoogleDriveService,
   req: Request<{ fileID: string }>,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
 ) {
   try {
     const fileID = req.params.fileID;

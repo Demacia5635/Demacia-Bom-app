@@ -1,4 +1,4 @@
-import {NextFunction, Request, Response} from 'express';
+import { Request, Response } from 'express';
 import { productionType } from '../db/enum';
 
 /** The entry whose `id` equals the route's :id (a whole number), if any. */
@@ -8,11 +8,11 @@ function findById<T extends { id: number }>(list: T[], rawId: string): T | undef
     return list.find((entry) => entry.id === id);
 }
 
-export function getAllProductionTypes(req: Request, res: Response, next: NextFunction) {
+export function getAllProductionTypes(req: Request, res: Response) {
     return res.status(200).json(productionType);
 }
 
-export function getProductionTypeByID(req: Request<{ id: string }>, res: Response, next: NextFunction) {
+export function getProductionTypeByID(req: Request<{ id: string }>, res: Response) {
     const type = findById(productionType, req.params.id);
 
     if (!type)
