@@ -16,6 +16,7 @@ const OrphansPage = lazy(() => import('./Pages/Orphans/OrphansPage'));
 const HealthPage = lazy(() => import('./Pages/Health/HealthPage'));
 const AdminPage = lazy(() => import('./Pages/Admin/AdminPage'));
 const ServerPage = lazy(() => import('./Pages/Server/ServerPage'));
+const ProductionPage = lazy(() => import('./Pages/Production/ProductionPage'));
 
 // A new id in the address is a new page (key): nothing of the previous BOM or
 // work order stays in its state, so the pages don't reset it by hand.
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/admin" element={<AdminPage />} />
           {/* Admin pages (sidebar's ADMIN section); their data needs the admin secret. */}
           <Route path="/server" element={<AdminGate needsSecret><ServerPage /></AdminGate>} />
+          <Route path="/production" element={<AdminGate needsSecret><ProductionPage /></AdminGate>} />
           <Route path="/whatsnew" element={<WhatsNewPage />} />
           {/* A mistyped address goes to Home, and the address bar says so. */}
           <Route path="*" element={<Navigate to="/home" replace />} />
