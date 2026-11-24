@@ -103,6 +103,10 @@ A part that no BOM lists is reported once, as `NOT_IN_ANY_ASSEMBLY`, and isn't c
 
 The rules live in `server/controllers/partRevision.ts` (`COUNTED_FIELDS`).
 
+**The one-time start** is an admin route, `POST /api/db/part/revisions/init` with body `{ "dryRun": true }` or `{}`. It needs `x-admin-secret` as well, like the Drive sort, and answers `404` without it. It gives every made part without a whole-number revision `1`, overwriting old manual values, and removes the revision from standard parts. Parts that already have a number keep it, so running it again changes nothing.
+
+The reply is `{ dryRun, total, standard, alreadyNumbered, setTo1, standardCleared, overwrittenCount, overwritten: [{ id, name, old }], updated? }`. `overwritten` lists up to 500 entries; `updated` holds the real run's counts. The real run writes one log line. Run the dry run first.
+
 ## BOMs (assemblies): `/api/db/bom`
 
 | Route | Body | Reply |

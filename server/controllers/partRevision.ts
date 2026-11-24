@@ -9,6 +9,9 @@
  * What counts as "its data" is COUNTED_FIELDS, the one place to change it
  * (e.g. to add a per-part geometry marker from Onshape later).
  */
+import type { NextFunction, Request, Response } from "express";
+import Part from "../models/Part";
+import { updatedByOf } from "./upsert";
 
 type Rec = Record<string, any>;
 
@@ -59,4 +62,67 @@ export function revisionUpdate(stored: Rec | null, incoming: Rec): { $set?: Rec;
     // revision 1, so a change makes it 2.
     if (!Number.isInteger(stored.revision)) return { $set: { revision: changed ? 2 : 1 } };
     return changed ? { $inc: { revision: 1 } } : {};
+}
+
+/** Most overwritten manual values one report lists (the counts are always complete). */
+const MAX_LISTED = 500;
+
+/**
+ * POST /db/part/revisions/init { dryRun } (admin): the one-time start of
+ * revisions. Every made part without a whole-number revision gets 1 (old
+ * manual values are overwritten, as the user decided); standard parts lose
+ * theirs. Parts that already have a number keep it. Running it again changes
+ * nothing. A dry run only reports:
+ * { dryRun, total, standard, alreadyNumbered, setTo1, standardCleared,
+ *   overwrittenCount, overwritten: [{ id, name, old }], updated? }.
+ */
+export async function initRevisions(req: Request, res: Response, next: NextFunction) {
+    try {
+        const dryRun = req.body?.dryRun === true;
+        const parts = await Part.find({}, { id: 1, name: 1, revision: 1, isStandardContent: 1, markedStandard: 1, vendor: 1 }).lean<Rec[]>();
+        const toSet: string[] = [];
+        const toClear: string[] = [];
+        const overwritten: { id: string; name?: string; old: unknown }[] = [];
+        let standard = 0;
+        let alreadyNumbered = 0;
+        let overwrittenCount = 0;
+        for (const part of parts) {
+            const has = part.revision !== undefined && part.revision !== null && part.revision !== "";
+            if (isStandardPart(part)) {
+                standard++;
+                if (has) toClear.push(part.id);
+            } else if (Number.isInteger(part.revision)) {
+                alreadyNumbered++;
+            } else {
+                toSet.push(part.id);
+                if (has) overwrittenCount++;
+                if (has && overwritten.length < MAX_LISTED) overwritten.push({ id: part.id, name: part.name, old: part.revision });
+            }
+        }
+        const report = {
+            dryRun,
+            total: parts.length,
+            standard,
+            alreadyNumbered,
+            setTo1: toSet.length,
+            standardCleared: toClear.length,
+            overwrittenCount,
+            overwritten,
+        };
+        if (dryRun) return res.status(200).json(report);
+
+        // Only parts still without a number (a publish may have numbered one meanwhile).
+        const stillUnnumbered: Record<string, unknown> = {
+            id: { $in: toSet },
+            $or: [{ revision: { $exists: false } }, { revision: { $not: { $type: "number" } } }],
+        };
+        const set = toSet.length ? await Part.updateMany(stillUnnumbered, { $set: { revision: 1 } }) : null;
+        const cleared = toClear.length ? await Part.updateMany({ id: { $in: toClear } }, { $unset: { revision: "" } }) : null;
+        const updated = { setTo1: set?.modifiedCount ?? 0, standardCleared: cleared?.modifiedCount ?? 0 };
+        console.log(`[revisions init ${res.locals.requestId}] by ${updatedByOf(req).updatedBy || "unknown"}: set to 1 ${updated.setTo1}, `
+            + `cleared on standard parts ${updated.standardCleared}, overwritten manual values ${overwrittenCount}`);
+        return res.status(200).json({ ...report, updated });
+    } catch (err) {
+        return next(err);
+    }
 }
