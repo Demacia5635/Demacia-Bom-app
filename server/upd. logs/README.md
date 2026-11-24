@@ -13,6 +13,7 @@ One file per version: `v<version>.md`, listing what changed in the server (`serv
 
 | Version | Pushed | Highlights |
 |---|---|---|
+| [5.4.2](v5.4.2.md) | 2026-11-24 | Progress counts bought lines |
 | [5.4.1](v5.4.1.md) | 2026-11-24 | Repair for work-order lines stuck as finished |
 | [5.4.0](v5.4.0.md) | 2026-11-24 | Admin pages' data, events log, work-order snapshots |
 | [5.3.0](v5.3.0.md) | 2026-11-24 | Admin check route, guard against guessing the admin secret |
