@@ -20,6 +20,7 @@ import { useCncGroups } from "./useCncGroups";
 import { isFinishedRow, isPurchasedRow, toggleIn, useWorkOrderFilters } from "./useWorkOrderFilters";
 import WorkOrderFilters from "./WorkOrderFilters";
 import { madeStatus } from "./workOrderOptions";
+import { linkFinished } from "./finishedLink";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { partListText } from "./copyPartList";
 import RecordCardList, { CardViewToggle } from "../../../components/RecordCardList";
@@ -159,13 +160,9 @@ export default function WorkOrderDetailsPage() {
                     updated.statusCode = madeStatus(updated.statusCode);
                 }
 
-                // "Finished" (bought) / "Finished Manufacturing" (made) and priority "Finished" go together.
-                const finishedStatus = isPurchasedRow(updated) ? 'Finished' : 'Finished Manufacturing';
-                if (oldRow.statusCode !== updated.statusCode && updated.statusCode === finishedStatus) {
-                    updated.Priority = 'Finished';
-                } else if (oldRow.Priority !== updated.Priority && updated.Priority === 'Finished') {
-                    updated.statusCode = finishedStatus;
-                }
+                // The finished status and priority "Finished" go together, both ways
+                // (finishedLink.ts), so the finished counts follow at once.
+                Object.assign(updated, linkFinished(oldRow, updated, isPurchasedRow(updated)));
             }
 
             return updated;
