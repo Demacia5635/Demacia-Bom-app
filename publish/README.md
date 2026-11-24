@@ -15,6 +15,7 @@ Website changes are logged in `src/upd. logs/`, server changes in `server/upd. l
 
 | Version | Built | Highlights |
 |---|---|---|
+| [next](next/vNEXT.md) | Not built yet | Failure reasons in usage statistics |
 | [5.1.0](5.1.0/v5.1.0.md) | 2026-11-24 12:13 | Firefox automatic updates, "Update available" tag, revision numbers |
 | [5.0.0](5.0.0/v5.0.0.md) | 2026-11-23 23:07 (Firefox; signed by Mozilla 2026-11-24) | Excel-style editing, undo, right-click 💡 fixes, changes list, notifications, shortcuts, branch-publish cover |
 | [4.0.0](4.0.0/v4.0.0.md) | 2026-11-21 18:33 | Same name + catalog number = same part (asks before combining); light mode |
