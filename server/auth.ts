@@ -74,6 +74,19 @@ export function checkAdmin(req: Request, res: Response, next: NextFunction) {
   }, WRONG_TRY_DELAY_MS);
 }
 
+/** The IPs with wrong admin secrets in the current 15 minutes (for #/server). */
+export function adminLockouts() {
+  const now = Date.now();
+  return [...wrongTries]
+    .filter(([key]) => key !== OVERALL && triesOf(key, now) > 0)
+    .map(([ip, { count, last }]) => ({
+      ip,
+      wrongTries: count,
+      lastAt: new Date(last).toISOString(),
+      ...(count >= MAX_WRONG_PER_IP ? { lockedUntil: new Date(last + LOCK_WINDOW_MS).toISOString() } : {}),
+    }));
+}
+
 /** GET /api/admin/check: 204 when x-admin-secret is right (after checkAdmin); for the website's admin unlock. */
 export function adminCheck(req: Request, res: Response) {
   return res.status(204).send();

@@ -34,6 +34,7 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /api` | `200 { status: "online", version, startedAt, database: "connected" \| "disconnected" }`. Public. |
 | `GET /api/db` | `200 { connected: true }`, or `503 { connected: false }`. |
 | `GET /api/admin/check` | **Admin:** `204` when `x-admin-secret` is right; `404` when it's missing or wrong, as for every admin route. For the website's admin unlock (below). |
+| `GET /api/admin/status` | **Admin.** How the server is doing (the website's `#/server`), described below. |
 | `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
 | `GET /api/drive` | `200` when Drive answers, `503` when it doesn't: `{ connected, ... }`. |
 
@@ -94,6 +95,25 @@ Against guessing:
 - **Lock:** after 10 wrong tries from one IP within 15 minutes, or 100 overall, every admin call answers `429 TOO_MANY_REQUESTS`, even one with the right secret, until 15 minutes pass with no tries.
 - **IP:** it's the first `X-Forwarded-For` entry, which Render's proxy adds. Everyone behind one network address shares a counter, so 10 typos at school lock the admin pages there for 15 minutes.
 - **Memory:** the counts are kept in memory, and a restart clears them.
+
+### `GET /api/admin/status`
+
+```json
+{
+  "version": "5.3.0", "startedAt": "...", "uptimeSeconds": 3600,
+  "database": { "connected": true },
+  "drive": { "connected": true, "user": "...", "checkedAt": "..." },
+  "organizeJobs": [ /* the last 10 Drive sort runs, as in GET /api/drive/organize */ ],
+  "lockouts": [{ "ip": "...", "wrongTries": 3, "lastAt": "...", "lockedUntil": "..." }],
+  "requests": { "since": "...", "total": 1234, "window": 1000,
+                "routes": [{ "route": "GET /api/db/part/id/:id", "count": 40, "errors": 0, "p50": 12.5, "p95": 80.1, "maxMs": 300.2 }] }
+}
+```
+
+- **`drive`** is checked at most once a minute.
+- **`lockouts`** lists the IPs with wrong admin secrets in the current 15 minutes. `lockedUntil` is there only when the IP is locked.
+- **`requests`** covers the last 1000 requests. `errors` counts 5xx replies. Routes are the request path with IDs shown as `:id`, slowest `p95` first.
+- **Memory:** everything here is kept in memory, and a restart starts it over.
 
 ## Parts: `/api/db/part`
 
