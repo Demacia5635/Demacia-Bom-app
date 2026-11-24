@@ -84,6 +84,19 @@ function sameValue(field: string, a: unknown, b: unknown): boolean {
   return String(a ?? "").trim() === String(b ?? "").trim();
 }
 
+/**
+ * What the Revision column shows for a part: the server's number, "—" for a
+ * standard part (none), "new" when it isn't in the database yet. A saved part
+ * without a number counts as 1 (the server's rule for parts saved before
+ * revisions); an old manual text value is shown as it is.
+ */
+export function revisionLabel(saved: { revision?: unknown } | null | undefined, standard: boolean): string {
+  if (standard) return "—";
+  if (!saved) return "new";
+  const r = saved.revision;
+  return r === undefined || r === null || r === "" ? "1" : String(r);
+}
+
 /** Engineer written for Onshape Standard Content (screws, nuts, washers...) and parts marked standard. */
 export const STANDARD_PART_ENGINEER = "Standard Part";
 
