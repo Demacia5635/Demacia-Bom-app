@@ -64,6 +64,15 @@ export function setUpdatedBy(name: string | null): void {
   updatedBy = name;
 }
 
+/**
+ * The X-Updated-By header (empty until setUpdatedBy), for requests that don't
+ * go through fetchFromApi (the extension's Drive upload / delete). Header
+ * values can't carry non-ASCII (Hebrew names): URL-encoded, as the server expects.
+ */
+export function updatedByHeader(): Record<string, string> {
+  return updatedBy ? { "X-Updated-By": encodeURIComponent(updatedBy) } : {};
+}
+
 export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
 
@@ -80,8 +89,8 @@ export async function fetchFromApi<T>(endpoint: string, options: RequestInit = {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "x-client-secret": secret,
-        // Header values can't carry non-ASCII (Hebrew names): URL-encoded, as the server expects.
-        ...(updatedBy && (options.method ?? "GET").toUpperCase() !== "GET" ? { "X-Updated-By": encodeURIComponent(updatedBy) } : {}),
+        // Who saves, on writes (updatedByHeader).
+        ...((options.method ?? "GET").toUpperCase() !== "GET" ? updatedByHeader() : {}),
         ...options.headers, // Merge custom headers
       },
     });

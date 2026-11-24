@@ -3,29 +3,20 @@
  * =============================================================================
  */
 
-import { fetchFromApi, type ApiError } from "../util/ApiService";
+import { fetchFromApi, updatedByHeader, type ApiError } from "../util/ApiService";
 import { apiUrl } from "../util/backendHost";
 import type { BomModel, PartModel } from "../util/Models";
 import type { OnshapeBomTable } from "./OnshapeBom";
 import * as onshapeDirect from "../extension/onshapeDirect";
 
-/** The signed-in Onshape user's name, sent as X-Updated-By ("" until known). */
-let updatedBy = "";
-
-/** Who the server records as having saved what the panel writes (its `updatedBy`). */
-export function setUpdatedBy(name: string): void {
-  updatedBy = name.trim();
-}
-
-/** X-Updated-By (URL-encoded, so any name works), once the user's name is known. */
-export function updatedByHeaders(): Record<string, string> {
-  return updatedBy ? { "X-Updated-By": encodeURIComponent(updatedBy) } : {};
-}
-
-/** Standard headers for our server: content type, the client secret, and who is saving. */
+/**
+ * Headers for the requests that don't go through fetchFromApi (Drive upload /
+ * delete): content type, the client secret, and who is saving (ApiService's
+ * setUpdatedBy, set from the Onshape user name by AssemblyBomPage).
+ */
 function getBomApiHeaders(contentType = "application/json"): Record<string, string> {
   const secret = import.meta.env.VITE_CLIENT_SECRET;
-  const headers: Record<string, string> = { ...updatedByHeaders() };
+  const headers: Record<string, string> = { ...updatedByHeader() };
   if (contentType) {
     headers["Content-Type"] = contentType;
   }
@@ -36,15 +27,12 @@ function getBomApiHeaders(contentType = "application/json"): Record<string, stri
 }
 
 /**
- * GET or POST to our server: fetchFromApi (client secret, JSON body and
- * answer, errors as ApiRequestError with the server's message and status).
+ * GET or POST to our server: fetchFromApi (client secret, X-Updated-By on
+ * writes, JSON body and answer, errors as ApiRequestError with the server's
+ * message and status).
  */
 function requestJson<T>(method: "GET" | "POST", endpoint: string, body?: unknown): Promise<T> {
-  return fetchFromApi<T>(endpoint, {
-    method,
-    headers: updatedByHeaders(),
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+  return fetchFromApi<T>(endpoint, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
 
 export interface OnshapeKey {
