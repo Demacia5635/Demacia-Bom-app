@@ -34,13 +34,14 @@ import { driveFileOfCell } from "../partColumns";
 import { isPurchasedPart } from "../../../util/Models";
 import RecordCardList, { CardViewToggle } from "../../../components/RecordCardList";
 import { usePhoneCards } from "../../../components/usePhoneCards";
+import { revisionLabel } from "../../../util/partRevision";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
 
 /** Part fields the table edits and saves (only the changed ones are sent). */
 const SAVED_PART_FIELDS = [
-  "name", "catalogNumber", "revision", "description", "engineer",
+  "name", "catalogNumber", "description", "engineer",
   "material", "mass", "price", "comments", "vendor",
 ] as const satisfies readonly (keyof BomTableRow)[];
 
@@ -91,7 +92,7 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
         avatar: recordImageSrc(record),
         name: partDisplayName(record, sub.bomID),
         catalogNumber: record?.catalogNumber || "",
-        revision: "-",
+        revision: "—", // parts have revisions; assemblies don't
         description: record?.description || "",
         engineer: record?.engineer || "",
         material: "-",
@@ -125,7 +126,7 @@ function buildBomRows(tree: BomTree, view: BomView): BomTableRow[] {
         avatar: recordImageSrc(part),
         name: partDisplayName(part, p.partID),
         catalogNumber: part.catalogNumber || "",
-        revision: part.revision || "",
+        revision: revisionLabel(part),
         description: part.description || "",
         engineer: part.engineer || "",
         material: part.material || "",
@@ -256,7 +257,7 @@ export default function BomDetailsPage() {
     const fields = {
       name: partDisplayName(saved, saved.id),
       catalogNumber: saved.catalogNumber || "",
-      revision: saved.revision || "",
+      revision: revisionLabel(saved),
       description: saved.description || "",
       engineer: saved.engineer || "",
       material: saved.material || "",
@@ -266,7 +267,7 @@ export default function BomDetailsPage() {
     };
     partEditsRef.current.set(saved.id, {
       ...partEditsRef.current.get(saved.id),
-      name: saved.name, catalogNumber: saved.catalogNumber, revision: saved.revision, description: saved.description,
+      name: saved.name, catalogNumber: saved.catalogNumber, description: saved.description,
       engineer: saved.engineer, material: saved.material, mass: saved.mass, price: saved.price, comments: saved.comments,
     });
     setRows((current) => current.map((r) => (!r.isSubAssembly && r.entityID === saved.id ? { ...r, ...fields } : r)));
@@ -452,6 +453,7 @@ export default function BomDetailsPage() {
             image: row.avatar,
             name: row.name,
             catalogNumber: row.catalogNumber,
+            revision: row.isSubAssembly ? undefined : row.revision,
             quantity: row.quantity,
             tag: row.isSubAssembly ? "Sub-assembly" : isPurchasedPart(row) ? "Bought" : undefined,
           })}

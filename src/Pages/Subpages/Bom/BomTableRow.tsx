@@ -5,6 +5,7 @@ export default interface BomTableRow extends RowData {
   avatar: string;
   name: string;
   catalogNumber: string;
+  /** As shown (revisionLabel): the server's number, "—" for standard parts and sub-assemblies. */
   revision: string;
   description: string;
   engineer: string;

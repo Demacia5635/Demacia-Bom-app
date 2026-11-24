@@ -25,6 +25,8 @@ const WorkOrderColumns: ColumnConfig<WorkOrderTableRow>[] = [
     { key: "lastUpadte", label: "Last Updated", type: "string", isDisabled: () => true },
     { key: "productionMakingOwner", label: "Production Making Owner", type: "string" },
     { key: "catalogNumber", label: "Catalogue Number", type: "string", isDisabled: () => true }, // Read-only
+    // The part's revision, kept by the server; "—" for standard parts.
+    { key: "revision", label: "Revision", type: "string", isDisabled: () => true },
     { key: "quantityTotal", label: "Qty Per Assembly", type: "number", isDisabled: () => true },
     {
         key: "statusCode",

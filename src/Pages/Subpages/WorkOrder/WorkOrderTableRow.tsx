@@ -5,6 +5,8 @@ export default interface WorkOrderTableRow extends RowData {
     lastUpadte: Date | string;
     productionMakingOwner: string;
     catalogNumber: string;
+    /** As shown (revisionLabel): the part's revision, "—" for standard parts. */
+    revision?: string;
     name: string;
     /** Bounding box from Onshape, e.g. "25 × 8 × 8 mm" (util/partSize); "" when unknown. */
     size?: string;

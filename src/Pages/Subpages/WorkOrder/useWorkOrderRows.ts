@@ -8,6 +8,7 @@ import { fetchPartsByIds } from "../../../util/records";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import { isPurchasedRow } from "./useWorkOrderFilters";
 import { boughtStatus } from "./workOrderOptions";
+import { revisionLabel } from "../../../util/partRevision";
 
 const ISRAEL_TIME = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Jerusalem",
@@ -160,6 +161,7 @@ export function useWorkOrderRows(workOrderID: string | undefined, onLoaded: (wor
                 lastUpadte: formatIsraelTime(existingWoPart?.updatedAt),
                 productionMakingOwner: existingWoPart?.productionMakingOwner || "",
                 catalogNumber: part?.catalogNumber || "",
+                revision: revisionLabel(part),
                 name: partDisplayName(part, partID),
                 size: part?.size || "",
                 partID,

@@ -35,6 +35,7 @@ import { usePartInAddress } from "../../../components/usePartInAddress";
 import SaveStatus from "../../../components/SaveStatus";
 import { SkeletonTable } from "../../../components/Skeleton";
 import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
+import { revisionLabel } from "../../../util/partRevision";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = WorkOrderColumns.filter((c) => c.key !== "size");
@@ -202,6 +203,7 @@ export default function WorkOrderDetailsPage() {
                 ...r,
                 name: partDisplayName(saved, saved.id),
                 catalogNumber: saved.catalogNumber || "",
+                revision: revisionLabel(saved),
                 material: r.material === (before?.material || "") ? saved.material || "" : r.material,
                 comments: r.comments === (before?.comments || "") ? saved.comments || "" : r.comments,
             };
@@ -459,6 +461,7 @@ export default function WorkOrderDetailsPage() {
                                 image: row.avatar,
                                 name: row.name,
                                 catalogNumber: row.catalogNumber,
+                                revision: row.revision,
                                 quantity: row.quantityTotal,
                                 tag: isPurchasedRow(row) ? "Bought" : undefined,
                             })}
