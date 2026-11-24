@@ -56,7 +56,8 @@ export default function buildAssemblyBomColumns(
     ...(showSize ? [{ key: "size", label: "Size", type: "string", isDisabled: () => true } satisfies ColumnConfig] : []),
     editable("description", "Description", "string"),
     editable("catalogNumber", "Catalog No.", "string"),
-    editable("revision", "Revision", "string"),
+    // Set by the server when a publish changes the part's data: read-only here.
+    { key: "revision", label: "Revision", type: "string", isDisabled: () => true },
     {
       ...editable("engineer", "Engineer", "string"),
       // Only items not in the database yet get the default engineer on Publish.

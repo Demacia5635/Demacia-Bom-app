@@ -2,6 +2,7 @@ import express from 'express';
 import * as partController from '../controllers/partController';
 import { deleteOrphanParts, getOrphanParts } from '../controllers/orphanParts';
 import { checkAdmin } from '../auth';
+import { initRevisions } from '../controllers/partRevision';
 
 const router = express.Router();
 
@@ -13,6 +14,8 @@ router.post('/ids', partController.getPartsByIds);
 router.get('/orphans', getOrphanParts);
 // Admin (x-admin-secret): deletes parts no BOM uses, re-checked one by one.
 router.post('/orphans/delete', checkAdmin, deleteOrphanParts);
+// Admin, one-time: revision 1 on every made part without one (dry run first).
+router.post('/revisions/init', checkAdmin, initRevisions);
 router.get('/id/:id', partController.getPartByID);
 router.post('/id/:id', partController.upsertPartByID);
 router.delete('/id/:id', partController.deletePartByID);

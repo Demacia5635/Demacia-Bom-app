@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import Part from "../models/Part";
 import { cleanUpdateBody, updatedByOf, upsertByID } from "./upsert";
 import { partInUse } from "./orphanParts";
+import { revisionUpdate } from "./partRevision";
 import { makeGetByIds } from "./getByIds";
 import { makeListAll } from "./listAll";
 
@@ -66,8 +67,9 @@ export async function upsertPartByID(
 ) {
   try {
     const id = req.params.id;
-    // Read only for the name below; 200 vs 201 comes from the write itself.
-    const existing = await Part.exists({ id: id });
+    // The stored part: for the name below and the revision (200 vs 201 comes
+    // from the write itself).
+    const existing = await Part.findOne({ id: id }).lean<Record<string, any>>();
 
     const updateData: any = { ...cleanUpdateBody(req.body), id: id };
 
@@ -80,7 +82,12 @@ export async function upsertPartByID(
       delete updateData.name;
     }
 
-    const { doc: part, created } = await upsertByID(Part, id, { $set: { ...updateData, ...updatedByOf(req) } });
+    // The revision is the server's: bumped when the counted data changes (partRevision.ts).
+    const revision = revisionUpdate(existing, updateData);
+    const { doc: part, created } = await upsertByID(Part, id, {
+      ...revision,
+      $set: { ...updateData, ...updatedByOf(req), ...(revision.$set ?? {}) },
+    });
 
     return res.status(created ? 201 : 200).json(part);
   } catch (err) {

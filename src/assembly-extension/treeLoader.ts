@@ -203,7 +203,6 @@ export async function resolvePartRow(
         name: dbPart.name ?? "",
         description: dbPart.description ?? "",
         catalogNumber: dbPart.catalogNumber ?? "",
-        revision: dbPart.revision ?? "",
         engineer: dbPart.engineer ?? "",
         material: dbPart.material ?? "",
         price: dbPart.price ?? 0,
@@ -224,7 +223,8 @@ export async function resolvePartRow(
     avatar: getOnshapeThumbnailSrc(key, partID, parsedItem.itemSource),
     name: parsedItem.name || dbPart?.name || partID,
     catalogNumber: pickText("partNumber", dbPart?.catalogNumber),
-    revision: pickText("revision", dbPart?.revision),
+    // Set by the server on each save that changes the part (not Onshape's Revision property).
+    revision: dbPart?.revision != null ? String(dbPart.revision) : "",
     description: pickText("description", dbPart?.description),
     engineer: standard ? STANDARD_PART_ENGINEER : pickText("engineer", dbPart?.engineer),
     material,
