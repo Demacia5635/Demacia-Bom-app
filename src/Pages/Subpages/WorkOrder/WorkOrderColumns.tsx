@@ -2,7 +2,7 @@ import type { ColumnConfig } from "../../../components/Table";
 import { cadLinkColumn, fileDownloadColumns } from "../partColumns";
 import type WorkOrderTableRow from "./WorkOrderTableRow";
 import { isPurchasedPart } from "../../../util/Models";
-import { BOUGHT_STATUSES, MADE_STATUSES, MANUFACTURING_METHODS, PRIORITIES } from "./workOrderOptions";
+import { BOUGHT_STATUSES, MADE_STATUSES, MANUFACTURING_METHODS, PRIORITIES, valueColour } from "./workOrderOptions";
 import { isPurchasedRow } from "./useWorkOrderFilters";
 
 /**
@@ -14,34 +14,6 @@ import { isPurchasedRow } from "./useWorkOrderFilters";
 const isStandardRow = (row: WorkOrderTableRow) => !!row.isStandardContent || !!row.markedStandard;
 
 
-/**
- * Colour of each status / method / priority value (classes styled in
- * css/table.css). Values not listed stay uncoloured.
- */
-const VALUE_COLOURS: Record<string, string> = {
-    'In Planning': 'status-bg-orange',
-    'To buy': 'status-bg-orange',
-    'In manufacturing': 'status-bg-orange',
-    'Medium': 'status-bg-orange',
-    'Manual': 'status-bg-orange',
-
-    'Manufacturing approved': 'status-bg-blue',
-    'Untracked': 'status-bg-blue',
-    'Milled': 'status-bg-blue',
-    'Lathed': 'status-bg-blue',
-    'CNC': 'status-bg-blue',
-    'Printed': 'status-bg-blue',
-    'Externally produced': 'status-bg-blue',
-    'Purchased': 'status-bg-blue',
-
-    'Finished Manufacturing': 'status-bg-green',
-    'Finished': 'status-bg-green',
-    'Low': 'status-bg-green',
-
-    'CATNUM Written': 'status-bg-red',
-    'High': 'status-bg-red',
-};
-const valueColour = (value: unknown) => VALUE_COLOURS[String(value ?? '')];
 
 // Avatar and name come first: the table freezes the first two columns.
 const WorkOrderColumns: ColumnConfig<WorkOrderTableRow>[] = [

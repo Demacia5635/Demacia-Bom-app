@@ -31,6 +31,9 @@ import { recordTitle, useDocumentTitle } from "../../../components/useDocumentTi
 import { downloadTableCsv, safeFileName } from "../../../util/exportCsv";
 import { DriveMenuItem } from "../../../components/DriveFileMenu";
 import { driveFileOfCell } from "../partColumns";
+import { isPurchasedPart } from "../../../util/Models";
+import RecordCardList, { CardViewToggle } from "../../../components/RecordCardList";
+import { usePhoneCards } from "../../../components/usePhoneCards";
 
 /** The table columns without Size, for when "Show size" is off. */
 const COLUMNS_WITHOUT_SIZE = BomColumns.filter((c) => c.key !== "size");
@@ -191,6 +194,14 @@ export default function BomDetailsPage() {
     }
   }, [tree]);
   const [view, setView] = useState<BomView>(savedView);
+  // Phones: cards instead of the table (unless "Table view" was picked).
+  const phone = usePhoneCards();
+  // The cards: the BOM's own rows, sorted like the table opens (catalog #);
+  // flattened, every part instead (rows inside sub-assemblies are hidden otherwise).
+  const cardRows = useMemo(() => {
+    const list = view === "flattened" ? rows.filter((r) => !r.isSubAssembly) : rows.filter((r) => !r.parentId);
+    return [...list].sort((a, b) => (a.catalogNumber || "").localeCompare(b.catalogNumber || "", undefined, { numeric: true }));
+  }, [rows, view]);
   /** "Show size" checkbox, shared with the work-order page (remembered in this browser). */
   const [showSize, setShowSize] = useState(readShowSize);
   useEffect(() => writeShowSize(showSize), [showSize]);
@@ -410,10 +421,11 @@ export default function BomDetailsPage() {
         </div>
         {/* Right of the view buttons, under the title card: save status, then "Show size". */}
         <span className="ml-auto"><SaveStatus /></span>
+        {phone.narrow && <CardViewToggle tableView={phone.tableView} onChange={phone.setTableView} />}
         {/* The table as shown (rows, columns, order) for Excel (QW9). */}
         <button
           type="button"
-          disabled={loading || rows.length === 0}
+          disabled={loading || rows.length === 0 || phone.showCards}
           onClick={() => {
             if (!tableAreaRef.current) return;
             downloadTableCsv(tableAreaRef.current, showSize ? BomColumns : COLUMNS_WITHOUT_SIZE, rowOfElement, safeFileName(mainBomData?.name || "BOM", "csv"));
@@ -431,6 +443,28 @@ export default function BomDetailsPage() {
 
       {loading ? (
         <SkeletonTable label="Loading the BOM…" columns={9} />
+      ) : phone.showCards ? (
+        // Phones: one card per part (tap: Part Portal); "Table view" brings the table back.
+        <RecordCardList
+          rows={cardRows}
+          item={(row) => ({
+            id: row.id,
+            image: row.avatar,
+            name: row.name,
+            catalogNumber: row.catalogNumber,
+            quantity: row.quantity,
+            tag: row.isSubAssembly ? "Sub-assembly" : isPurchasedPart(row) ? "Bought" : undefined,
+          })}
+          onOpen={(row) => void handleShowPartData(row)}
+          extra={(row) =>
+            row.isSubAssembly && row.subBomId ? (
+              <button type="button" onClick={() => handleGoToSubBom(row)} className="text-xs font-semibold text-blue-500 hover:underline">
+                Open its BOM ›
+              </button>
+            ) : null
+          }
+          empty="This BOM has no parts."
+        />
       ) : (
         <div
           ref={tableAreaRef}
