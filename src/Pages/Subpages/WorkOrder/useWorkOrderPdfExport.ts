@@ -25,7 +25,7 @@ export function useWorkOrderPdfExport({ rowFromElement, title, assemblyName, fil
 
   const exportPdf = async () => {
     // The rows as the table shows them: filtered and in its sort order.
-    const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+    const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("[data-row-id]") ?? [])
       .map(rowFromElement)
       .filter((r): r is WorkOrderTableRow => !!r);
     if (shownRows.length === 0) {

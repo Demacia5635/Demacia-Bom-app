@@ -68,7 +68,8 @@ app.use(cors({
         }
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "x-client-secret", "Authorization", "X-Updated-By"],
+    // x-admin-secret: the website's admin pages (e.g. /orphans' Delete) send it.
+    allowedHeaders: ["Content-Type", "x-client-secret", "x-admin-secret", "Authorization", "X-Updated-By"],
     // Lets the website and extension read it, e.g. to show it with an error.
     exposedHeaders: ["X-Request-Id"],
     // Browsers may reuse a preflight answer for 2 hours (Chrome's maximum)
