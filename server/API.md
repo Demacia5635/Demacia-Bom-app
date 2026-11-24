@@ -92,6 +92,17 @@ A part that no BOM lists is reported once, as `NOT_IN_ANY_ASSEMBLY`, and isn't c
 | `GET /d/:documentID/wvmT/:wvmType/wvmI/:wvmID/e/:elementID/p/:partID` | | The part with this Onshape identity, or `404`. Read-only. |
 | `DELETE` (same path) | | **Turned off:** `405`. |
 
+### A part's revision
+
+`revision` is a whole number that only the server sets; a `revision` in a request body is ignored. On every part save (from Publish or from the website):
+- **A new made part** starts at `1`.
+- **A save that changes the part's data** adds 1. Only the fields it sends are compared; blank and missing count as the same, and so do `1.5` and `"1.5"`. The counted fields are `name`, `catalogNumber`, `description`, `material`, `engineer`, `comments`, `vendor`, `price`, `mass`, `size`, `wantStl` and `wantParasolid`. Geometry is followed through `size` and `mass`. Drive file IDs and `filesModelVersion` don't count, because a re-export changes them for a whole Part Studio.
+- **A save that changes nothing** keeps the number.
+- **Standard parts** (Standard Content, marked standard, or with a vendor) have **no** `revision`; the field is absent. A part that stops being standard starts again at `1`.
+- **A part saved before revisions existed** counts as `1` (`2` if that save changed it). A one-time run sets every other made part to `1`.
+
+The rules live in `server/controllers/partRevision.ts` (`COUNTED_FIELDS`).
+
 ## BOMs (assemblies): `/api/db/bom`
 
 | Route | Body | Reply |
