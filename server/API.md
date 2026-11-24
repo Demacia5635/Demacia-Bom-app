@@ -36,6 +36,8 @@ Parts, BOMs and work orders each have a string `id` (unique), `createdAt`, `upda
 | `GET /api/admin/check` | **Admin:** `204` when `x-admin-secret` is right; `404` when it's missing or wrong, as for every admin route. For the website's admin unlock (below). |
 | `GET /api/admin/status` | **Admin.** How the server is doing (the website's `#/server`), described below. |
 | `GET /api/admin/production` | **Admin.** Work orders' progress for `#/production`, described below. |
+| `GET /api/admin/files[?refresh=1]` | **Admin.** The team's Drive files for `#/files`, described below. |
+| `POST /api/admin/files/delete` | **Admin.** `{ ids }` (1-200 Drive file IDs): moves unused files to Drive's trash. Each file is re-checked first and refused if a part or BOM uses it, if it isn't in the team folders, or if it's not found. Returns `200 { deleted: [{ fileId, name }], refused: [{ fileId, reason }] }`, with one log line per file. |
 | `GET /api/db/health` | Every problem in the parts and BOMs (the website's data health page), described below. Read-only. |
 | `GET /api/drive` | `200` when Drive answers, `503` when it doesn't: `{ connected, ... }`. |
 
@@ -96,6 +98,23 @@ Against guessing:
 - **Lock:** after 10 wrong tries from one IP within 15 minutes, or 100 overall, every admin call answers `429 TOO_MANY_REQUESTS`, even one with the right secret, until 15 minutes pass with no tries.
 - **IP:** it's the first `X-Forwarded-For` entry, which Render's proxy adds. Everyone behind one network address shares a counter, so 10 typos at school lock the admin pages there for 15 minutes.
 - **Memory:** the counts are kept in memory, and a restart clears them.
+
+### `GET /api/admin/files`
+
+Lists the whole Drive once, at about one request per 1000 files, and reuses the result for 10 minutes; `?refresh=1` lists it again.
+
+```json
+{ "generatedAt": "...", "totals": { "files": 3, "bytes": 14020000 },
+  "types": [{ "type": "STL", "folderId": "...", "files": 2, "bytes": 14000000, "folders": [{ "path": "2714-0000/2714-1000", "files": 2, "bytes": 14000000 }] }],
+  "largest": [{ "fileId": "...", "name": "old.stl", "bytes": 9000000, "type": "STL", "path": "2714-0000/2714-1000", "usedBy": { "kind": "part", "id": "...", "name": "..." } }],
+  "unused": [{ "fileId": "...", "name": "old.stl", "bytes": 9000000, "type": "STL", "path": "...", "modifiedTime": "..." }],
+  "missing": [{ "kind": "part", "id": "...", "name": "...", "field": "parasolidLink", "reason": "file not found or in trash" }] }
+```
+
+- **Scope:** only files under the three type folders count.
+- **`largest`:** the top 50 files.
+- **`unused`:** files no part or BOM points at.
+- **`missing`:** links to files that are gone or trashed (`reason: "file not found or in trash"`), and parts with `wantStl` or `wantParasolid` but no link (`reason: "no link"`).
 
 ### `GET /api/admin/production`
 

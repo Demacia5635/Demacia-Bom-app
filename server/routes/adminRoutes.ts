@@ -4,6 +4,7 @@ import express from 'express';
 import { adminCheck, checkAdmin } from '../auth';
 import { getServerStatus } from '../controllers/adminController';
 import { getProduction } from '../controllers/workOrderSummary';
+import { deleteUnusedFiles, getFilesOverview } from '../controllers/driveFiles';
 
 const router = express.Router();
 router.use(checkAdmin);
@@ -14,5 +15,8 @@ router.get('/check', adminCheck);
 router.get('/status', getServerStatus);
 // #/production: work orders' progress, open orders, what blocks them.
 router.get('/production', getProduction);
+// #/files: the team's Drive files (sizes, largest, unused, missing), and deleting unused ones.
+router.get('/files', getFilesOverview);
+router.post('/files/delete', deleteUnusedFiles);
 
 export default router;
