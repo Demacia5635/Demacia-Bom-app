@@ -24,3 +24,32 @@ export function madeStatus(statusCode: string): string {
   if (statusCode === 'To buy') return 'In Planning';
   return statusCode;
 }
+
+/**
+ * Colour of each status / method / priority value (classes styled in
+ * css/table.css). Values not listed stay uncoloured.
+ */
+const VALUE_COLOURS: Record<string, string> = {
+    'In Planning': 'status-bg-orange',
+    'To buy': 'status-bg-orange',
+    'In manufacturing': 'status-bg-orange',
+    'Medium': 'status-bg-orange',
+    'Manual': 'status-bg-orange',
+
+    'Manufacturing approved': 'status-bg-blue',
+    'Untracked': 'status-bg-blue',
+    'Milled': 'status-bg-blue',
+    'Lathed': 'status-bg-blue',
+    'CNC': 'status-bg-blue',
+    'Printed': 'status-bg-blue',
+    'Externally produced': 'status-bg-blue',
+    'Purchased': 'status-bg-blue',
+
+    'Finished Manufacturing': 'status-bg-green',
+    'Finished': 'status-bg-green',
+    'Low': 'status-bg-green',
+
+    'CATNUM Written': 'status-bg-red',
+    'High': 'status-bg-red',
+};
+export const valueColour = (value: unknown) => VALUE_COLOURS[String(value ?? '')];

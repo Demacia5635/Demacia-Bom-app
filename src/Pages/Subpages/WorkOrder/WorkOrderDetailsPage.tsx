@@ -22,6 +22,9 @@ import WorkOrderFilters from "./WorkOrderFilters";
 import { madeStatus } from "./workOrderOptions";
 import { useWorkOrderPdfExport } from "./useWorkOrderPdfExport";
 import { partListText } from "./copyPartList";
+import RecordCardList, { CardViewToggle } from "../../../components/RecordCardList";
+import { usePhoneCards } from "../../../components/usePhoneCards";
+import WorkOrderCardChips from "./WorkOrderCardChips";
 import { DriveMenuItem } from "../../../components/DriveFileMenu";
 import { driveFileOfCell } from "../partColumns";
 import { formatIsraelTime, useWorkOrderRows } from "./useWorkOrderRows";
@@ -224,6 +227,10 @@ export default function WorkOrderDetailsPage() {
         };
     }, [rows]);
     const { rowFilter } = filters;
+    // Phones: cards instead of the table (unless "Table view" was picked), in the
+    // table's own order (CNC groups together), filtered like it.
+    const phone = usePhoneCards();
+    const cardRows = useMemo(() => (rowFilter ? displayRows.filter(rowFilter) : displayRows), [displayRows, rowFilter]);
     const shownCount = useMemo(() => (rowFilter ? rows.filter(rowFilter).length : rows.length), [rows, rowFilter]);
 
     // ---- Export the shown parts (image, name, quantity) to PDF ----
@@ -243,7 +250,7 @@ export default function WorkOrderDetailsPage() {
     // ---- Copy the shown parts as plain text (copyPartList.ts) ----
     const handleCopyList = async () => {
         // As the table shows them: filtered and in its sort order.
-        const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("tr[data-row-id]") ?? [])
+        const shownRows = Array.from(tableAreaRef.current?.querySelectorAll("[data-row-id]") ?? [])
             .map(rowFromElement)
             .filter((r): r is WorkOrderTableRow => !!r);
         if (shownRows.length === 0) {
@@ -321,6 +328,7 @@ export default function WorkOrderDetailsPage() {
                     Parts and quantities follow the assembly&apos;s current BOM: publishing it again updates this work order.
                 </p>
                 <span className="ml-auto"><SaveStatus /></span>
+                {phone.narrow && <CardViewToggle tableView={phone.tableView} onChange={phone.setTableView} />}
                 <label className={`flex items-center gap-2 cursor-pointer text-sm ${theme.textLabel}`} title="Each made part&apos;s size in Onshape (bounding box, longest side first), saved by Publish BOM. Empty for bought parts and parts published before sizes were saved.">
                     <input type="checkbox" checked={showSize} onChange={(e) => setShowSize(e.target.checked)} />
                     Show size
@@ -348,7 +356,7 @@ export default function WorkOrderDetailsPage() {
                     <WorkOrderFilters rows={rows} filters={filters} shownCount={shownCount}>
                         <button
                             type="button"
-                            disabled={shownCount === 0}
+                            disabled={shownCount === 0 || phone.showCards}
                             onClick={() => {
                                 if (!tableAreaRef.current) return;
                                 downloadTableCsv(tableAreaRef.current, showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE, rowFromElement, safeFileName(workOrderData?.name || "Work order", "csv"));
@@ -442,6 +450,23 @@ export default function WorkOrderDetailsPage() {
                     onContextMenuCapture={handleTableContextMenuCapture} 
                     className="relative cursor-pointer"
                 >
+                    {phone.showCards ? (
+                        // Phones: one card per part (tap: Part Portal), with its status and priority.
+                        <RecordCardList
+                            rows={cardRows}
+                            item={(row) => ({
+                                id: row.id,
+                                image: row.avatar,
+                                name: row.name,
+                                catalogNumber: row.catalogNumber,
+                                quantity: row.quantityTotal,
+                                tag: isPurchasedRow(row) ? "Bought" : undefined,
+                            })}
+                            onOpen={(row) => void handleShowPartData(row)}
+                            extra={(row) => <WorkOrderCardChips row={row} onChange={(changes) => handleTableDataChange(displayRows.map((r) => (r.id === row.id ? { ...r, ...changes } : r)))} />}
+                            empty={rows.length === 0 ? "This work order has no parts." : "No parts match the filters."}
+                        />
+                    ) : (
                     <Table
                         data={displayRows}
                         columnsData={showSize ? WorkOrderColumns : COLUMNS_WITHOUT_SIZE}
@@ -453,6 +478,7 @@ export default function WorkOrderDetailsPage() {
                         frozenColumns={2}
                         rowFilter={rowFilter}
                     />
+                    )}
 
                     {contextMenu && (
                         <div
