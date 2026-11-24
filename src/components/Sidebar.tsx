@@ -1,4 +1,4 @@
-import { HomeIcon, SearchIcon, ClipboardList, Package, X, Activity, HeartPulse, PackageX, ShieldCheck, Server, Factory, HardDrive, type LucideProps } from "lucide-react";
+import { HomeIcon, SearchIcon, ClipboardList, Package, X, Activity, HeartPulse, PackageX, ShieldCheck, Server, Factory, HardDrive, History, type LucideProps } from "lucide-react";
 import { type ForwardRefExoticComponent, type RefAttributes } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useThemeSync } from "../util/misc/useThemeSync";
@@ -10,6 +10,7 @@ type NavIcon = ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttribute
 
 /** The unlisted pages, at the bottom of the sidebar once this browser is unlocked (#/admin). */
 const ADMIN_ITEMS: { label: string; path: string; icon: NavIcon }[] = [
+    { label: 'Activity', path: '/activity', icon: History },
     { label: 'Production', path: '/production', icon: Factory },
     { label: 'Files', path: '/files', icon: HardDrive },
     { label: 'Onshape Footprint', path: '/tele', icon: Activity },
