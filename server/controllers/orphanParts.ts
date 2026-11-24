@@ -9,6 +9,7 @@ import Part from "../models/Part";
 import { FILE_FIELDS } from "../services/driveFolderPlan";
 import { drive } from "../services/driveClient";
 import { updatedByOf } from "./upsert";
+import { recordEvent, whoOf } from "../services/events";
 
 type Rec = Record<string, any>;
 
@@ -145,6 +146,11 @@ export async function deleteUnusedParts(ids: string[], who: string, logTag: stri
         }
         const { _id, __v, ...record } = part;
         console.log(`${logTag} by ${who || "unknown"}: deleted part ${id} "${part.name ?? ""}"; files to Drive's trash: [${filesTrashed.join(", ")}]; record: ${JSON.stringify(record)}`);
+        recordEvent({
+            kind: "part.delete", who, record: { kind: "part", id, name: part.name },
+            message: `${whoOf(who)} deleted part ${part.name || id} (not in any assembly)${filesTrashed.length ? `; ${filesTrashed.length} file(s) to Drive's trash` : ""}`,
+            details: { filesTrashed, source: logTag },
+        });
         result.deleted.push({ id, name: part.name, catalogNumber: part.catalogNumber, filesTrashed });
     }
     return result;

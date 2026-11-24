@@ -35,6 +35,11 @@ function sanitize(raw: any) {
     ok: raw?.ok !== false,
     error: text(raw?.error, 500),
     version: text(raw?.version, 20),
+    // Optional (newer extension versions): left out when not sent.
+    errorCode: /^[A-Z0-9_]{1,64}$/.test(text(raw?.errorCode, 64)) ? text(raw?.errorCode, 64) : "",
+    ...(raw?.items !== undefined ? { items: count(raw.items) } : {}),
+    ...(raw?.problems !== undefined ? { problems: count(raw.problems) } : {}),
+    browser: ["chrome", "firefox"].includes(text(raw?.browser, 20)) ? text(raw?.browser, 20) : "",
   };
 }
 
